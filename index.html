@@ -214,10 +214,66 @@
       }
     });
 
+    // ★★★ テクスチャのLODを管理する新しいコンポーネント ★★★
+    AFRAME.registerComponent('texture-lod', {
+        schema: {
+            lowRes: {type: 'asset'},
+            midRes: {type: 'asset'},
+            highRes: {type: 'asset'},
+            midThreshold: {type: 'number', default: 1.7},
+            highThreshold: {type: 'number', default: 2.4}
+        },
+        init: function() {
+            this.currentLOD = -1; // 現在のLODレベルを保存 (-1で初期化)
+        },
+        tick: function() {
+            const scale = this.el.object3D.scale.x;
+            let newLOD = 0; // 新しいLODレベルを決定
+
+            if (scale >= this.data.highThreshold) {
+                newLOD = 2; // 高解像度
+            } else if (scale >= this.data.midThreshold) {
+                newLOD = 1; // 中解像度
+            } else {
+                newLOD = 0; // 低解像度
+            }
+
+            // LODレベルが変化した場合のみ、テクスチャを更新
+            if (newLOD !== this.currentLOD) {
+                let textureId;
+                let textureName;
+                if (newLOD === 2) {
+                    textureId = this.data.highRes;
+                    textureName = "High Res";
+                } else if (newLOD === 1) {
+                    textureId = this.data.midRes;
+                    textureName = "Mid Res";
+                } else {
+                    textureId = this.data.lowRes;
+                    textureName = "Low Res";
+                }
+                
+                // ★★★ バグを修正: .id を削除 ★★★
+                this.el.setAttribute('src', `#${textureId}`);
+                this.currentLOD = newLOD;
+                // ★★★ デバッグ用にコンソールにメッセージを表示 ★★★
+                console.log(`Texture LOD changed to: ${textureName} (Scale: ${scale.toFixed(2)})`);
+            }
+        }
+    });
+
   </script>
 
   <!-- renderer="antialias: true" を追加して、描画を滑らかにする -->
   <a-scene renderer="antialias: true">
+    
+    <!-- ★★★ 3枚のテクスチャを事前に読み込む ★★★ -->
+    <a-assets>
+        <img id="low-res-tex" src="eartn_model/world.topo.200409.3x2700x1350.jpg">
+        <img id="mid-res-tex" src="eartn_model/world.topo.200409.3x5400x2700.jpg">
+        <img id="high-res-tex" src="eartn_model/world.topo.200409.3x10800x5400.jpg">
+    </a-assets>
+
     <!-- シーンに照明を追加 -->
     <a-light type="ambient" color="#CCC"></a-light>
     <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
@@ -227,11 +283,12 @@
       position="0 1.5 -3.2"
       radius="1"
       scale="1 1 1"
-      src="eartn_model/world.topo.200409.3x10800x5400.jpg"
+      src="#low-res-tex"
       segments-height="64"
       segments-width="128"
       earth-controls
-      marker-placer>
+      marker-placer
+      texture-lod="lowRes: low-res-tex; midRes: mid-res-tex; highRes: high-res-tex;">
     </a-sphere>
 
     <!-- カメラとコントローラーをリグで囲む -->
