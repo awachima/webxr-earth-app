@@ -140,6 +140,12 @@
       },
       init: function() {
         this.markers = []; // 作成したマーカーを保存する配列
+        // ★★★ 計算用の変数を準備 ★★★
+        this.cameraEl = document.querySelector('#camera'); // ★★★ バグを修正: カメラのエンティティを取得 ★★★
+        this.cameraPos = new THREE.Vector3();
+        this.markerPos = new THREE.Vector3();
+        this.earthPos = new THREE.Vector3();
+
         // ★★★ 2000個のランダムなサンプルデータを生成 ★★★
         const locations = [];
         for (let i = 0; i < 2000; i++) {
@@ -183,9 +189,14 @@
         });
       },
 
-      // マーカーのスケールを毎フレーム更新するtick関数
+      // マーカーのスケールと表示/非表示を毎フレーム更新するtick関数
       tick: function() {
-        if (!this.markers || this.markers.length === 0) return;
+        if (!this.markers || this.markers.length === 0 || !this.cameraEl) return;
+
+        // 地球とカメラの現在の世界座標を取得
+        this.el.object3D.getWorldPosition(this.earthPos);
+        // ★★★ バグを修正: カメラのエンティティから位置を取得 ★★★
+        this.cameraEl.object3D.getWorldPosition(this.cameraPos);
 
         // 地球の現在のスケールを取得
         const earthScale = this.el.object3D.scale.x;
@@ -195,9 +206,19 @@
         // マーカーの倍率を、maxMarkerMultiplierから1まで線形補間で計算
         const markerScale = this.data.maxMarkerMultiplier - t * (this.data.maxMarkerMultiplier - 1);
 
-        // 全てのマーカーのスケールを更新
+        // 全てのマーカーを更新
         for (const marker of this.markers) {
+            // スケールを更新
             marker.object3D.scale.set(markerScale, markerScale, markerScale);
+
+            // ★★★ オクルージョンカリングの計算 ★★★
+            marker.object3D.getWorldPosition(this.markerPos);
+            const markerNormal = this.markerPos.clone().sub(this.earthPos).normalize();
+            const cameraToMarker = this.markerPos.clone().sub(this.cameraPos).normalize();
+            const dotProduct = markerNormal.dot(cameraToMarker);
+            
+            // dotProductが0より大きい場合、マーカーは裏側にある
+            marker.object3D.visible = (dotProduct < 0);
         }
       },
 
@@ -214,66 +235,10 @@
       }
     });
 
-    // ★★★ テクスチャのLODを管理する新しいコンポーネント ★★★
-    AFRAME.registerComponent('texture-lod', {
-        schema: {
-            lowRes: {type: 'asset'},
-            midRes: {type: 'asset'},
-            highRes: {type: 'asset'},
-            midThreshold: {type: 'number', default: 1.7},
-            highThreshold: {type: 'number', default: 2.4}
-        },
-        init: function() {
-            this.currentLOD = -1; // 現在のLODレベルを保存 (-1で初期化)
-        },
-        tick: function() {
-            const scale = this.el.object3D.scale.x;
-            let newLOD = 0; // 新しいLODレベルを決定
-
-            if (scale >= this.data.highThreshold) {
-                newLOD = 2; // 高解像度
-            } else if (scale >= this.data.midThreshold) {
-                newLOD = 1; // 中解像度
-            } else {
-                newLOD = 0; // 低解像度
-            }
-
-            // LODレベルが変化した場合のみ、テクスチャを更新
-            if (newLOD !== this.currentLOD) {
-                let textureId;
-                let textureName;
-                if (newLOD === 2) {
-                    textureId = this.data.highRes;
-                    textureName = "High Res";
-                } else if (newLOD === 1) {
-                    textureId = this.data.midRes;
-                    textureName = "Mid Res";
-                } else {
-                    textureId = this.data.lowRes;
-                    textureName = "Low Res";
-                }
-                
-                // ★★★ バグを修正: .id を削除 ★★★
-                this.el.setAttribute('src', `#${textureId}`);
-                this.currentLOD = newLOD;
-                // ★★★ デバッグ用にコンソールにメッセージを表示 ★★★
-                console.log(`Texture LOD changed to: ${textureName} (Scale: ${scale.toFixed(2)})`);
-            }
-        }
-    });
-
   </script>
 
   <!-- renderer="antialias: true" を追加して、描画を滑らかにする -->
   <a-scene renderer="antialias: true">
-    
-    <!-- ★★★ 3枚のテクスチャを事前に読み込む ★★★ -->
-    <a-assets>
-        <img id="low-res-tex" src="eartn_model/world.topo.200409.3x2700x1350.jpg">
-        <img id="mid-res-tex" src="eartn_model/world.topo.200409.3x5400x2700.jpg">
-        <img id="high-res-tex" src="eartn_model/world.topo.200409.3x10800x5400.jpg">
-    </a-assets>
-
     <!-- シーンに照明を追加 -->
     <a-light type="ambient" color="#CCC"></a-light>
     <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
@@ -283,12 +248,11 @@
       position="0 1.5 -3.2"
       radius="1"
       scale="1 1 1"
-      src="#low-res-tex"
+      src="eartn_model/world.topo.200409.3x10800x5400.jpg"
       segments-height="64"
       segments-width="128"
       earth-controls
-      marker-placer
-      texture-lod="lowRes: low-res-tex; midRes: mid-res-tex; highRes: high-res-tex;">
+      marker-placer>
     </a-sphere>
 
     <!-- カメラとコントローラーをリグで囲む -->
