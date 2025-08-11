@@ -184,6 +184,16 @@
           // countを渡してマーカーを生成
           marker.setAttribute('hex-marker', {count: loc.count});
           
+          // ★★★ クリックできるようにクラスを追加 ★★★
+          marker.classList.add('collidable');
+          // ★★★ マーカーにデータを保存 ★★★
+          marker.dataset.title = loc.title;
+
+          // ★★★ クリックとホバーのイベントリスナーを追加 ★★★
+          marker.addEventListener('click', this.onMarkerClick);
+          marker.addEventListener('mouseenter', this.onMarkerEnter);
+          marker.addEventListener('mouseleave', this.onMarkerLeave);
+          
           // マーカーを地球の子要素として追加
           this.el.appendChild(marker);
           this.markers.push(marker);
@@ -225,6 +235,23 @@
             if (marker.textEl) {
                 marker.textEl.object3D.visible = isVisible;
             }
+        }
+      },
+
+      // ★★★ イベントハンドラ関数を追加 ★★★
+      onMarkerClick: function(evt) {
+        console.log("Clicked:", evt.target.dataset.title);
+      },
+      onMarkerEnter: function(evt) {
+        const mesh = evt.target.getObject3D('mesh');
+        if (mesh) {
+            mesh.material.color.set('green');
+        }
+      },
+      onMarkerLeave: function(evt) {
+        const mesh = evt.target.getObject3D('mesh');
+        if (mesh) {
+            mesh.material.color.set('yellow');
         }
       },
 
