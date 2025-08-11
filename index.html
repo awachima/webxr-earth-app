@@ -116,10 +116,11 @@
             textEntity.setAttribute('width', 0.1);
             
             this.el.appendChild(textEntity);
-            this.textEntity = textEntity;
+            // ★★★ marker-placerからアクセスできるように、テキストへの参照を保存 ★★★
+            this.el.textEl = textEntity;
         },
         tick: function() {
-            if (!this.textEntity) return;
+            if (!this.el.textEl) return;
 
             const parentScale = this.el.object3D.scale.y;
             if (parentScale === 0) return;
@@ -128,7 +129,7 @@
             const desiredGap = 0.0001;
             const adjustedGap = desiredGap / parentScale;
 
-            this.textEntity.setAttribute('position', {x: 0, y: this.height / 2 + adjustedGap, z: 0});
+            this.el.textEl.setAttribute('position', {x: 0, y: this.height / 2 + adjustedGap, z: 0});
         }
     });
 
@@ -140,13 +141,13 @@
       },
       init: function() {
         this.markers = []; // 作成したマーカーを保存する配列
-        // ★★★ 計算用の変数を準備 ★★★
-        this.cameraEl = document.querySelector('#camera'); // ★★★ バグを修正: カメラのエンティティを取得 ★★★
+        // 計算用の変数を準備
+        this.cameraEl = document.querySelector('#camera');
         this.cameraPos = new THREE.Vector3();
         this.markerPos = new THREE.Vector3();
         this.earthPos = new THREE.Vector3();
 
-        // ★★★ 2000個のランダムなサンプルデータを生成 ★★★
+        // 2000個のランダムなサンプルデータを生成
         const locations = [];
         for (let i = 0; i < 2000; i++) {
             locations.push({
@@ -193,9 +194,8 @@
       tick: function() {
         if (!this.markers || this.markers.length === 0 || !this.cameraEl) return;
 
-        // 地球とカメラの現在の世界座標を取得
+        // 地球とカメラの現在の世界座標と向きを取得
         this.el.object3D.getWorldPosition(this.earthPos);
-        // ★★★ バグを修正: カメラのエンティティから位置を取得 ★★★
         this.cameraEl.object3D.getWorldPosition(this.cameraPos);
 
         // 地球の現在のスケールを取得
@@ -211,14 +211,20 @@
             // スケールを更新
             marker.object3D.scale.set(markerScale, markerScale, markerScale);
 
-            // ★★★ オクルージョンカリングの計算 ★★★
+            // マーカーの現在位置を取得
             marker.object3D.getWorldPosition(this.markerPos);
-            const markerNormal = this.markerPos.clone().sub(this.earthPos).normalize();
-            const cameraToMarker = this.markerPos.clone().sub(this.cameraPos).normalize();
-            const dotProduct = markerNormal.dot(cameraToMarker);
             
-            // dotProductが0より大きい場合、マーカーは裏側にある
-            marker.object3D.visible = (dotProduct < 0);
+            // オクルージョンカリングの計算
+            const markerNormal = this.markerPos.clone().sub(this.earthPos).normalize();
+            const cameraToMarkerForOcclusion = this.markerPos.clone().sub(this.cameraPos).normalize();
+            const dotProduct = markerNormal.dot(cameraToMarkerForOcclusion);
+            const isVisible = (dotProduct < 0);
+            marker.object3D.visible = isVisible;
+
+            // ★★★ 視野角カリングを削除し、マーカーの表示状態にテキストを合わせる ★★★
+            if (marker.textEl) {
+                marker.textEl.object3D.visible = isVisible;
+            }
         }
       },
 
