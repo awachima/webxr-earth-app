@@ -13,7 +13,9 @@
     AFRAME.registerComponent('earth-controls', {
       // 初期設定
       schema: {
-        rotationSpeed: { type: 'number', default: 2.0 }, // 回転の速さ
+        rotationSpeed: { type: 'number', default: 2.0 }, // キーボードの回転速度
+        // ★★★ ジョイスティック専用の回転速度を追加 ★★★
+        joystickRotationSpeed: { type: 'number', default: 1.0 }, // ジョイスティックの回転速度
         scaleSpeed: { type: 'number', default: 0.01 },   // 拡大・縮小の速さ
         mouseRotationSpeed: { type: 'number', default: 0.2 }, // マウス回転の速さ
         wheelScaleSpeed: { type: 'number', default: 0.0005 } // ホイール拡縮の速さ
@@ -110,9 +112,15 @@
         const rotationMultiplier = 1 - (t * (7 / 8));
 
         // --- 値の計算 ---
-        // 回転
-        const finalRotY = (this.stickInput.right.x !== 0 ? this.stickInput.right.x : rotY_keyboard) * this.data.rotationSpeed * rotationMultiplier;
-        const finalRotX = (this.stickInput.right.y !== 0 ? this.stickInput.right.y : rotX_keyboard) * this.data.rotationSpeed * rotationMultiplier;
+        // ★★★ キーボードとジョイスティックの回転を分離 ★★★
+        const rotY_joystick = this.stickInput.right.x * this.data.joystickRotationSpeed * rotationMultiplier;
+        const rotX_joystick = this.stickInput.right.y * this.data.joystickRotationSpeed * rotationMultiplier;
+        
+        const rotY_keyboard_final = rotY_keyboard * this.data.rotationSpeed * rotationMultiplier;
+        const rotX_keyboard_final = rotX_keyboard * this.data.rotationSpeed * rotationMultiplier;
+
+        const finalRotY = rotY_joystick !== 0 ? rotY_joystick : rotY_keyboard_final;
+        const finalRotX = rotX_joystick !== 0 ? rotX_joystick : rotX_keyboard_final;
         
         // 拡縮
         const finalScale = (this.stickInput.left.y !== 0 ? -this.stickInput.left.y : scale_keyboard) * this.data.scaleSpeed;
@@ -241,7 +249,7 @@
         this.currentMarkers = [];
 
         const earthScale = this.el.object3D.scale.x;
-        // ★★★ 地球のサイズに合わせてクラスタリング範囲を線形補間で計算 ★★★
+        // ★★★ ご指定の値に修正 ★★★
         const minScale = 1.0;
         const maxScale = 3.0;
         const minThreshold = 0.2; // スケールが1倍の時の範囲
