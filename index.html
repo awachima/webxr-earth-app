@@ -4,6 +4,7 @@
   <title>WebXR Earth Controls</title>
   <!-- ★★★ 正しく動作するURLに修正 ★★★ -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <!-- データ用のscriptタグは不要になったため削除 -->
 </head>
 <body>
   <!-- JavaScriptで独自の操作機能を定義 -->
@@ -13,7 +14,9 @@
       // 初期設定
       schema: {
         rotationSpeed: { type: 'number', default: 2.0 }, // 回転の速さ
-        scaleSpeed: { type: 'number', default: 0.01 }   // 拡大・縮小の速さ
+        scaleSpeed: { type: 'number', default: 0.01 },   // 拡大・縮小の速さ
+        mouseRotationSpeed: { type: 'number', default: 0.2 }, // マウス回転の速さ
+        wheelScaleSpeed: { type: 'number', default: 0.0005 } // ホイール拡縮の速さ
       },
 
       // コンポーネントが初期化されるときに一度だけ呼ばれる関数
@@ -24,6 +27,10 @@
         this.currentXRotation = 0;
         this.keys = {}; // 押されているキーの状態
         this.stickInput = { left: {x: 0, y: 0}, right: {x: 0, y: 0} }; // スティックの入力状態
+        this.isDragging = false;
+        this.previousMousePosition = { x: 0, y: 0 };
+        this.cameraEl = document.querySelector('#camera');
+
 
         // --- イベントリスナーの登録 ---
         this.onStickMoved = this.onStickMoved.bind(this);
@@ -33,10 +40,53 @@
         this.onKeyUp = this.onKeyUp.bind(this);
         window.addEventListener('keydown', this.onKeyDown);
         window.addEventListener('keyup', this.onKeyUp);
+
+        // マウス操作用のイベントリスナーを追加
+        this.onMouseDown = this.onMouseDown.bind(this);
+        this.onMouseMove = this.onMouseMove.bind(this);
+        this.onMouseUp = this.onMouseUp.bind(this);
+        this.onWheel = this.onWheel.bind(this);
+        this.el.sceneEl.canvas.addEventListener('mousedown', this.onMouseDown);
+        window.addEventListener('mousemove', this.onMouseMove);
+        window.addEventListener('mouseup', this.onMouseUp);
+        window.addEventListener('wheel', this.onWheel);
       },
       
       onKeyDown: function (evt) { this.keys[evt.key] = true; },
       onKeyUp: function (evt) { this.keys[evt.key] = false; },
+
+      // マウス操作用の関数
+      onMouseDown: function(evt) {
+        this.isDragging = true;
+        this.previousMousePosition = { x: evt.clientX, y: evt.clientY };
+        if (this.cameraEl) {
+            this.cameraEl.setAttribute('look-controls', 'enabled', false);
+        }
+      },
+      onMouseMove: function(evt) {
+        if (!this.isDragging) return;
+        const deltaX = evt.clientX - this.previousMousePosition.x;
+        const deltaY = evt.clientY - this.previousMousePosition.y;
+
+        this.el.object3D.rotation.y += deltaX * (Math.PI / 180) * this.data.mouseRotationSpeed;
+        this.currentXRotation -= deltaY * this.data.mouseRotationSpeed;
+
+        this.previousMousePosition = { x: evt.clientX, y: evt.clientY };
+      },
+      onMouseUp: function() {
+        this.isDragging = false;
+        if (this.cameraEl) {
+            this.cameraEl.setAttribute('look-controls', 'enabled', true);
+        }
+      },
+      onWheel: function(evt) {
+        let currentScale = this.el.object3D.scale.x;
+        const scaleAmount = evt.deltaY * -1 * this.data.wheelScaleSpeed;
+        currentScale += scaleAmount;
+        currentScale = Math.max(this.minScale, Math.min(this.maxScale, currentScale));
+        this.el.object3D.scale.set(currentScale, currentScale, currentScale);
+      },
+
 
       // VRコントローラーのスティックが動いた時の処理
       onStickMoved: function (evt) {
@@ -82,6 +132,10 @@
         this.el.sceneEl.removeEventListener('thumbstickmoved', this.onStickMoved);
         window.removeEventListener('keydown', this.onKeyDown);
         window.removeEventListener('keyup', this.onKeyUp);
+        this.el.sceneEl.canvas.removeEventListener('mousedown', this.onMouseDown);
+        window.removeEventListener('mousemove', this.onMouseMove);
+        window.removeEventListener('mouseup', this.onMouseUp);
+        window.removeEventListener('wheel', this.onWheel);
       }
     });
 
@@ -95,28 +149,21 @@
         },
         init: function() {
             const data = this.data;
-            // デフォルトの高さを0.01に変更
             this.height = 0.01 + (data.count * data.heightUnit);
             
-            // 裾が少し広がった六角柱のジオメトリを作成
             const geometry = new THREE.CylinderGeometry(data.baseRadius * 0.9, data.baseRadius, this.height, 6);
-            // flatShading: true を追加して、表示をカクカクさせる
             const material = new THREE.MeshStandardMaterial({color: data.color, flatShading: true});
             const mesh = new THREE.Mesh(geometry, material);
             this.el.setObject3D('mesh', mesh);
 
-            // マーカー表面に表示するテキストを作成
             const textEntity = document.createElement('a-text');
             textEntity.setAttribute('value', data.count);
-            // テキストが六角柱の上面と平行になるように回転
             textEntity.setAttribute('rotation', {x: -90, y: 0, z: 0});
             textEntity.setAttribute('align', 'center');
             textEntity.setAttribute('color', 'black');
-            // マーカーのサイズに合わせてテキストの幅を調整
             textEntity.setAttribute('width', 0.1);
             
             this.el.appendChild(textEntity);
-            // ★★★ marker-placerからアクセスできるように、テキストへの参照を保存 ★★★
             this.el.textEl = textEntity;
         },
         tick: function() {
@@ -125,7 +172,6 @@
             const parentScale = this.el.object3D.scale.y;
             if (parentScale === 0) return;
 
-            // 親のスケールが大きくなるほど、隙間を小さくして、見た目の距離を一定に保つ
             const desiredGap = 0.0001;
             const adjustedGap = desiredGap / parentScale;
 
@@ -139,108 +185,186 @@
       schema: {
         maxMarkerMultiplier: {type: 'number', default: 12}
       },
-      init: function() {
-        this.markers = []; // 作成したマーカーを保存する配列
-        // 計算用の変数を準備
+      init: async function() {
+        this.allLocations = []; // 全ての地点データを保存
+        this.currentMarkers = []; // 現在表示中のマーカーを保存
         this.cameraEl = document.querySelector('#camera');
         this.cameraPos = new THREE.Vector3();
         this.markerPos = new THREE.Vector3();
         this.earthPos = new THREE.Vector3();
+        this.previousEarthScale = 0;
 
-        // 2000個のランダムなサンプルデータを生成
-        const locations = [];
-        for (let i = 0; i < 2000; i++) {
-            locations.push({
-                title: `Point ${i + 1}`,
-                lat: Math.random() * 180 - 90, // -90 to 90
-                lon: Math.random() * 360 - 180, // -180 to 180
-                url: '...',
-                count: Math.floor(Math.random() * 50) + 1 // 1 to 50
-            });
+        // Google Sheetsからデータを読み込む
+        const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
+        try {
+            const response = await fetch(sheetUrl);
+            if (!response.ok) {
+                console.error("Google Sheetsからのデータ読み込みに失敗しました。");
+            } else {
+                const csvText = await response.text();
+                this.allLocations = this.parseCsv(csvText);
+            }
+        } catch (error) {
+            console.error("データの取得または解析中にエラーが発生しました:", error);
         }
 
-        // 球体の半径をコンポーネントから直接取得
+        // 最初のクラスター更新
+        this.updateClusters();
+      },
+
+      // CSVデータを解析する関数
+      parseCsv: function(csvText) {
+        const locations = [];
+        const lines = csvText.trim().split('\n');
+        const startIndex = lines[0].toLowerCase().includes('title') ? 1 : 0;
+
+        for (let i = startIndex; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const parts = line.split(',');
+            if (parts.length >= 4) {
+                locations.push({
+                    title: parts[0].replace(/"/g, ''),
+                    lat: parseFloat(parts[1]),
+                    lon: parseFloat(parts[2]),
+                    url: parts[3].replace(/"/g, '')
+                });
+            }
+        }
+        return locations;
+      },
+
+      // クラスターを更新するメインの関数
+      updateClusters: function() {
+        // 既存のマーカーをすべて削除
+        this.currentMarkers.forEach(marker => marker.parentNode.removeChild(marker));
+        this.currentMarkers = [];
+
+        const earthScale = this.el.object3D.scale.x;
+        // ★★★ 地球のサイズに合わせてクラスタリング範囲を線形補間で計算 ★★★
+        const minScale = 1.0;
+        const maxScale = 3.0;
+        const minThreshold = 0.2; // スケールが1倍の時の範囲
+        const maxThreshold = 0.0025; // スケールが3倍の時の範囲
+
+        const t = (earthScale - minScale) / (maxScale - minScale);
+        const clusterThreshold = minThreshold - t * (minThreshold - maxThreshold);
+        
+        let unclustered = [...this.allLocations];
+        const clusters = [];
+
+        while (unclustered.length > 0) {
+            const currentPoint = unclustered.shift();
+            const cluster = [currentPoint];
+            const remainingPoints = [];
+
+            for (const otherPoint of unclustered) {
+                const dist = this.haversineDistance(currentPoint, otherPoint);
+                if (dist < clusterThreshold) {
+                    cluster.push(otherPoint);
+                } else {
+                    remainingPoints.push(otherPoint);
+                }
+            }
+            unclustered = remainingPoints;
+            clusters.push(cluster);
+        }
+
+        // クラスターをマーカーとして配置
+        this.placeMarkersFromClusters(clusters);
+      },
+
+      // クラスターからマーカーを生成して配置する関数
+      placeMarkersFromClusters: function(clusters) {
         const earthRadius = this.el.getAttribute('geometry').radius;
 
-        locations.forEach(loc => {
-          // 緯度経度を3D座標に変換
-          const pos = this.latLonTo3D(loc.lat, loc.lon, earthRadius);
+        clusters.forEach(cluster => {
+            let avgLat = 0, avgLon = 0;
+            cluster.forEach(point => {
+                avgLat += point.lat;
+                avgLon += point.lon;
+            });
+            avgLat /= cluster.length;
+            avgLon /= cluster.length;
 
-          // a-sphereの代わりに、新しいhex-markerコンポーネントを持つa-entityを作成
-          const marker = document.createElement('a-entity');
-          marker.setAttribute('position', pos);
+            const pos = this.latLonTo3D(avgLat, avgLon, earthRadius);
+            const marker = document.createElement('a-entity');
+            marker.setAttribute('position', pos);
 
-          // マーカーの向きを、北極を基準に安定させる
-          const yAxis = pos.clone().normalize();
-          const worldUp = new THREE.Vector3(0, 1, 0);
-          const xAxis = new THREE.Vector3().crossVectors(worldUp, yAxis).normalize();
-          if (xAxis.length() === 0) {
-            xAxis.set(1, 0, 0);
-          }
-          const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis);
-          const rotationMatrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
-          marker.object3D.quaternion.setFromRotationMatrix(rotationMatrix);
+            const yAxis = pos.clone().normalize();
+            const worldUp = new THREE.Vector3(0, 1, 0);
+            const xAxis = new THREE.Vector3().crossVectors(worldUp, yAxis).normalize();
+            if (xAxis.length() === 0) {
+              xAxis.set(1, 0, 0);
+            }
+            const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis);
+            const rotationMatrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+            marker.object3D.quaternion.setFromRotationMatrix(rotationMatrix);
 
-          // countを渡してマーカーを生成
-          marker.setAttribute('hex-marker', {count: loc.count});
-          
-          // ★★★ クリックできるようにクラスを追加 ★★★
-          marker.classList.add('collidable');
-          // ★★★ マーカーにデータを保存 ★★★
-          marker.dataset.title = loc.title;
+            marker.setAttribute('hex-marker', {count: cluster.length});
+            marker.classList.add('collidable');
+            marker.dataset.locations = JSON.stringify(cluster); // データをJSON文字列として保存
 
-          // ★★★ クリックとホバーのイベントリスナーを追加 ★★★
-          marker.addEventListener('click', this.onMarkerClick);
-          marker.addEventListener('mouseenter', this.onMarkerEnter);
-          marker.addEventListener('mouseleave', this.onMarkerLeave);
-          
-          // マーカーを地球の子要素として追加
-          this.el.appendChild(marker);
-          this.markers.push(marker);
+            marker.addEventListener('click', this.onMarkerClick);
+            marker.addEventListener('mouseenter', this.onMarkerEnter);
+            marker.addEventListener('mouseleave', this.onMarkerLeave);
+            
+            this.el.appendChild(marker);
+            this.currentMarkers.push(marker);
         });
       },
 
+      // 2点間の球面距離を計算する関数
+      haversineDistance: function(coords1, coords2) {
+        function toRad(x) { return x * Math.PI / 180; }
+        const R = 1; // 地球の半径を1とする
+        const dLat = toRad(coords2.lat - coords1.lat);
+        const dLon = toRad(coords2.lon - coords1.lon);
+        const lat1 = toRad(coords1.lat);
+        const lat2 = toRad(coords2.lat);
+
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2); 
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
+        return R * c;
+      },
+
+
       // マーカーのスケールと表示/非表示を毎フレーム更新するtick関数
       tick: function() {
-        if (!this.markers || this.markers.length === 0 || !this.cameraEl) return;
+        if (this.currentMarkers.length === 0 || !this.cameraEl) return;
 
-        // 地球とカメラの現在の世界座標と向きを取得
+        const earthScale = this.el.object3D.scale.x;
+        // スケールが大きく変化した場合のみクラスターを再計算
+        if (Math.abs(earthScale - this.previousEarthScale) > 0.1) {
+            this.updateClusters();
+            this.previousEarthScale = earthScale;
+        }
+
         this.el.object3D.getWorldPosition(this.earthPos);
         this.cameraEl.object3D.getWorldPosition(this.cameraPos);
 
-        // 地球の現在のスケールを取得
-        const earthScale = this.el.object3D.scale.x;
-
-        // earthScaleが1から3の間で変化する時、tは0から1の間で変化する
         const t = (earthScale - 1) / (3 - 1); 
-        // マーカーの倍率を、maxMarkerMultiplierから1まで線形補間で計算
         const markerScale = this.data.maxMarkerMultiplier - t * (this.data.maxMarkerMultiplier - 1);
 
-        // 全てのマーカーを更新
-        for (const marker of this.markers) {
-            // スケールを更新
+        for (const marker of this.currentMarkers) {
             marker.object3D.scale.set(markerScale, markerScale, markerScale);
-
-            // マーカーの現在位置を取得
             marker.object3D.getWorldPosition(this.markerPos);
-            
-            // オクルージョンカリングの計算
             const markerNormal = this.markerPos.clone().sub(this.earthPos).normalize();
             const cameraToMarkerForOcclusion = this.markerPos.clone().sub(this.cameraPos).normalize();
             const dotProduct = markerNormal.dot(cameraToMarkerForOcclusion);
             const isVisible = (dotProduct < 0);
             marker.object3D.visible = isVisible;
-
-            // ★★★ 視野角カリングを削除し、マーカーの表示状態にテキストを合わせる ★★★
             if (marker.textEl) {
                 marker.textEl.object3D.visible = isVisible;
             }
         }
       },
 
-      // ★★★ イベントハンドラ関数を追加 ★★★
       onMarkerClick: function(evt) {
-        console.log("Clicked:", evt.target.dataset.title);
+        const locations = JSON.parse(evt.target.dataset.locations);
+        console.log("Clicked cluster with", locations.length, "locations:");
+        locations.forEach(loc => console.log("-", loc.title));
       },
       onMarkerEnter: function(evt) {
         const mesh = evt.target.getObject3D('mesh');
@@ -292,7 +416,7 @@
     <a-entity id="rig">
       <!-- カメラ -->
       <a-entity id="camera" camera position="0 1.6 0" look-controls>
-        <!-- ★★★ PC操作用のカーソルを追加 ★★★ -->
+        <!-- PC操作用のカーソルを追加 -->
         <a-entity cursor="rayOrigin: mouse" raycaster="objects: .collidable; far: 10;"></a-entity>
       </a-entity>
       
