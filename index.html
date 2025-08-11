@@ -90,12 +90,13 @@
     // マーカーを配置するためのコンポーネント
     AFRAME.registerComponent('marker-placer', {
       schema: {
-        maxMarkerMultiplier: {type: 'number', default: 12}
+        maxMarkerMultiplier: {type: 'number', default: 12},
+        heightUnit: {type: 'number', default: 0.5} // 基本の高さに対するcount毎の高さの割合
       },
       init: function() {
         this.instancedMesh = this.el.querySelector('[instanced-mesh]').components['instanced-mesh'];
         this.previousEarthScale = 0; // 前フレームのスケールを保存
-        this.markersData = []; // マーカーの位置と向きを保存
+        this.markersData = []; // マーカーの位置、向き、countを保存
 
         // 2000個のランダムなサンプルデータを生成
         const locations = [];
@@ -112,28 +113,40 @@
         locations.forEach(loc => {
           const pos = this.latLonTo3D(loc.lat, loc.lon, earthRadius);
           const quat = this.getLookAtQuaternion(pos);
-          this.markersData.push({position: pos, quaternion: quat});
+          // ★★★ countも一緒に保存 ★★★
+          this.markersData.push({position: pos, quaternion: quat, count: loc.count});
         });
 
-        // インスタンスを描画
-        this.instancedMesh.updateInstancedMesh(this.markersData);
+        // 最初のスケール計算とインスタンス描画
+        this.updateMarkersScale(1.0);
       },
 
       tick: function() {
         const earthScale = this.el.object3D.scale.x;
-        // ★★★ 地球のスケールが変化した時だけ計算を実行 ★★★
+        // 地球のスケールが変化した時だけ計算を実行
         if (earthScale === this.previousEarthScale) return;
 
+        this.updateMarkersScale(earthScale);
+        this.previousEarthScale = earthScale; // スケールを保存
+      },
+      
+      // ★★★ マーカーのスケールを更新する関数を分離 ★★★
+      updateMarkersScale: function(earthScale) {
         const t = (earthScale - 1) / (3 - 1); 
-        const markerScale = this.data.maxMarkerMultiplier - t * (this.data.maxMarkerMultiplier - 1);
+        const baseMarkerScale = this.data.maxMarkerMultiplier - t * (this.data.maxMarkerMultiplier - 1);
         
         // 全てのマーカーのスケールを更新
         for(let i = 0; i < this.markersData.length; i++) {
-            this.markersData[i].scale = {x: markerScale, y: markerScale, z: markerScale};
+            const markerData = this.markersData[i];
+            // countに基づいて高さを計算
+            const heightScale = 1 + (markerData.count * this.data.heightUnit);
+            markerData.scale = {
+                x: baseMarkerScale, 
+                y: baseMarkerScale * heightScale, 
+                z: baseMarkerScale
+            };
         }
         this.instancedMesh.updateInstancedMesh(this.markersData);
-
-        this.previousEarthScale = earthScale; // スケールを保存
       },
 
       getLookAtQuaternion: function(pos) {
@@ -163,11 +176,10 @@
   <!-- renderer="antialias: true" を追加して、描画を滑らかにする -->
   <a-scene renderer="antialias: true">
     
-    <!-- ★★★ インスタンス化するマーカーの「原型」を定義 (非表示) ★★★ -->
+    <!-- インスタンス化するマーカーの「原型」を定義 (非表示) -->
     <a-assets>
-        <a-entity id="marker-shape" visible="false">
-            <a-cylinder radius-top="0.00675" radius-bottom="0.0075" height="0.01" segments-radial="6" material="color: yellow; flatShading: true"></a-cylinder>
-        </a-entity>
+        <!-- ★★★ 原型の高さを1に、半径を0.0075に設定 ★★★ -->
+        <a-cylinder id="marker-shape" radius-top="0.00675" radius-bottom="0.0075" height="1" segments-radial="6" material="color: yellow; flatShading: true" visible="false"></a-cylinder>
     </a-assets>
 
     <!-- シーンに照明を追加 -->
@@ -184,7 +196,7 @@
       segments-width="100"
       earth-controls
       marker-placer>
-      <!-- ★★★ ここで2000個のマーカーを一度に描画 ★★★ -->
+      <!-- ここで2000個のマーカーを一度に描画 -->
       <a-entity instanced-mesh="#marker-shape"></a-entity>
     </a-sphere>
 
