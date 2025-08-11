@@ -291,7 +291,10 @@
     <!-- カメラとコントローラーをリグで囲む -->
     <a-entity id="rig">
       <!-- カメラ -->
-      <a-entity id="camera" camera position="0 1.6 0" look-controls></a-entity>
+      <a-entity id="camera" camera position="0 1.6 0" look-controls>
+        <!-- ★★★ PC操作用のカーソルを追加 ★★★ -->
+        <a-entity cursor="rayOrigin: mouse" raycaster="objects: .collidable; far: 10;"></a-entity>
+      </a-entity>
       
       <!-- コントローラー -->
       <a-entity id="left-hand" oculus-touch-controls="hand: left"></a-entity>
