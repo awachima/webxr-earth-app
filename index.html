@@ -7,7 +7,7 @@
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-  <!-- Troika（※バージョンを 0.47 系で揃える） -->
+  <!-- Troika（バージョンを揃える） -->
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
@@ -146,7 +146,8 @@ AFRAME.registerComponent('earth-controls',{
       }
       if(R && !R._thumbBound){
         R.addEventListener('thumbstickmoved', e=>{ this.stickInput.right={x:e.detail.x,y:e.detail.y}; });
-        R.addEventListener('axismove', e=>{ const a=e.detail?.axis||[]; this.stickInput.right={x:a[2]||0, y:a[3]||0}; });
+        // ★ 右手の axismove は index 0/1（2/3 ではない）
+        R.addEventListener('axismove', e=>{ const a=e.detail?.axis||[]; this.stickInput.right={x:a[0]||0, y:a[1]||0}; });
         R._thumbBound=true;
       }
     };
@@ -381,7 +382,7 @@ AFRAME.registerComponent('marker-placer',{
       marker.object3D.getWorldPosition(this.markerPos);
       const normal=this.markerPos.clone().sub(this.earthPos).normalize();
       const camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
-      const visible=(normal.dot(camDir)<0); // 既存ロジックを維持
+      const visible=(normal.dot(camDir)<0); // 既存ロジックのまま
       marker.object3D.visible=visible;
       if(marker.textEl) marker.textEl.object3D.visible=visible;
     }
@@ -417,14 +418,13 @@ AFRAME.registerComponent('marker-placer',{
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
     </a-entity>
 
-    <!-- 左手：モデル表示ON（見た目で認識確認） -->
-    <a-entity id="left-hand"
-              oculus-touch-controls="hand: left; model: true;"></a-entity>
+    <!-- 左手（モデル表示で接続確認しやすく） -->
+    <a-entity id="left-hand" oculus-touch-controls="hand: left; model: true;"></a-entity>
 
-    <!-- 右手：モデル表示ON + 自前raycaster（showLine） + cursor -->
+    <!-- 右手（自前raycaster + cursor）。'rayOrigin' は raycaster のプロパティではないので付けない -->
     <a-entity id="right-hand"
               oculus-touch-controls="hand: right; model: true;"
-              raycaster="rayOrigin: entity; objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
+              raycaster="objects: .collidable, .ui; far: 30; interval: 0; showLine: true"
               cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend">
     </a-entity>
   </a-entity>
