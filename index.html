@@ -7,8 +7,8 @@
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-  <!-- Troika (cluster数字) -->
-  <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.43.0/dist/troika-worker-utils.umd.min.js"></script>
+  <!-- Troika（※バージョンを 0.47 系で揃える） -->
+  <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
@@ -19,11 +19,7 @@
       src:url("static/NotoSansJP-Regular.ttf") format("truetype");
       font-weight:400; font-style:normal; font-display:swap;
     }
-    :root{
-      --panel-w:min(70vw,920px);
-      --panel-h:min(70vh,580px);
-      --panel-radius:18px;
-    }
+    :root{ --panel-w:min(70vw,920px); --panel-h:min(70vh,580px); --panel-radius:18px; }
     #hudPanel{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:99999; pointer-events:none;}
     #hudPanel.show{display:flex;}
     #hudBackdrop{position:absolute; inset:0; background:rgba(0,0,0,.12); pointer-events:auto;}
@@ -108,7 +104,7 @@ function closeHtmlPanel(){
 </script>
 
 <script>
-/* ============ Earth Controls (VR/非VRスティック対応) ============ */
+/* ============ Earth Controls（VR/非VRスティック対応） ============ */
 AFRAME.registerComponent('earth-controls',{
   schema:{
     rotationSpeed:{type:'number',default:2.0},
@@ -134,29 +130,23 @@ AFRAME.registerComponent('earth-controls',{
       cvs.addEventListener('mousedown',e=>this.onMouseDown(e));
       window.addEventListener('mousemove',e=>this.onMouseMove(e));
       window.addEventListener('mouseup',()=>this.onMouseUp());
-      // 非VR（PC等）のみホイール登録
       if (!AFRAME.utils.device.checkHeadsetConnected()) {
         cvs.addEventListener('wheel',e=>this.onWheelCanvas(e),{passive:true});
       }
     });
 
-    // --- VR: コントローラー thumbstick の確実なバインド + フォールバック ---
+    // VR: thumbstick + axismove フォールバック
     this._bindThumbsticks = ()=>{
       const L=document.querySelector('#left-hand');
       const R=document.querySelector('#right-hand');
-
       if(L && !L._thumbBound){
         L.addEventListener('thumbstickmoved', e=>{ this.stickInput.left={x:e.detail.x,y:e.detail.y}; });
-        L.addEventListener('axismove', e=>{
-          const a=e.detail?.axis; if(Array.isArray(a) && a.length>=2){ this.stickInput.left={x:a[0]||0, y:a[1]||0}; }
-        });
+        L.addEventListener('axismove', e=>{ const a=e.detail?.axis||[]; this.stickInput.left={x:a[0]||0, y:a[1]||0}; });
         L._thumbBound=true;
       }
       if(R && !R._thumbBound){
         R.addEventListener('thumbstickmoved', e=>{ this.stickInput.right={x:e.detail.x,y:e.detail.y}; });
-        R.addEventListener('axismove', e=>{
-          const a=e.detail?.axis; if(Array.isArray(a) && a.length>=4){ this.stickInput.right={x:a[2]||0, y:a[3]||0}; }
-        });
+        R.addEventListener('axismove', e=>{ const a=e.detail?.axis||[]; this.stickInput.right={x:a[2]||0, y:a[3]||0}; });
         R._thumbBound=true;
       }
     };
@@ -172,7 +162,7 @@ AFRAME.registerComponent('earth-controls',{
     this.el.sceneEl.addEventListener('controllersupdated', this._bindThumbsticks);
     this.el.sceneEl.addEventListener('exit-vr', stopBind);
 
-    // 入力ソースの可視化（デバッグ）
+    // デバッグ：XR inputSources
     this.el.sceneEl.addEventListener('enter-vr', ()=>{
       const sess = this.el.sceneEl.renderer?.xr?.getSession?.();
       if (!sess) return;
@@ -180,7 +170,7 @@ AFRAME.registerComponent('earth-controls',{
       console.log('XR inputSources:', info);
     });
 
-    // 非VR：接続ログ
+    // 非VR：Gamepad接続ログ
     window.addEventListener('gamepadconnected', e=>console.log('gamepadconnected:', e.gamepad));
     window.addEventListener('gamepaddisconnected', e=>console.log('gamepaddisconnected:', e.gamepad));
   },
@@ -190,10 +180,7 @@ AFRAME.registerComponent('earth-controls',{
     const p = Array.from(pads).find(g=>g && g.connected);
     if(!p) return null;
     const ax = p.axes || [];
-    return {
-      left:  { x: ax[0] || 0, y: ax[1] || 0 },
-      right: { x: ax[2] || 0, y: ax[3] || 0 }
-    };
+    return { left:{x:ax[0]||0, y:ax[1]||0}, right:{x:ax[2]||0, y:ax[3]||0} };
   },
   onMouseDown:function(evt){
     if(window.__panelOpen) return;
@@ -223,38 +210,34 @@ AFRAME.registerComponent('earth-controls',{
   tick:function(){
     if(window.__panelOpen) return;
 
-    // --- キーボード ---
+    // キーボード
     const rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
     const rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
     const scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
 
     let stickRotX = 0, stickRotY = 0, stickScale = 0;
 
-    // VR: WebXR入力 / 非VR: Gamepad API
+    // VR: WebXR / 非VR: Gamepad
     if (this.el.sceneEl.is('vr-mode')) {
       stickRotX = this.stickInput.right.y;
       stickRotY = this.stickInput.right.x;
       stickScale = this.stickInput.left.y;
     } else {
       const gp = this.getNonVrSticks();
-      if (gp){
-        stickRotX = gp.right.y;
-        stickRotY = gp.right.x;
-        stickScale = gp.left.y;
-      }
+      if (gp){ stickRotX = gp.right.y; stickRotY = gp.right.x; stickScale = gp.left.y; }
     }
 
-    // --- 拡大率による減速 ---
+    // 拡大率に応じた減速
     const s = this.el.object3D.scale.x;
     const t = (s - 1.0) / (3.0 - 1.0);
     const mul = 1 - (t * (7 / 8));
 
-    // --- 入力の統合 ---
+    // 入力の統合
     const finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : rotY_k * this.data.rotationSpeed) * mul;
     const finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : rotX_k * this.data.rotationSpeed) * mul;
     const finalScale = (stickScale !== 0 ? -stickScale : scale_k) * this.data.scaleSpeed;
 
-    // --- 適用 ---
+    // 適用
     this.el.object3D.rotation.y += finalRotY * (Math.PI / 180);
     this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation + finalRotX));
     this.el.object3D.rotation.x = this.currentXRotation * (Math.PI / 180);
@@ -265,7 +248,7 @@ AFRAME.registerComponent('earth-controls',{
   }
 });
 
-/* ============ hex-marker (cluster) ============ */
+/* ============ hex-marker（cluster） ============ */
 AFRAME.registerComponent('hex-marker',{
   schema:{ count:{type:'number',default:1}, color:{type:'color',default:'yellow'}, baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001}, fontUrl:{type:'string',default:FONT_URL} },
   init:function(){
@@ -325,11 +308,7 @@ AFRAME.registerComponent('marker-placer',{
   updateClusters:function(){
     this.currentMarkers.forEach(m=>{
       const mesh = m.getObject3D('mesh');
-      if (mesh) {
-        mesh.geometry && mesh.geometry.dispose();
-        mesh.material && mesh.material.dispose();
-        m.removeObject3D('mesh');
-      }
+      if (mesh) { mesh.geometry && mesh.geometry.dispose(); mesh.material && mesh.material.dispose(); m.removeObject3D('mesh'); }
       m.remove();
     });
     this.currentMarkers=[];
@@ -438,13 +417,14 @@ AFRAME.registerComponent('marker-placer',{
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
     </a-entity>
 
-    <!-- 左手（VRスティック入力用） -->
-    <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
+    <!-- 左手：モデル表示ON（見た目で認識確認） -->
+    <a-entity id="left-hand"
+              oculus-touch-controls="hand: left; model: true;"></a-entity>
 
-    <!-- 右手（レーザー／クリック用）：showLineで常に可視化 -->
+    <!-- 右手：モデル表示ON + 自前raycaster（showLine） + cursor -->
     <a-entity id="right-hand"
-              laser-controls="hand: right"
-              raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
+              oculus-touch-controls="hand: right; model: true;"
+              raycaster="rayOrigin: entity; objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
               cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend">
     </a-entity>
   </a-entity>
