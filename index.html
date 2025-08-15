@@ -4,16 +4,13 @@
   <meta charset="utf-8" />
   <title>WebXR Earth Controls</title>
 
-  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-  <!-- Troika (cluster数字) -->
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.43.0/dist/troika-worker-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
-  <!-- DOM Overlay -->
   <style>
     @font-face{
       font-family:"NotoSansJPLocal";
@@ -45,7 +42,6 @@
 </head>
 <body>
 
-<!-- ===== DOM Overlay (2D UI) ===== -->
 <div id="hudPanel" aria-hidden="true">
   <div id="hudBackdrop"></div>
   <div id="hudCard" role="dialog" aria-modal="true">
@@ -69,12 +65,6 @@ function refreshAllRaycasters(){
     if(rc && rc.refreshObjects) rc.refreshObjects();
   });
 }
-// ▼ 追加：シーン初期化完了後に必ず一度リフレッシュ
-window.addEventListener('load', () => {
-  const scene = document.querySelector('a-scene');
-  if (scene) scene.addEventListener('loaded', () => setTimeout(refreshAllRaycasters, 0));
-});
-
 function setRaycasterTargets(uiOnly){
   const objs = uiOnly ? '.ui' : '.collidable, .ui';
   ['#mouseCursor', '#right-hand'].forEach(sel=>{
@@ -135,10 +125,11 @@ AFRAME.registerComponent('earth-controls',{
       cvs.addEventListener('wheel',e=>this.onWheelCanvas(e),{passive:true});
     });
 
-    // --- VR thumbstick バインド ---
+    // --- VR: コントローラー thumbstick の確実なバインド ---
     this._bindThumbsticks = ()=>{
       const L=document.querySelector('#left-hand');
       const R=document.querySelector('#right-hand');
+
       if(L && !L._thumbBound){
         L.addEventListener('thumbstickmoved', e=>{ this.stickInput.left={x:e.detail.x,y:e.detail.y}; });
         L._thumbBound=true;
@@ -151,6 +142,7 @@ AFRAME.registerComponent('earth-controls',{
     const startBind = ()=>{
       this._bindThumbsticks();
       if(this._bindTimer) clearInterval(this._bindTimer);
+      // 遅延生成に備え、入室直後しばらく監視
       this._bindTimer=setInterval(this._bindThumbsticks, 500);
       setTimeout(()=>clearInterval(this._bindTimer), 5000);
     };
@@ -185,32 +177,39 @@ AFRAME.registerComponent('earth-controls',{
     s=Math.max(this.minScale,Math.min(this.maxScale,s));
     this.el.object3D.scale.set(s,s,s);
   },
+  
+  // ===== 修正箇所 =====
   tick:function(){
     if(window.__panelOpen) return;
 
-    const rotY_k=(this.keys['ArrowLeft']?-1:0)+(this.keys['ArrowRight']?1:0);
-    const rotX_k=(this.keys['ArrowUp']?-1:0)+(this.keys['ArrowDown']?1:0);
-    const scale_k=(this.keys['w']||this.keys['W']?1:0)+(this.keys['s']||this.keys['S']?-1:0);
+    // --- キーボード入力 ---
+    const rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
+    const rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
+    const scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
 
-    const s=this.el.object3D.scale.x;
-    const t=(s-1.0)/(3.0-1.0);
-    const mul=1-(t*(7/8));
+    // --- VRコントローラー入力（ここでロジックを明確化） ---
+    const stickRotX = this.stickInput.right.y; // 右スティックの上下
+    const stickRotY = this.stickInput.right.x; // 右スティックの左右
+    const stickScale = this.stickInput.left.y;  // 左スティックの上下
 
-    const rotY_js=this.stickInput.right.x*this.data.joystickRotationSpeed*mul;
-    const rotX_js=this.stickInput.right.y*this.data.joystickRotationSpeed*mul;
-    const finalRotY=(rotY_js!==0?rotY_js:rotY_k*this.data.rotationSpeed*mul);
-    const finalRotX=(rotX_js!==0?rotX_js:rotX_k*this.data.rotationSpeed*mul);
+    // --- 拡大率に応じた回転・ズーム速度の調整 ---
+    const s = this.el.object3D.scale.x;
+    const t = (s - 1.0) / (3.0 - 1.0);
+    const mul = 1 - (t * (7 / 8));
 
-    const leftY=this.stickInput.left.y;
-    const finalScale=((leftY!==0? -leftY : scale_k))*this.data.scaleSpeed;
+    // --- 入力の統合（ジョイスティック優先）---
+    const finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : rotY_k * this.data.rotationSpeed) * mul;
+    const finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : rotX_k * this.data.rotationSpeed) * mul;
+    const finalScale = (stickScale !== 0 ? -stickScale : scale_k) * this.data.scaleSpeed; // 左スティックのY軸は上下反転させる
 
-    this.el.object3D.rotation.y += finalRotY*(Math.PI/180);
-    this.currentXRotation=Math.max(-80,Math.min(80,this.currentXRotation+finalRotX));
-    this.el.object3D.rotation.x=this.currentXRotation*(Math.PI/180);
+    // --- 座標の更新 ---
+    this.el.object3D.rotation.y += finalRotY * (Math.PI / 180);
+    this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation + finalRotX));
+    this.el.object3D.rotation.x = this.currentXRotation * (Math.PI / 180);
 
-    let ns=s+finalScale;
-    ns=Math.max(this.minScale,Math.min(this.maxScale,ns));
-    this.el.object3D.scale.set(ns,ns,ns);
+    let ns = s + finalScale;
+    ns = Math.max(this.minScale, Math.min(this.maxScale, ns));
+    this.el.object3D.scale.set(ns, ns, ns);
   }
 });
 
@@ -257,9 +256,6 @@ AFRAME.registerComponent('marker-placer',{
     const sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
     try{ const res=await fetch(sheetUrl); if(res.ok) this.allLocations=this.parseCsv(await res.text()); }catch(e){ console.error("データ取得エラー:",e); }
     this.updateClusters();
-
-    // ▼ 追加：シーン完成後にも再スキャン（初回取りこぼし防止）
-    this.el.sceneEl.addEventListener('loaded', () => setTimeout(refreshAllRaycasters, 0));
   },
   parseCsv:function(csvText){
     const locations=[]; const lines=csvText.trim().split('\n');
@@ -317,8 +313,7 @@ AFRAME.registerComponent('marker-placer',{
       this.el.appendChild(marker);
       this.currentMarkers.push(marker);
     });
-    // ▼ 追加：次フレームで raycaster を確実に更新
-    setTimeout(refreshAllRaycasters, 0);
+    refreshAllRaycasters();
   },
   haversineDistance:function(a,b){
     const toRad=x=>x*Math.PI/180;
@@ -359,7 +354,6 @@ AFRAME.registerComponent('marker-placer',{
 });
 </script>
 
-<!-- ===== Scene ===== -->
 <a-scene
   renderer="highRefreshRate: true"
   vr-mode-ui="enabled: true"
@@ -368,7 +362,6 @@ AFRAME.registerComponent('marker-placer',{
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
 
-  <!-- Earth -->
   <a-sphere id="earth" position="0 1.5 -3.2" radius="1" scale="1 1 1"
             src="eartn_model/world.topo.200409.3x10800x5400.jpg"
             segments-height="64" segments-width="128"
@@ -378,20 +371,18 @@ AFRAME.registerComponent('marker-placer',{
     <a-entity id="camera" camera position="0 1.6 0" look-controls>
       <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
-                raycaster="objects: .collidable, .ui; recursive: true; useWorldCoordinates: true; far: 50; interval: 0"></a-entity>
-    </a-entity>
+                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
 
-    <!-- Left hand: stick = zoom -->
-    <a-entity id="left-hand"
-              oculus-touch-controls="hand: left; model: true">
-    </a-entity>
+      <a-entity id="left-hand"
+                oculus-touch-controls="hand: left; model: true">
+      </a-entity>
 
-    <!-- Right hand: laser + click (trigger) + visible line -->
-    <a-entity id="right-hand"
-              oculus-touch-controls="hand: right; model: true"
-              laser-controls="hand: right"
-              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup"
-              raycaster="objects: .collidable, .ui; recursive: true; useWorldCoordinates: true; far: 50; interval: 0; showLine: true">
+      <a-entity id="right-hand"
+                oculus-touch-controls="hand: right; model: true"
+                laser-controls="hand: right"
+                cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup"
+                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true">
+      </a-entity>
     </a-entity>
   </a-entity>
 
