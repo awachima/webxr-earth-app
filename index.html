@@ -14,594 +14,416 @@
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
-  <style>
-    body, html { margin: 0; height: 100%; }
-  </style>
+  <style>html,body{margin:0;height:100%;background:#f4f7fb}</style>
 </head>
 <body>
 <script>
-/* ============================================================
-   共有フラグ（UIと地球の操作の分離）
-   ============================================================ */
-window.__panelOpen   = false;   // 情報パネルが開いているか
-window.__hoveringUI  = false;   // UI上にポインタがあるか（マウス用）
-function setupUIHoverWatcher() {
-  const cursor = document.querySelector('#mouseCursor');
-  if (!cursor) return;
-  const computeHover = (els) => {
-    window.__hoveringUI = (els || []).some(el => el.classList && el.classList.contains('ui'));
-  };
-  cursor.addEventListener('raycaster-intersection', (e)=> computeHover(e.detail.els));
-  cursor.addEventListener('raycaster-intersection-cleared', ()=> computeHover([]));
-}
-function refreshAllRaycasters () {
-  ['#mouseCursor', '#right-hand'].forEach(sel => {
+/* ----------------- 共有状態 ----------------- */
+window.__panelOpen  = false;
+window.__hoveringUI = false;
+
+function refreshAllRaycasters(){
+  ['#mouseCursor','#right-hand'].forEach(sel=>{
     const el = document.querySelector(sel);
     const rc = el && el.components && el.components.raycaster;
     if (rc && rc.refreshObjects) rc.refreshObjects();
   });
 }
 
-/* ============================================================
-   earth-controls : マウス/キーボード/右スティックで回転・ズーム
-   パネルが開いている間は無効化
-   ============================================================ */
-AFRAME.registerComponent('earth-controls', {
-  schema: {
-    rotationSpeed:         {type:'number', default: 2.0},
-    joystickRotationSpeed: {type:'number', default: 1.0},
-    scaleSpeed:            {type:'number', default: 0.01},
-    mouseRotationSpeed:    {type:'number', default: 0.2},
-    wheelScaleSpeed:       {type:'number', default: 0.0005}
+function setupUIHoverWatcher(){
+  const cursor = document.querySelector('#mouseCursor');
+  if (!cursor) return;
+  const setHover = (els)=>window.__hoveringUI=(els||[]).some(el=>el.classList&&el.classList.contains('ui'));
+  cursor.addEventListener('raycaster-intersection', e=>setHover(e.detail.els));
+  cursor.addEventListener('raycaster-intersection-cleared', ()=>setHover([]));
+}
+
+/* ----------------- 地球操作 ----------------- */
+AFRAME.registerComponent('earth-controls',{
+  schema:{
+    rotationSpeed:{default:2.0},
+    joystickRotationSpeed:{default:1.0},
+    scaleSpeed:{default:0.01},
+    mouseRotationSpeed:{default:0.2},
+    wheelScaleSpeed:{default:0.0005}
   },
-  init() {
-    this.minScale = 1.0;
-    this.maxScale = 3.0;
-    this.currentXRotation = 0;
-    this.keys = {};
-    this.stickInput = {left:{x:0,y:0}, right:{x:0,y:0}};
-    this.isDragging = false;
-    this.previousMousePosition = {x:0,y:0};
-    this.cameraEl = document.querySelector('#camera');
+  init(){
+    this.minScale=1.0; this.maxScale=3.0;
+    this.currentXRotation=0;
+    this.keys={}; this.stick={left:{x:0,y:0}, right:{x:0,y:0}};
+    this.drag=false; this.prev={x:0,y:0};
+    this.cameraEl=document.querySelector('#camera');
 
-    this.onStickMoved   = this.onStickMoved.bind(this);
-    this.onMouseDown    = this.onMouseDown.bind(this);
-    this.onMouseMove    = this.onMouseMove.bind(this);
-    this.onMouseUp      = this.onMouseUp.bind(this);
-    this.onWheelCanvas  = this.onWheelCanvas.bind(this);
-
-    this.el.sceneEl.addEventListener('thumbstickmoved', this.onStickMoved);
-    window.addEventListener('keydown', e=> this.keys[e.key] = true);
-    window.addEventListener('keyup',   e=> this.keys[e.key] = false);
-
-    this.el.sceneEl.addEventListener('loaded', () => {
-      const cvs = this.el.sceneEl.canvas;
-      cvs.addEventListener('mousedown', this.onMouseDown);
-      window.addEventListener('mousemove', this.onMouseMove);
-      window.addEventListener('mouseup', this.onMouseUp);
-      cvs.addEventListener('wheel', this.onWheelCanvas, {passive:true});
+    this.el.sceneEl.addEventListener('thumbstickmoved', e=>{
+      if (e.target.id==='left-hand')  this.stick.left=e.detail;
+      if (e.target.id==='right-hand') this.stick.right=e.detail;
     });
-  },
-  onMouseDown(evt){
-    if (window.__panelOpen) return;
-    this.isDragging = true;
-    this.previousMousePosition = {x:evt.clientX,y:evt.clientY};
-    if (this.cameraEl) this.cameraEl.setAttribute('look-controls', 'enabled', false);
-  },
-  onMouseMove(evt){
-    if (window.__panelOpen || !this.isDragging) return;
-    const dx = evt.clientX - this.previousMousePosition.x;
-    const dy = evt.clientY - this.previousMousePosition.y;
-    this.el.object3D.rotation.y += dx * (Math.PI/180) * this.data.mouseRotationSpeed;
-    this.currentXRotation += dy * this.data.mouseRotationSpeed;
-    this.previousMousePosition = {x:evt.clientX,y:evt.clientY};
-  },
-  onMouseUp(){
-    this.isDragging = false;
-    if (this.cameraEl) this.cameraEl.setAttribute('look-controls', 'enabled', true);
-  },
-  onWheelCanvas(evt){
-    if (window.__panelOpen || window.__hoveringUI) return;
-    let s = this.el.object3D.scale.x;
-    s += evt.deltaY * -1 * this.data.wheelScaleSpeed;
-    s = Math.max(this.minScale, Math.min(this.maxScale, s));
-    this.el.object3D.scale.set(s,s,s);
-  },
-  onStickMoved(evt){
-    // 右スティック：回転、左スティック：ズーム。パネル中は無効
-    if (evt.target.id === 'left-hand')  this.stickInput.left  = evt.detail;
-    if (evt.target.id === 'right-hand') this.stickInput.right = evt.detail;
+    window.addEventListener('keydown',e=>this.keys[e.key]=true);
+    window.addEventListener('keyup',e=>this.keys[e.key]=false);
+
+    this.el.sceneEl.addEventListener('loaded',()=>{
+      const cvs=this.el.sceneEl.canvas;
+      cvs.addEventListener('mousedown',e=>{
+        if (window.__panelOpen) return;
+        this.drag=true; this.prev={x:e.clientX,y:e.clientY};
+        this.cameraEl && this.cameraEl.setAttribute('look-controls','enabled:false');
+      });
+      window.addEventListener('mousemove',e=>{
+        if (window.__panelOpen||!this.drag) return;
+        const dx=e.clientX-this.prev.x, dy=e.clientY-this.prev.y;
+        this.el.object3D.rotation.y += dx*(Math.PI/180)*this.data.mouseRotationSpeed;
+        this.currentXRotation += dy*this.data.mouseRotationSpeed;
+        this.prev={x:e.clientX,y:e.clientY};
+      });
+      window.addEventListener('mouseup',()=>{
+        this.drag=false;
+        this.cameraEl && this.cameraEl.setAttribute('look-controls','enabled:true');
+      });
+      cvs.addEventListener('wheel',e=>{
+        if (window.__panelOpen||window.__hoveringUI) return;
+        let s=this.el.object3D.scale.x;
+        s += e.deltaY * -1 * this.data.wheelScaleSpeed;
+        s=Math.max(this.minScale,Math.min(this.maxScale,s));
+        this.el.object3D.scale.set(s,s,s);
+      },{passive:true});
+    });
   },
   tick(){
     if (window.__panelOpen) return;
+    const s=this.el.object3D.scale.x;
+    const t=(s-1)/(3-1), mul=1-(t*(7/8));
 
-    const rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
-    const rotX_k = (this.keys['ArrowUp']   ? -1 : 0) + (this.keys['ArrowDown']  ? 1 : 0);
-    const scale_k = (this.keys['w']||this.keys['W'] ? 1 : 0) + (this.keys['s']||this.keys['S'] ? -1 : 0);
+    const ky=(this.keys['ArrowLeft']?-1:0)+(this.keys['ArrowRight']?1:0);
+    const kx=(this.keys['ArrowUp']?-1:0)+(this.keys['ArrowDown']?1:0);
+    const kz=((this.keys['w']||this.keys['W'])?1:0)+((this.keys['s']||this.keys['S'])?-1:0);
 
-    const s = this.el.object3D.scale.x;
-    const t = (s - 1.0) / (3.0 - 1.0);
-    const mul = 1 - (t * (7/8));
+    const ry=(this.stick.right.x||0)*this.data.joystickRotationSpeed*mul || ky*this.data.rotationSpeed*mul;
+    const rx=(this.stick.right.y||0)*this.data.joystickRotationSpeed*mul || kx*this.data.rotationSpeed*mul;
+    const sc=(this.stick.left.y!==0?-this.stick.left.y:kz)*this.data.scaleSpeed;
 
-    const rotY_js = this.stickInput.right.x * this.data.joystickRotationSpeed * mul;
-    const rotX_js = this.stickInput.right.y * this.data.joystickRotationSpeed * mul;
+    this.el.object3D.rotation.y += ry*(Math.PI/180);
+    this.currentXRotation = Math.max(-80,Math.min(80,this.currentXRotation+rx));
+    this.el.object3D.rotation.x = this.currentXRotation*(Math.PI/180);
 
-    const finalRotY = (rotY_js !== 0 ? rotY_js : rotY_k * this.data.rotationSpeed * mul);
-    const finalRotX = (rotX_js !== 0 ? rotX_js : rotX_k * this.data.rotationSpeed * mul);
-    const finalScale = (this.stickInput.left.y !== 0 ? -this.stickInput.left.y : scale_k) * this.data.scaleSpeed;
-
-    this.el.object3D.rotation.y += finalRotY * (Math.PI/180);
-    this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation + finalRotX));
-    this.el.object3D.rotation.x = this.currentXRotation * (Math.PI/180);
-
-    let ns = s + finalScale;
-    ns = Math.max(this.minScale, Math.min(this.maxScale, ns));
+    let ns=s+sc; ns=Math.max(this.minScale,Math.min(this.maxScale,ns));
     this.el.object3D.scale.set(ns,ns,ns);
   }
 });
 
-/* ============================================================
-   hex-marker : 六角柱＋上に数字。数字は常にカメラ正対
-   ============================================================ */
-AFRAME.registerComponent('hex-marker', {
+/* ----------------- クラスタ（六角柱＋数字） ----------------- */
+AFRAME.registerComponent('hex-marker',{
   schema:{
-    count:      {type:'number', default:1},
-    color:      {type:'color',  default:'yellow'},
-    baseRadius: {type:'number', default:0.0075},
-    heightUnit: {type:'number', default:0.0001}
+    count:{type:'number',default:1},
+    color:{type:'color',default:'yellow'},
+    baseRadius:{type:'number',default:0.0075},
+    heightUnit:{type:'number',default:0.0001}
   },
   init(){
-    const d = this.data;
-    this.height = 0.01 + (d.count * d.heightUnit);
+    const d=this.data;
+    this.height=0.01 + d.count*d.heightUnit;
 
-    const geom = new THREE.CylinderGeometry(d.baseRadius*0.9, d.baseRadius, this.height, 6);
-    const mat  = new THREE.MeshStandardMaterial({color:d.color, flatShading:true});
-    const mesh = new THREE.Mesh(geom, mat);
-    this.el.setObject3D('mesh', mesh);
+    // 六角柱（レイキャスト対象）
+    const geom=new THREE.CylinderGeometry(d.baseRadius*0.9,d.baseRadius,this.height,6);
+    const mat=new THREE.MeshStandardMaterial({color:d.color,flatShading:true});
+    const mesh=new THREE.Mesh(geom,mat);
+    this.el.setObject3D('mesh',mesh);
 
-    // 数字（troika ではなく a-text：軽量＆簡潔）
-    const txt = document.createElement('a-text');
-    txt.setAttribute('value', d.count);
-    txt.setAttribute('align', 'center');
-    txt.setAttribute('color', '#111');
-    // 適切な基準サイズ
-    const baseFontSize = d.baseRadius * 0.8;
-    txt.setAttribute('width', baseFontSize * 8);
-    this.el.appendChild(txt);
-    this.textEl = txt;
+    // 数字（TroikaText / 前面固定）
+    const label=document.createElement('a-entity');
+    label.setAttribute('troika-text',{
+      value:String(d.count),
+      font:'static/NotoSansJP-Regular.ttf',
+      color:'#111111',
+      fontSize:d.baseRadius*0.8,
+      outlineWidth:0.0006,
+      outlineColor:'#ffffff',
+      outlineBlur:0.00001,
+      depthOffset:-2
+    });
+    label.setAttribute('position','0 0 0');
+    label.addEventListener('object3dset',()=>{
+      const obj=label.getObject3D('mesh');
+      if (obj && obj.material){ obj.material.depthTest=false; obj.material.needsUpdate=true; obj.renderOrder=20; }
+    });
+    this.el.appendChild(label);
+    this.label=label;
 
-    // カメラ参照
-    this.cameraEl = document.querySelector('#camera');
+    this.cameraEl=document.querySelector('#camera');
   },
   tick(){
-    if (!this.textEl) return;
-    const s = this.el.object3D.scale.y || 1;
-    const gap = 0.0001 / s;
-    this.textEl.setAttribute('position', {x:0, y:this.height/2 + gap, z:0});
+    if (!this.label) return;
+    const s=this.el.object3D.scale.y||1;
+    const gap=0.0001/s;
+    this.label.object3D.position.set(0,this.height/2+gap,0);
 
-    // ビルボード（常にカメラ正対）
-    if (this.cameraEl) {
-      const tp = this.textEl.object3D.position.clone();
-      this.textEl.object3D.lookAt(this.cameraEl.object3D.getWorldPosition(new THREE.Vector3()));
-      // 水平に立てずに、数字は正対したまま少し前へ
-      this.textEl.object3D.rotateX(-Math.PI/2);
+    if (this.cameraEl){
+      const camPos=this.cameraEl.object3D.getWorldPosition(new THREE.Vector3());
+      this.label.object3D.lookAt(camPos);
+      this.label.object3D.rotateX(-Math.PI/2);
     }
   }
 });
 
-/* ============================================================
-   marker-placer : CSVから地点を読み込み、スケールに応じてクラスタリング
-   ============================================================ */
-AFRAME.registerComponent('marker-placer', {
-  schema:{ maxMarkerMultiplier:{type:'number', default:12} },
+/* ----------------- 位置計算＆配置 ----------------- */
+AFRAME.registerComponent('marker-placer',{
+  schema:{maxMarkerMultiplier:{default:12}},
   async init(){
-    this.allLocations = [];
-    this.currentMarkers = [];
-    this.cameraEl  = document.querySelector('#camera');
-    this.infoPanel = document.querySelector('#info-panel');
+    this.all=[]; this.markers=[];
+    this.cam=document.querySelector('#camera');
+    this.info=document.querySelector('#info-panel');
+    this.prevScale=0;
 
-    this.cameraPos = new THREE.Vector3();
-    this.markerPos = new THREE.Vector3();
-    this.earthPos  = new THREE.Vector3();
-    this.previousEarthScale = 0;
-
-    const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
+    const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
     try{
-      const res = await fetch(sheetUrl);
-      if (res.ok){
-        const csvText = await res.text();
-        this.allLocations = this.parseCsv(csvText);
-      } else {
-        console.error('Google Sheets 読み込み失敗');
-      }
-    }catch(e){
-      console.error('データ取得エラー:', e);
-    }
+      const r=await fetch(url); if(!r.ok) throw new Error('fetch failed');
+      const csv=await r.text(); this.all=this.parse(csv);
+    }catch(e){ console.error(e); }
     this.updateClusters();
   },
-  parseCsv(csvText){
-    const locations = [];
-    const lines = csvText.trim().split('\n');
-    const startIndex = lines[0].toLowerCase().includes('title') ? 1 : 0;
-    for (let i=startIndex;i<lines.length;i++){
-      const parts = lines[i].split(',');
-      if (parts.length>=4){
-        locations.push({
-          title: parts[0].replace(/"/g,''),
-          lat: parseFloat(parts[1]),
-          lon: parseFloat(parts[2]),
-          url: parts[3].replace(/"/g,'')
-        });
-      }
+  parse(csv){
+    const out=[]; const lines=csv.trim().split('\n');
+    const start=lines[0].toLowerCase().includes('title')?1:0;
+    for(let i=start;i<lines.length;i++){
+      const p=lines[i].split(',');
+      if (p.length>=4) out.push({title:p[0].replace(/"/g,''),lat:+p[1],lon:+p[2],url:p[3].replace(/"/g,'')});
     }
-    return locations;
+    return out;
   },
-  _refreshRaycasters(){ refreshAllRaycasters(); },
+  _refresh(){ refreshAllRaycasters(); },
   updateClusters(){
-    // 既存削除
-    this.currentMarkers.forEach(m => m.parentNode && m.parentNode.removeChild(m));
-    this.currentMarkers = [];
-    this._refreshRaycasters();
+    this.markers.forEach(m=>m.parentNode&&m.parentNode.removeChild(m));
+    this.markers.length=0; this._refresh();
 
-    const s = this.el.object3D.scale.x;
-    const minScale=1.0, maxScale=3.0;
-    const minTh=0.2, maxTh=0.0035;
-    const t  = (s - minScale)/(maxScale-minScale);
-    const th = minTh - t*(minTh - maxTh);
+    const s=this.el.object3D.scale.x;
+    const minS=1,maxS=3,minTh=0.2,maxTh=0.0035;
+    const t=(s-minS)/(maxS-minS), th=minTh - t*(minTh-maxTh);
 
-    let un = [...this.allLocations];
-    const clusters = [];
-    while(un.length>0){
-      const p = un.shift();
-      const cl=[p]; const rest=[];
-      for(const q of un){
-        const dist = this.haversineDistance(p,q);
-        if (dist < th) cl.push(q);
-        else rest.push(q);
+    let rest=[...this.all]; const clusters=[];
+    while(rest.length){
+      const p=rest.shift(), cl=[p], tmp=[];
+      for(const q of rest){
+        if (this.haversine(p,q)<th) cl.push(q); else tmp.push(q);
       }
-      un = rest; clusters.push(cl);
+      rest=tmp; clusters.push(cl);
     }
-    this.placeMarkersFromClusters(clusters);
+    this.place(clusters);
   },
-  placeMarkersFromClusters(clusters){
-    const R = this.el.getAttribute('geometry').radius;
-    clusters.forEach(cluster=>{
-      let lat=0,lon=0;
-      cluster.forEach(p=>{lat+=p.lat;lon+=p.lon;});
-      lat/=cluster.length; lon/=cluster.length;
-      const pos = this.latLonTo3D(lat,lon,R);
+  place(clusters){
+    const R=this.el.getAttribute('geometry').radius;
+    clusters.forEach(cl=>{
+      let lat=0,lon=0; cl.forEach(p=>{lat+=p.lat;lon+=p.lon;}); lat/=cl.length; lon/=cl.length;
+      const pos=this.latLon(lat,lon,R);
 
-      const marker = document.createElement('a-entity');
-      marker.setAttribute('position', pos);
+      const e=document.createElement('a-entity');
+      e.setAttribute('position',pos);
+      // 法線合わせ
+      const y=pos.clone().normalize(), up=new THREE.Vector3(0,1,0);
+      const x=new THREE.Vector3().crossVectors(up,y).normalize(); if (!x.length()) x.set(1,0,0);
+      const z=new THREE.Vector3().crossVectors(x,y);
+      const m=new THREE.Matrix4().makeBasis(x,y,z); e.object3D.quaternion.setFromRotationMatrix(m);
 
-      // 法線に合わせる
-      const yAxis = pos.clone().normalize();
-      const worldUp = new THREE.Vector3(0,1,0);
-      const xAxis = new THREE.Vector3().crossVectors(worldUp,yAxis).normalize();
-      if (xAxis.length()===0) xAxis.set(1,0,0);
-      const zAxis = new THREE.Vector3().crossVectors(xAxis,yAxis);
-      const rotM = new THREE.Matrix4().makeBasis(xAxis,yAxis,zAxis);
-      marker.object3D.quaternion.setFromRotationMatrix(rotM);
+      e.setAttribute('hex-marker',{count:cl.length});
+      e.classList.add('collidable');
+      e.dataset.locations=JSON.stringify(cl);
 
-      marker.setAttribute('hex-marker', {count:cluster.length});
-      marker.classList.add('collidable');
-      marker.dataset.locations = JSON.stringify(cluster);
-
-      marker.addEventListener('mouseenter', ()=>{
+      e.addEventListener('mouseenter',()=>{
         if (window.__panelOpen) return;
-        const mesh = marker.getObject3D('mesh'); if (mesh) mesh.material.color.set('green');
+        const mesh=e.getObject3D('mesh'); if (mesh) mesh.material.color.set('green');
       });
-      marker.addEventListener('mouseleave', ()=>{
+      e.addEventListener('mouseleave',()=>{
         if (window.__panelOpen) return;
-        const mesh = marker.getObject3D('mesh'); if (mesh) mesh.material.color.set('yellow');
+        const mesh=e.getObject3D('mesh'); if (mesh) mesh.material.color.set('yellow');
       });
-      marker.addEventListener('click', (evt)=>{
+      e.addEventListener('click',()=>{
         if (window.__panelOpen) return;
-        const locations = JSON.parse(marker.dataset.locations || '[]');
-        this.infoPanel.setAttribute('info-panel', {locations});
-        this.infoPanel.setAttribute('visible', true);
-        window.__panelOpen = true;
+        const locs=JSON.parse(e.dataset.locations||'[]');
+        this.info.setAttribute('info-panel',{locations:locs});
+        this.info.setAttribute('visible',true);
+        window.__panelOpen=true;
       });
 
-      this.el.appendChild(marker);
-      this.currentMarkers.push(marker);
+      this.el.appendChild(e);
+      this.markers.push(e);
     });
-    this._refreshRaycasters();
+    this._refresh();
   },
-  haversineDistance(a,b){
-    const toRad = x => x*Math.PI/180;
-    const dLat = toRad(b.lat - a.lat);
-    const dLon = toRad(b.lon - a.lon);
-    const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
-    const h = Math.sin(dLat/2)**2 + Math.sin(dLon/2)**2 * Math.cos(lat1)*Math.cos(lat2);
-    return 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
+  haversine(a,b){
+    const r=x=>x*Math.PI/180;
+    const dLat=r(b.lat-a.lat), dLon=r(b.lon-a.lon);
+    const la1=r(a.lat), la2=r(b.lat);
+    const h=Math.sin(dLat/2)**2 + Math.sin(dLon/2)**2 * Math.cos(la1)*Math.cos(la2);
+    return 2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
   },
   tick(){
-    if (this.currentMarkers.length===0 || !this.cameraEl) return;
+    if (!this.markers.length||!this.cam) return;
+    const s=this.el.object3D.scale.x;
+    if (Math.abs(s-this.prevScale)>0.1){ this.updateClusters(); this.prevScale=s; }
 
-    const s = this.el.object3D.scale.x;
-    if (Math.abs(s - this.previousEarthScale) > 0.1){
-      this.updateClusters();
-      this.previousEarthScale = s;
-    }
+    const camPos=this.cam.object3D.getWorldPosition(new THREE.Vector3());
+    const earthPos=this.el.object3D.getWorldPosition(new THREE.Vector3());
+    const t=(s-1)/(3-1), mul=this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier-1);
 
-    this.el.object3D.getWorldPosition(this.earthPos);
-    this.cameraEl.object3D.getWorldPosition(this.cameraPos);
-
-    const t = (s-1)/(3-1);
-    const markerScale = this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier-1);
-
-    for (const m of this.currentMarkers){
-      m.object3D.scale.set(markerScale,markerScale,markerScale);
-
-      // 裏側不可視
-      m.object3D.getWorldPosition(this.markerPos);
-      const normal = this.markerPos.clone().sub(this.earthPos).normalize();
-      const camDir = this.markerPos.clone().sub(this.cameraPos).normalize();
-      const visible = (normal.dot(camDir) < 0);
-      m.object3D.visible = visible;
-      if (m.textEl) m.textEl.object3D.visible = visible;
+    for(const e of this.markers){
+      e.object3D.scale.set(mul,mul,mul);
+      const w=e.object3D.getWorldPosition(new THREE.Vector3());
+      const normal=w.clone().sub(earthPos).normalize();
+      const camDir=w.clone().sub(camPos).normalize();
+      const visible=(normal.dot(camDir)<0);
+      e.object3D.visible=visible;
     }
   },
-  latLonTo3D(lat,lon,R){
-    const phi = (90-lat)*(Math.PI/180);
-    const theta = (lon+180)*(Math.PI/180);
+  latLon(lat,lon,R){
+    const phi=(90-lat)*(Math.PI/180), th=(lon+180)*(Math.PI/180);
     return new THREE.Vector3(
-      -(R*Math.sin(phi)*Math.cos(theta)),
+      -(R*Math.sin(phi)*Math.cos(th)),
       R*Math.cos(phi),
-      R*Math.sin(phi)*Math.sin(theta)
+      R*Math.sin(phi)*Math.sin(th)
     );
   }
 });
 
-/* ============================================================
-   info-panel : 角丸＋境界線＋スクロール可能 TroikaText
-   文字を全面/最前面（depthTest: false, renderOrder 大）に固定
-   ============================================================ */
-AFRAME.registerComponent('info-panel', {
+/* ----------------- パネル ----------------- */
+AFRAME.registerComponent('info-panel',{
   schema:{
-    locations:    {type:'array',  default:[]},
-    cornerRadius: {type:'number', default:0.06}, // 1.5倍相当
-    panelWidth:   {type:'number', default:1.2},
-    panelHeight:  {type:'number', default:0.9},
-    panelColor:   {type:'string', default:'#333'},
-    panelOpacity: {type:'number', default:0.85},
-    borderColor:  {type:'string', default:'#FFFFFF'},
-    fontUrl:      {type:'string', default:'static/NotoSansJP-Regular.ttf'},
-    maxTitles:    {type:'number', default:28}
+    locations:{type:'array',default:[]},
+    cornerRadius:{default:0.06},
+    panelWidth:{default:1.2},
+    panelHeight:{default:0.9},
+    panelColor:{default:'#333'},
+    panelOpacity:{default:0.85},
+    borderColor:{default:'#fff'},
+    fontUrl:{default:'static/NotoSansJP-Regular.ttf'},
+    maxTitles:{default:28}
   },
   init(){
     const w=this.data.panelWidth, h=this.data.panelHeight;
-    const r=Math.min(this.data.cornerRadius, Math.min(w,h)*0.49);
+    const r=Math.min(this.data.cornerRadius,Math.min(w,h)*0.49);
 
-    // 角丸シェイプ
-    const shape = new THREE.Shape();
-    const x0=-w/2, y0=h/2;
-    shape.moveTo(x0+r, y0);
-    shape.lineTo(x0+w-r, y0);
-    shape.quadraticCurveTo(x0+w, y0, x0+w, y0-r);
-    shape.lineTo(x0+w, y0-h+r);
-    shape.quadraticCurveTo(x0+w, y0-h, x0+w-r, y0-h);
-    shape.lineTo(x0+r, y0-h);
-    shape.quadraticCurveTo(x0, y0-h, x0, y0-h+r);
-    shape.lineTo(x0, y0-r);
-    shape.quadraticCurveTo(x0, y0, x0+r, y0);
+    const shape=new THREE.Shape();
+    const x=-w/2,y=h/2;
+    shape.moveTo(x+r,y);
+    shape.lineTo(x+w-r,y); shape.quadraticCurveTo(x+w,y,x+w,y-r);
+    shape.lineTo(x+w,y-h+r); shape.quadraticCurveTo(x+w,y-h,x+w-r,y-h);
+    shape.lineTo(x+r,y-h); shape.quadraticCurveTo(x,y-h,x,y-h+r);
+    shape.lineTo(x,y-r); shape.quadraticCurveTo(x,y,x+r,y);
 
-    // 面
-    const panelGeom = new THREE.ShapeGeometry(shape, 32);
-    const panelMat  = new THREE.MeshBasicMaterial({color:this.data.panelColor, transparent:true, opacity:this.data.panelOpacity});
-    this.panelMesh = new THREE.Mesh(panelGeom, panelMat);
-    this.el.setObject3D('panelMesh', this.panelMesh);
+    const g=new THREE.ShapeGeometry(shape,32);
+    const m=new THREE.MeshBasicMaterial({color:this.data.panelColor,transparent:true,opacity:this.data.panelOpacity});
+    this.panel=new THREE.Mesh(g,m); this.el.setObject3D('panel',this.panel);
 
-    // 枠線
-    const borderPts = shape.getPoints(128).map(p=>new THREE.Vector3(p.x,p.y,0.001));
-    const borderGeom = new THREE.BufferGeometry().setFromPoints(borderPts);
-    this.borderLine = new THREE.LineLoop(borderGeom, new THREE.LineBasicMaterial({color:this.data.borderColor}));
-    this.el.setObject3D('borderLine', this.borderLine);
+    const borderPts=shape.getPoints(128).map(p=>new THREE.Vector3(p.x,p.y,0.001));
+    const gl=new THREE.BufferGeometry().setFromPoints(borderPts);
+    this.line=new THREE.LineLoop(gl,new THREE.LineBasicMaterial({color:this.data.borderColor}));
+    this.el.setObject3D('line',this.line);
 
-    // タイトル置き場
-    this.titleContainer = document.createElement('a-entity');
-    this.el.appendChild(this.titleContainer);
+    [this.panel,this.line].forEach((obj,i)=>{
+      obj.renderOrder=990+i; if (obj.material){obj.material.depthTest=false; obj.material.needsUpdate=true;}
+    });
 
-    // 前面固定（パネル本体）
-    const setAlwaysOnTop = (obj3D, order) => {
-      if (!obj3D) return;
-      obj3D.renderOrder = order;
-      const m = obj3D.material;
-      if (Array.isArray(m)) m.forEach(mm=>{ if(mm){mm.depthTest=false; mm.needsUpdate=true;}});
-      else if (m) { m.depthTest=false; m.needsUpdate=true; }
-    };
-    setAlwaysOnTop(this.panelMesh, 998);
-    setAlwaysOnTop(this.borderLine, 999);
+    this.list=document.createElement('a-entity'); this.el.appendChild(this.list);
 
-    // 閉じるボタン（右上）
-    const closeButton = document.createElement('a-entity');
-    closeButton.setAttribute('position', `${w/2 - 0.06} ${h/2 - 0.06} 0.02`);
-    closeButton.classList.add('ui'); // UIヒット対象
-    this.el.appendChild(closeButton);
+    const close=document.createElement('a-entity');
+    close.setAttribute('position',`${w/2-0.06} ${h/2-0.06} 0.02`);
+    close.classList.add('ui');
+    const bg=document.createElement('a-circle'); bg.setAttribute('radius',0.04); bg.setAttribute('color','red');
+    bg.setAttribute('material','depthTest:false; transparent:true'); close.appendChild(bg);
+    const bar=(rot)=>{const p=document.createElement('a-plane'); p.setAttribute('width',0.055); p.setAttribute('height',0.007);
+      p.setAttribute('rotation',`0 0 ${rot}`); p.setAttribute('color','#fff'); p.setAttribute('position','0 0 0.001');
+      p.setAttribute('material','depthTest:false; transparent:true'); close.appendChild(p);};
+    bar(45); bar(-45);
+    this.el.appendChild(close);
+    close.addEventListener('click',()=>{ this.el.setAttribute('visible',false); window.__panelOpen=false; });
 
-    const buttonBG = document.createElement('a-circle');
-    buttonBG.setAttribute('radius', 0.04);
-    buttonBG.setAttribute('color', 'red');
-    buttonBG.setAttribute('material', 'depthTest:false; transparent:true');
-    closeButton.appendChild(buttonBG);
-
-    const mkx = (rot)=> {
-      const p = document.createElement('a-plane');
-      p.setAttribute('width', 0.055);
-      p.setAttribute('height', 0.007);
-      p.setAttribute('rotation', `0 0 ${rot}`);
-      p.setAttribute('color', 'white');
-      p.setAttribute('position', '0 0 0.001');
-      p.setAttribute('material', 'depthTest:false; transparent:true');
-      closeButton.appendChild(p);
-      return p;
-    };
-    const x1 = mkx(45), x2 = mkx(-45);
-
-    // 前面順序
-    const applyFront = () => {
-      setAlwaysOnTop(buttonBG.getObject3D('mesh'), 1001);
-      setAlwaysOnTop(x1.getObject3D('mesh'),     1002);
-      setAlwaysOnTop(x2.getObject3D('mesh'),     1002);
-    };
-    let loadedCount=0;
-    const chk=()=>{ if(++loadedCount===3) applyFront(); };
-    buttonBG.addEventListener('loaded', chk);
-    x1.addEventListener('loaded', chk);
-    x2.addEventListener('loaded', chk);
-
-    // クリックで閉じる
-    const close = ()=>{
-      this.el.setAttribute('visible', false);
-      window.__panelOpen = false;
-    };
-    closeButton.addEventListener('click', close);
-
-    // スクロール制御
-    this.topIndex = 0;
-    this.onWheel = (evt)=>{
+    this.top=0;
+    this.onWheel=(e)=>{
       if (!window.__panelOpen) return;
-      const delta = Math.sign(evt.deltaY);
-      this.topIndex = Math.max(0, Math.min(Math.max(0, this.locations.length - this.data.maxTitles), this.topIndex + delta));
-      this.renderTitles();
+      const d=Math.sign(e.deltaY);
+      const max=Math.max(0,(this.locations?.length||0)-this.data.maxTitles);
+      this.top=Math.max(0,Math.min(max,this.top+d));
+      this.render();
     };
-    this.el.sceneEl.addEventListener('loaded', ()=>{
-      this.el.sceneEl.canvas.addEventListener('wheel', this.onWheel, {passive:true});
+    this.el.sceneEl.addEventListener('loaded',()=>{
+      this.el.sceneEl.canvas.addEventListener('wheel',this.onWheel,{passive:true});
     });
 
-    // パネルが開いている間は地球操作禁止
-    this.el.addEventListener('visible-changed', (e)=>{
-      window.__panelOpen = !!e.detail.newData;
-    });
-
-    // 初回
-    this.locations = [];
+    this.locations=[];
   },
-  update(oldData){
-    // locations が更新されたら描画
-    this.locations = (this.data.locations || []);
-    if (this.locations.length>0) this.topIndex = 0;
-    this.renderTitles();
-  },
+  update(){ this.locations=this.data.locations||[]; this.top=0; this.render(); },
   remove(){
-    // 後始末
-    const cvs = this.el.sceneEl && this.el.sceneEl.canvas;
-    if (cvs) cvs.removeEventListener('wheel', this.onWheel);
+    const cvs=this.el.sceneEl && this.el.sceneEl.canvas;
+    if (cvs) cvs.removeEventListener('wheel',this.onWheel);
   },
-  renderTitles(){
-    // 既存消去
-    while (this.titleContainer.firstChild) this.titleContainer.removeChild(this.titleContainer.firstChild);
-
-    const locs = this.locations.slice(this.topIndex, this.topIndex + this.data.maxTitles);
-    // タイトル描画
+  render(){
+    while(this.list.firstChild) this.list.removeChild(this.list.firstChild);
+    const w=this.data.panelWidth, h=this.data.panelHeight;
+    const locs=(this.locations||[]).slice(this.top,this.top+this.data.maxTitles);
     locs.forEach((loc,i)=>{
-      const t = document.createElement('a-entity');
-      t.setAttribute('troika-text', {
-        value: loc.title,
-        font:  this.data.fontUrl,
-        fontSize: 0.06,
-        color: '#FFFFFF',
-        anchor: 'left',
-        outlineWidth: 0.0006,
-        outlineColor: '#000000',
-        outlineBlur: 0.00001,
-        depthOffset: -2
+      const t=document.createElement('a-entity');
+      t.setAttribute('troika-text',{
+        value:loc.title, font:this.data.fontUrl, fontSize:0.06, color:'#fff',
+        anchor:'left', outlineWidth:0.0006, outlineColor:'#000', outlineBlur:0.00001, depthOffset:-2
       });
-      t.setAttribute('position', `-${this.data.panelWidth/2 - 0.1} ${this.data.panelHeight/2 - 0.15 - (i*0.065)} 0.02`);
-      // 最前面＆地球に埋もれない
-      t.addEventListener('object3dset', ()=>{
-        const mesh = t.getObject3D('mesh');
-        if (mesh && mesh.material){
-          mesh.renderOrder = 1000;
-          mesh.material.depthTest = false;
-          mesh.material.needsUpdate = true;
-        }
+      t.setAttribute('position',`-${w/2-0.1} ${h/2-0.15-(i*0.065)} 0.02`);
+      t.addEventListener('object3dset',()=>{
+        const mesh=t.getObject3D('mesh'); if (mesh){ mesh.renderOrder=1000; mesh.material.depthTest=false; mesh.material.needsUpdate=true; }
       });
-      this.titleContainer.appendChild(t);
+      this.list.appendChild(t);
     });
-
     refreshAllRaycasters();
   }
 });
 
-/* ============================================================
-   シーン初期化：VR入退出でコントローラ表示切替
-   ============================================================ */
+/* ----------------- VR 可視/不可視（tracked-controls-webxr は使わない） ----------------- */
 function setupVRHandVisibility(){
-  const scene = document.querySelector('a-scene');
-  const left  = document.getElementById('left-hand');
-  const right = document.getElementById('right-hand');
-
-  scene.addEventListener('enter-vr', ()=>{
-    left.setAttribute('visible', true);
-    right.setAttribute('visible', true);
-  });
-  scene.addEventListener('exit-vr', ()=>{
-    left.setAttribute('visible', false);
-    right.setAttribute('visible', false);
-  });
+  const scene=document.querySelector('a-scene');
+  const L=document.getElementById('left-hand');
+  const R=document.getElementById('right-hand');
+  scene.addEventListener('enter-vr',()=>{ L.setAttribute('visible',true); R.setAttribute('visible',true); });
+  scene.addEventListener('exit-vr', ()=>{ L.setAttribute('visible',false); R.setAttribute('visible',false); });
 }
-
-window.addEventListener('DOMContentLoaded', ()=>{
-  setupUIHoverWatcher();
-  setupVRHandVisibility();
-});
+window.addEventListener('DOMContentLoaded',()=>{ setupUIHoverWatcher(); setupVRHandVisibility(); });
 </script>
 
-<!-- ===================== シーン ===================== -->
 <a-scene
-  renderer="highRefreshRate: true"
-  webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay, bounded-floor; overlayElement: #hudPanel"
+  renderer="highRefreshRate:true"
+  webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor,dom-overlay; overlayElement:#hud"
   vr-mode-ui="enabled: true">
 
-  <!-- 照明 -->
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.6"></a-light>
 
-  <!-- 地球 -->
   <a-sphere id="earth"
             position="0 1.5 -3.2"
             radius="1"
-            scale="1 1 1"
             src="eartn_model/world.topo.200409.3x10800x5400.jpg"
-            segments-height="64"
-            segments-width="128"
-            earth-controls
-            marker-placer>
+            segments-height="64" segments-width="128"
+            earth-controls marker-placer>
   </a-sphere>
 
-  <!-- カメラリグ -->
   <a-entity id="rig">
     <a-entity id="camera" camera position="0 1.6 0" look-controls>
-      <!-- デスクトップ用カーソル -->
       <a-entity id="mouseCursor"
-                cursor="rayOrigin: mouse; fuse: false"
-                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0">
+        cursor="rayOrigin: mouse; fuse: false"
+        raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0">
       </a-entity>
-
-      <!-- パネル（通常は非表示） -->
-      <a-entity id="info-panel" position="0 0 -0.9" visible="false" info-panel class="ui"></a-entity>
+      <a-entity id="info-panel" class="ui" info-panel visible="false" position="0 0 -0.9"></a-entity>
     </a-entity>
 
-    <!-- VRコントローラ（enter-vr時だけ可視化） -->
+    <!-- VR コントローラ：tracked-controls-webxr は付けない -->
     <a-entity id="left-hand"
-              oculus-touch-controls="hand: left"
-              visible="false"></a-entity>
+      oculus-touch-controls="hand: left; model: true"
+      visible="false"></a-entity>
 
     <a-entity id="right-hand"
-              oculus-touch-controls="hand: right"
-              laser-controls="hand: right"
-              cursor="rayOrigin: entity; fuse: false"
-              raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
-              visible="false">
-    </a-entity>
+      oculus-touch-controls="hand: right; model: true"
+      laser-controls="hand: right"
+      cursor="rayOrigin: entity; fuse: false"
+      raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
+      visible="false"></a-entity>
   </a-entity>
 
   <a-sky color="#ECECEC"></a-sky>
-
-  <!-- DOM Overlay 用の空ノード（必要に応じて） -->
-  <div id="hudPanel" style="position: absolute; left:0; top:0;"></div>
+  <div id="hud" style="position:absolute;left:0;top:0;"></div>
 </a-scene>
 </body>
 </html>
