@@ -82,7 +82,7 @@ document.getElementById('hudClose').addEventListener('click', closeHtmlPanel);
 document.getElementById('hudBackdrop').addEventListener('click', closeHtmlPanel);
 
 function openHtmlPanel(locations){
-  $title.textContent = locations.length ? locations[0].title + ` など（${locations.length}件）` : 'Places';
+  $title.textContent = locations.length ? `${locations[0].title} など（${locations.length}件）` : 'Places';
   $list.innerHTML='';
   for(const loc of locations){
     const d=document.createElement('div');
@@ -172,7 +172,15 @@ AFRAME.registerComponent('earth-controls',{
     this.el.sceneEl.addEventListener('controllersupdated', this._bindThumbsticks);
     this.el.sceneEl.addEventListener('exit-vr', stopBind);
 
-    // 非VR：接続ログ（取れない環境もある）
+    // 入力ソースの可視化（デバッグ）
+    this.el.sceneEl.addEventListener('enter-vr', ()=>{
+      const sess = this.el.sceneEl.renderer?.xr?.getSession?.();
+      if (!sess) return;
+      const info = [...sess.inputSources].map(s=>({hand:s.handedness, mode:s.targetRayMode, profiles:s.profiles}));
+      console.log('XR inputSources:', info);
+    });
+
+    // 非VR：接続ログ
     window.addEventListener('gamepadconnected', e=>console.log('gamepadconnected:', e.gamepad));
     window.addEventListener('gamepaddisconnected', e=>console.log('gamepaddisconnected:', e.gamepad));
   },
@@ -435,7 +443,7 @@ AFRAME.registerComponent('marker-placer',{
 
     <!-- 右手（レーザー／クリック用）：showLineで常に可視化 -->
     <a-entity id="right-hand"
-              oculus-touch-controls="hand: right; model: false;"
+              laser-controls="hand: right"
               raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
               cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend">
     </a-entity>
