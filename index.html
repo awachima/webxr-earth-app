@@ -123,8 +123,8 @@ AFRAME.registerComponent('earth-controls',{
       window.addEventListener('mousemove',e=>this.onMouseMove(e));
       window.addEventListener('mouseup',()=>this.onMouseUp());
       
-      // ===== 修正箇所 1: PC（非モバイル）デバイスでのみホイールイベントを登録 =====
-      if (!AFRAME.utils.device.isMobile()) {
+      // ===== 修正箇所 1: VRディスプレイが利用可能でない場合（＝PC）のみホイールイベントを登録 =====
+      if (!AFRAME.utils.device.isVRDisplay()) {
         cvs.addEventListener('wheel',e=>this.onWheelCanvas(e),{passive:true});
       }
     });
@@ -384,9 +384,7 @@ AFRAME.registerComponent('marker-placer',{
 
       <a-entity id="right-hand"
                 hand-controls="hand: right;"
-                laser-controls="hand: right"
-                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
-                cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup">
+                laser-controls="hand: right; objects: .collidable, .ui;">
       </a-entity>
     </a-entity>
   </a-entity>
