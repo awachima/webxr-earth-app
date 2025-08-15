@@ -4,8 +4,10 @@
   <meta charset="utf-8" />
   <title>WebXR Earth Controls</title>
 
+  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
+  <!-- Troika (cluster数字) -->
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.43.0/dist/troika-worker-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
@@ -81,22 +83,32 @@ document.getElementById('hudBackdrop').addEventListener('click', closeHtmlPanel)
 
 function openHtmlPanel(locations){
   $title.textContent = locations.length ? locations[0].title.split(' ')[0] + ' など' : 'Places';
-  $list.innerHTML=''; for(const loc of locations){ const d=document.createElement('div'); d.className='row'; d.textContent=loc.title; $list.appendChild(d); }
+  $list.innerHTML='';
+  for(const loc of locations){
+    const d=document.createElement('div');
+    d.className='row';
+    d.textContent=loc.title;
+    $list.appendChild(d);
+  }
   window.__panelOpen=true;
-  $panel.classList.add('show'); $panel.setAttribute('aria-hidden','false');
+  $panel.classList.add('show');
+  $panel.setAttribute('aria-hidden','false');
   document.querySelector('a-scene').emit('panel-opened');
-  setRaycasterTargets(true); refreshAllRaycasters();
+  setRaycasterTargets(true);
+  refreshAllRaycasters();
 }
 function closeHtmlPanel(){
   window.__panelOpen=false;
-  $panel.classList.remove('show'); $panel.setAttribute('aria-hidden','true');
+  $panel.classList.remove('show');
+  $panel.setAttribute('aria-hidden','true');
   document.querySelector('a-scene').emit('panel-closed');
-  setRaycasterTargets(false); refreshAllRaycasters();
+  setRaycasterTargets(false);
+  refreshAllRaycasters();
 }
 </script>
 
 <script>
-/* ============ Earth Controls (VR対応強化) ============ */
+/* ============ Earth Controls (VR/非VRスティック対応) ============ */
 AFRAME.registerComponent('earth-controls',{
   schema:{
     rotationSpeed:{type:'number',default:2.0},
@@ -122,31 +134,36 @@ AFRAME.registerComponent('earth-controls',{
       cvs.addEventListener('mousedown',e=>this.onMouseDown(e));
       window.addEventListener('mousemove',e=>this.onMouseMove(e));
       window.addEventListener('mouseup',()=>this.onMouseUp());
-      
-      // VRヘッドセットが接続されていない場合（＝PC）のみホイールイベントを登録
+      // PC（非VRヘッドセット未接続）時のみホイール登録
       if (!AFRAME.utils.device.checkHeadsetConnected()) {
         cvs.addEventListener('wheel',e=>this.onWheelCanvas(e),{passive:true});
       }
     });
 
-    // --- VR: コントローラー thumbstick の確実なバインド ---
+    // --- VR: コントローラー thumbstick の確実なバインド + フォールバック ---
     this._bindThumbsticks = ()=>{
       const L=document.querySelector('#left-hand');
       const R=document.querySelector('#right-hand');
 
       if(L && !L._thumbBound){
         L.addEventListener('thumbstickmoved', e=>{ this.stickInput.left={x:e.detail.x,y:e.detail.y}; });
+        L.addEventListener('axismove', e=>{
+          const a=e.detail?.axis; if(Array.isArray(a) && a.length>=4){ this.stickInput.left={x:a[0]??0, y:a[1]??0}; }
+        });
         L._thumbBound=true;
       }
       if(R && !R._thumbBound){
+        // 右手は laser-controls 主体（axismove で補足）
         R.addEventListener('thumbstickmoved', e=>{ this.stickInput.right={x:e.detail.x,y:e.detail.y}; });
+        R.addEventListener('axismove', e=>{
+          const a=e.detail?.axis; if(Array.isArray(a) && a.length>=4){ this.stickInput.right={x:a[2]??0, y:a[3]??0}; }
+        });
         R._thumbBound=true;
       }
     };
     const startBind = ()=>{
       this._bindThumbsticks();
       if(this._bindTimer) clearInterval(this._bindTimer);
-      // 遅延生成に備え、入室直後しばらく監視
       this._bindTimer=setInterval(this._bindThumbsticks, 500);
       setTimeout(()=>clearInterval(this._bindTimer), 5000);
     };
@@ -155,6 +172,18 @@ AFRAME.registerComponent('earth-controls',{
     this.el.sceneEl.addEventListener('enter-vr', startBind);
     this.el.sceneEl.addEventListener('controllersupdated', this._bindThumbsticks);
     this.el.sceneEl.addEventListener('exit-vr', stopBind);
+  },
+  // 非VR：Gamepad APIでスティック取得
+  getNonVrSticks:function(){
+    const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
+    const p = Array.from(pads).find(g=>g && g.connected);
+    if(!p) return null;
+    const ax = p.axes || [];
+    // 標準マッピング: 左(0,1), 右(2,3)
+    return {
+      left:  { x: ax[0] || 0, y: ax[1] || 0 },
+      right: { x: ax[2] || 0, y: ax[3] || 0 }
+    };
   },
   onMouseDown:function(evt){
     if(window.__panelOpen) return;
@@ -181,7 +210,6 @@ AFRAME.registerComponent('earth-controls',{
     s=Math.max(this.minScale,Math.min(this.maxScale,s));
     this.el.object3D.scale.set(s,s,s);
   },
-  
   tick:function(){
     if(window.__panelOpen) return;
 
@@ -192,11 +220,18 @@ AFRAME.registerComponent('earth-controls',{
 
     let stickRotX = 0, stickRotY = 0, stickScale = 0;
 
-    // VRモード中のみジョイスティック入力を処理
+    // VR: WebXR入力 / 非VR: Gamepad API
     if (this.el.sceneEl.is('vr-mode')) {
-      stickRotX = this.stickInput.right.y; // 右スティックの上下
-      stickRotY = this.stickInput.right.x; // 右スティックの左右
-      stickScale = this.stickInput.left.y;  // 左スティックの上下
+      stickRotX = this.stickInput.right.y; // 右スティック上下：X回転
+      stickRotY = this.stickInput.right.x; // 右スティック左右：Y回転
+      stickScale = this.stickInput.left.y;  // 左スティック上下：拡縮
+    } else {
+      const gp = this.getNonVrSticks();
+      if (gp){
+        stickRotX = gp.right.y;
+        stickRotY = gp.right.x;
+        stickScale = gp.left.y;
+      }
     }
 
     // --- 拡大率に応じた回転・ズーム速度の調整 ---
@@ -207,9 +242,9 @@ AFRAME.registerComponent('earth-controls',{
     // --- 入力の統合（ジョイスティック優先）---
     const finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : rotY_k * this.data.rotationSpeed) * mul;
     const finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : rotX_k * this.data.rotationSpeed) * mul;
-    const finalScale = (stickScale !== 0 ? -stickScale : scale_k) * this.data.scaleSpeed; // 左スティックのY軸は上下反転させる
+    const finalScale = (stickScale !== 0 ? -stickScale : scale_k) * this.data.scaleSpeed; // 左Yは上下反転
 
-    // --- 座標の更新 ---
+    // --- 座標更新 ---
     this.el.object3D.rotation.y += finalRotY * (Math.PI / 180);
     this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation + finalRotX));
     this.el.object3D.rotation.x = this.currentXRotation * (Math.PI / 180);
@@ -261,8 +296,12 @@ AFRAME.registerComponent('marker-placer',{
     this.previousEarthScale=0;
 
     const sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
-    try{ const res=await fetch(sheetUrl); if(res.ok) this.allLocations=this.parseCsv(await res.text()); }catch(e){ console.error("データ取得エラー:",e); }
+    try{
+      const res=await fetch(sheetUrl);
+      if(res.ok) this.allLocations=this.parseCsv(await res.text());
+    }catch(e){ console.error("データ取得エラー:",e); }
     this.updateClusters();
+    this.previousEarthScale=this.el.object3D.scale.x; // 初回再クラスタ抑止
   },
   parseCsv:function(csvText){
     const locations=[]; const lines=csvText.trim().split('\n');
@@ -274,7 +313,15 @@ AFRAME.registerComponent('marker-placer',{
     return locations;
   },
   updateClusters:function(){
-    this.currentMarkers.forEach(m=>m.parentNode&&m.parentNode.removeChild(m));
+    this.currentMarkers.forEach(m=>{
+      const mesh = m.getObject3D('mesh');
+      if (mesh) {
+        mesh.geometry && mesh.geometry.dispose();
+        mesh.material && mesh.material.dispose();
+        m.removeObject3D('mesh');
+      }
+      m.remove();
+    });
     this.currentMarkers=[];
 
     const s=this.el.object3D.scale.x;
@@ -345,7 +392,7 @@ AFRAME.registerComponent('marker-placer',{
       marker.object3D.getWorldPosition(this.markerPos);
       const normal=this.markerPos.clone().sub(this.earthPos).normalize();
       const camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
-      const visible=(normal.dot(camDir)<0);
+      const visible=(normal.dot(camDir)<0); // 既存ロジックを維持
       marker.object3D.visible=visible;
       if(marker.textEl) marker.textEl.object3D.visible=visible;
     }
@@ -379,18 +426,19 @@ AFRAME.registerComponent('marker-placer',{
       <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
+    </a-entity>
 
-      <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;">
-          <a-gltf-model src="https://cdn.aframe.io/examples/showcase/hands/models/left-hand.gltf"></a-gltf-model>
-      </a-entity>
+    <!-- 左手（VRスティック入力用） -->
+    <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
 
-      <a-entity id="right-hand"
-                oculus-touch-controls="hand: right; model: false;"
-                laser-controls="hand: right;"
-                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30;"
-                cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup">
-          <a-gltf-model src="https://cdn.aframe.io/examples/showcase/hands/models/right-hand.gltf"></a-gltf-model>
-      </a-entity>
+    <!-- 右手（レーザー／クリック用） -->
+    <a-entity id="right-hand"
+              laser-controls="hand: right"
+              raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"
+              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup"
+              line="color: white; opacity: 0.95">
+      <!-- 任意：可視モデル（必要なければ削除可能） -->
+      <a-gltf-model src="https://cdn.aframe.io/examples/showcase/hands/models/right-hand.gltf"></a-gltf-model>
     </a-entity>
   </a-entity>
 
