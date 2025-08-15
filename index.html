@@ -7,13 +7,13 @@
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-  <!-- Troika (cluster数字) -->
+  <!-- Troika (クラスタ数字) -->
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.43.0/dist/troika-worker-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
-  <!-- DOM Overlay -->
+  <!-- ===== HTML オーバーレイ UI ===== -->
   <style>
     @font-face{
       font-family:"NotoSansJPLocal";
@@ -25,22 +25,26 @@
       --panel-h:min(70vh,580px);
       --panel-radius:18px;
     }
-    #hudPanel{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:99999; pointer-events:none;}
-    #hudPanel.show{display:flex;}
-    #hudBackdrop{position:absolute; inset:0; background:rgba(0,0,0,.12); pointer-events:auto;}
+    #hudPanel{
+      position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+      z-index:99999; pointer-events:none;
+    }
+    #hudPanel.show{ display:flex; }
+    #hudBackdrop{ position:absolute; inset:0; background:rgba(0,0,0,.12); pointer-events:auto; }
     #hudCard{
       position:relative; width:var(--panel-w); height:var(--panel-h);
       background:rgba(45,45,48,.85); border:1px solid rgba(255,255,255,.35);
       border-radius:var(--panel-radius); box-shadow:0 10px 40px rgba(0,0,0,.35);
       backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
       pointer-events:auto; overflow:hidden;
-      font-family:"NotoSansJPLocal",system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Meiryo",sans-serif; color:#fff;
+      font-family:"NotoSansJPLocal",system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;
+      color:#fff;
     }
-    #hudHeader{height:56px; display:flex; align-items:center; gap:12px; padding:0 18px; border-bottom:1px solid rgba(255,255,255,.22); user-select:none;}
-    #hudTitle{font-size:22px; letter-spacing:.2px; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1 1 auto;}
-    #hudClose{width:36px; height:36px; border-radius:50%; border:0; background:#DA2D2D; color:#fff; font-size:20px; line-height:36px; text-align:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.25);}
-    #hudList{height:calc(100% - 56px); overflow-y:auto; padding:14px 18px 18px 18px; scrollbar-gutter:stable both-edges;}
-    .row{font-size:20px; line-height:1.25; padding:10px 12px; border-radius:10px; margin-bottom:6px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08);}
+    #hudHeader{ height:56px; display:flex; align-items:center; gap:12px; padding:0 18px; border-bottom:1px solid rgba(255,255,255,.22); user-select:none; }
+    #hudTitle{ font-size:22px; letter-spacing:.2px; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1 1 auto; }
+    #hudClose{ width:36px; height:36px; border-radius:50%; border:0; background:#DA2D2D; color:#fff; font-size:20px; line-height:36px; text-align:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.25); }
+    #hudList{ height:calc(100% - 56px); overflow-y:auto; padding:14px 18px 18px 18px; scrollbar-gutter:stable both-edges; }
+    .row{ font-size:20px; line-height:1.25; padding:10px 12px; border-radius:10px; margin-bottom:6px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); }
   </style>
 </head>
 <body>
@@ -100,7 +104,9 @@ function closeHtmlPanel(){
 </script>
 
 <script>
-/* ============ Earth Controls (VR対応強化) ============ */
+/* =========================
+   earth-controls（Gamepad直ポーリング）
+   ========================= */
 AFRAME.registerComponent('earth-controls',{
   schema:{
     rotationSpeed:{type:'number',default:2.0},
@@ -113,11 +119,16 @@ AFRAME.registerComponent('earth-controls',{
     this.minScale=1.0; this.maxScale=3.0;
     this.currentXRotation=0;
     this.keys={};
-    this.stickInput={ left:{x:0,y:0}, right:{x:0,y:0} };
     this.isDragging=false;
     this.previousMousePosition={x:0,y:0};
     this.cameraEl=document.querySelector('#camera');
 
+    // Gamepad 紐づけ用
+    this._gpLeftIndex=-1;
+    this._gpRightIndex=-1;
+    this._gpScanTick=0;
+
+    // キー・マウス
     window.addEventListener('keydown',e=>this.keys[e.key]=true);
     window.addEventListener('keyup',e=>this.keys[e.key]=false);
 
@@ -129,33 +140,34 @@ AFRAME.registerComponent('earth-controls',{
       cvs.addEventListener('wheel',e=>this.onWheelCanvas(e),{passive:true});
     });
 
-    // --- VR: コントローラー thumbstick の確実なバインド ---
-    this._bindThumbsticks = ()=>{
-      const L=document.querySelector('#left-hand');
-      const R=document.querySelector('#right-hand');
-
-      if(L && !L._thumbBound){
-        L.addEventListener('thumbstickmoved', e=>{ this.stickInput.left={x:e.detail.x,y:e.detail.y}; });
-        L._thumbBound=true;
-      }
-      if(R && !R._thumbBound){
-        R.addEventListener('thumbstickmoved', e=>{ this.stickInput.right={x:e.detail.x,y:e.detail.y}; });
-        R._thumbBound=true;
-      }
-    };
-    const startBind = ()=>{
-      this._bindThumbsticks();
-      if(this._bindTimer) clearInterval(this._bindTimer);
-      // 遅延生成に備え、入室直後しばらく監視
-      this._bindTimer=setInterval(this._bindThumbsticks, 500);
-      setTimeout(()=>clearInterval(this._bindTimer), 5000);
-    };
-    const stopBind = ()=>{ if(this._bindTimer) clearInterval(this._bindTimer); };
-
-    this.el.sceneEl.addEventListener('enter-vr', startBind);
-    this.el.sceneEl.addEventListener('controllersupdated', this._bindThumbsticks);
-    this.el.sceneEl.addEventListener('exit-vr', stopBind);
+    // VR 入退室
+    this.el.sceneEl.addEventListener('enter-vr', ()=>{ this._gpLeftIndex=-1; this._gpRightIndex=-1; });
+    this.el.sceneEl.addEventListener('exit-vr',  ()=>{ this._gpLeftIndex=-1; this._gpRightIndex=-1; });
   },
+
+  // === Gamepad(Quest) を直接読む ===
+  _scanGamepads:function(){
+    const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+    this._gpLeftIndex  = -1;
+    this._gpRightIndex = -1;
+    for(let i=0;i<gps.length;i++){
+      const g=gps[i]; if(!g || !g.connected) continue;
+      const id=(g.id||'').toLowerCase();
+      const hand = g.hand || (g.handedness||''); // Chrome拡張 or WebXR拡張
+      if(hand==='left'  || id.includes('left'))  this._gpLeftIndex=i;
+      if(hand==='right' || id.includes('right')) this._gpRightIndex=i;
+    }
+  },
+  _readStick:function(index){
+    const gp = (navigator.getGamepads && navigator.getGamepads()[index]) || null;
+    if(!gp || !gp.axes) return {x:0,y:0};
+    // xr-standard: [0]=X, [1]=Y がサムスティック
+    let x=gp.axes[0]||0, y=gp.axes[1]||0;
+    // デッドゾーン
+    const dz=0.08; if(Math.abs(x)<dz) x=0; if(Math.abs(y)<dz) y=0;
+    return {x,y};
+  },
+
   onMouseDown:function(evt){
     if(window.__panelOpen) return;
     this.isDragging=true;
@@ -181,9 +193,20 @@ AFRAME.registerComponent('earth-controls',{
     s=Math.max(this.minScale,Math.min(this.maxScale,s));
     this.el.object3D.scale.set(s,s,s);
   },
-  tick:function(){
+
+  tick:function(time,dt){
     if(window.__panelOpen) return;
 
+    // 500ms ごとにゲームパッド割当を見直し
+    if((this._gpScanTick+=dt) > 500){
+      this._gpScanTick=0;
+      this._scanGamepads();
+    }
+    let rightStick={x:0,y:0}, leftStick={x:0,y:0};
+    if(this._gpRightIndex>=0) rightStick=this._readStick(this._gpRightIndex);
+    if(this._gpLeftIndex>=0)  leftStick =this._readStick(this._gpLeftIndex);
+
+    // キー入力
     const rotY_k=(this.keys['ArrowLeft']?-1:0)+(this.keys['ArrowRight']?1:0);
     const rotX_k=(this.keys['ArrowUp']?-1:0)+(this.keys['ArrowDown']?1:0);
     const scale_k=(this.keys['w']||this.keys['W']?1:0)+(this.keys['s']||this.keys['S']?-1:0);
@@ -192,14 +215,13 @@ AFRAME.registerComponent('earth-controls',{
     const t=(s-1.0)/(3.0-1.0);
     const mul=1-(t*(7/8));
 
-    // 右スティック＝回転 / 左スティック＝ズーム（強制）
-    const rotY_js=this.stickInput.right.x*this.data.joystickRotationSpeed*mul;
-    const rotX_js=this.stickInput.right.y*this.data.joystickRotationSpeed*mul;
+    // === 右スティック＝回転 / 左スティック＝ズーム（強制） ===
+    const rotY_js= rightStick.x * this.data.joystickRotationSpeed * mul;
+    const rotX_js= rightStick.y * this.data.joystickRotationSpeed * mul;
     const finalRotY=(rotY_js!==0?rotY_js:rotY_k*this.data.rotationSpeed*mul);
     const finalRotX=(rotX_js!==0?rotX_js:rotX_k*this.data.rotationSpeed*mul);
 
-    const leftY=this.stickInput.left.y;
-    const finalScale=((leftY!==0? -leftY : scale_k))*this.data.scaleSpeed;
+    const finalScale=((leftStick.y!==0? -leftStick.y : scale_k))*this.data.scaleSpeed;
 
     this.el.object3D.rotation.y += finalRotY*(Math.PI/180);
     this.currentXRotation=Math.max(-80,Math.min(80,this.currentXRotation+finalRotX));
@@ -210,13 +232,24 @@ AFRAME.registerComponent('earth-controls',{
     this.el.object3D.scale.set(ns,ns,ns);
   }
 });
+</script>
 
-/* ============ hex-marker (cluster) ============ */
+<script>
+/* =========================
+   hex-marker（クラスタ）
+   ========================= */
 AFRAME.registerComponent('hex-marker',{
-  schema:{ count:{type:'number',default:1}, color:{type:'color',default:'yellow'}, baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001}, fontUrl:{type:'string',default:FONT_URL} },
+  schema:{
+    count:{type:'number',default:1},
+    color:{type:'color',default:'yellow'},
+    baseRadius:{type:'number',default:0.0075},
+    heightUnit:{type:'number',default:0.0001},
+    fontUrl:{type:'string',default:'static/NotoSansJP-Regular.ttf'}
+  },
   init:function(){
     const d=this.data;
     this.height=0.01+(d.count*d.heightUnit);
+
     const geom=new THREE.CylinderGeometry(d.baseRadius*0.9,d.baseRadius,this.height,6);
     const mat =new THREE.MeshStandardMaterial({color:d.color,flatShading:true});
     this.el.setObject3D('mesh', new THREE.Mesh(geom,mat));
@@ -240,7 +273,9 @@ AFRAME.registerComponent('hex-marker',{
   }
 });
 
-/* ============ marker-placer ============ */
+/* =========================
+   marker-placer
+   ========================= */
 AFRAME.registerComponent('marker-placer',{
   schema:{ maxMarkerMultiplier:{type:'number',default:12} },
   init:async function(){
@@ -323,8 +358,9 @@ AFRAME.registerComponent('marker-placer',{
   tick:function(){
     if(this.currentMarkers.length===0 || !this.cameraEl) return;
     const s=this.el.object3D.scale.x;
-    if(Math.abs(s-this.previousEarthScale)>0.1){ this.updateClusters(); this.previousEarthScale=s; }
-
+    if(Math.abs(s-this.previousEarthScale)>0.1){
+      this.updateClusters(); this.previousEarthScale=s;
+    }
     this.el.object3D.getWorldPosition(this.earthPos);
     this.cameraEl.object3D.getWorldPosition(this.cameraPos);
 
@@ -361,7 +397,7 @@ AFRAME.registerComponent('marker-placer',{
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
 
-  <!-- Earth -->
+  <!-- 地球 -->
   <a-sphere id="earth" position="0 1.5 -3.2" radius="1" scale="1 1 1"
             src="eartn_model/world.topo.200409.3x10800x5400.jpg"
             segments-height="64" segments-width="128"
@@ -369,21 +405,20 @@ AFRAME.registerComponent('marker-placer',{
 
   <a-entity id="rig">
     <a-entity id="camera" camera position="0 1.6 0" look-controls>
+      <!-- デスクトップ用レイ -->
       <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
     </a-entity>
 
-    <!-- Left hand: stick = zoom -->
+    <!-- 左手：モデル表示だけ（スティックはGamepad直読） -->
     <a-entity id="left-hand"
               oculus-touch-controls="hand: left; model: true">
     </a-entity>
 
-    <!-- Right hand: laser + click (trigger) + visible line -->
+    <!-- 右手：レーザーのみ（ray + click は laser-controls 内蔵） -->
     <a-entity id="right-hand"
-              oculus-touch-controls="hand: right; model: true"
               laser-controls="hand: right"
-              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup"
               raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true">
     </a-entity>
   </a-entity>
