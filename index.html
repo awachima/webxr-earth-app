@@ -123,7 +123,6 @@ AFRAME.registerComponent('earth-controls',{
       window.addEventListener('mousemove',e=>this.onMouseMove(e));
       window.addEventListener('mouseup',()=>this.onMouseUp());
       
-      // ===== 修正箇所 1: 正しい関数名に修正 =====
       // VRヘッドセットが接続されていない場合（＝PC）のみホイールイベントを登録
       if (!AFRAME.utils.device.checkHeadsetConnected()) {
         cvs.addEventListener('wheel',e=>this.onWheelCanvas(e),{passive:true});
@@ -381,13 +380,16 @@ AFRAME.registerComponent('marker-placer',{
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
 
-      <a-entity id="left-hand" hand-controls="hand: left;"></a-entity>
+      <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;">
+          <a-gltf-model src="https://cdn.aframe.io/examples/showcase/hands/models/left-hand.gltf"></a-gltf-model>
+      </a-entity>
 
       <a-entity id="right-hand"
-                hand-controls="hand: right;"
+                oculus-touch-controls="hand: right; model: false;"
                 laser-controls="hand: right;"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30;"
-                cursor="rayOrigin: entity; fuse: false;">
+                cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup">
+          <a-gltf-model src="https://cdn.aframe.io/examples/showcase/hands/models/right-hand.gltf"></a-gltf-model>
       </a-entity>
     </a-entity>
   </a-entity>
