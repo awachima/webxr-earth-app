@@ -82,7 +82,7 @@ document.getElementById('hudClose').addEventListener('click', closeHtmlPanel);
 document.getElementById('hudBackdrop').addEventListener('click', closeHtmlPanel);
 
 function openHtmlPanel(locations){
-  $title.textContent = locations.length ? locations[0].title.split(' ')[0] + ' など' : 'Places';
+  $title.textContent = locations.length ? locations[0].title + ` など（${locations.length}件）` : 'Places';
   $list.innerHTML='';
   for(const loc of locations){
     const d=document.createElement('div');
@@ -134,7 +134,7 @@ AFRAME.registerComponent('earth-controls',{
       cvs.addEventListener('mousedown',e=>this.onMouseDown(e));
       window.addEventListener('mousemove',e=>this.onMouseMove(e));
       window.addEventListener('mouseup',()=>this.onMouseUp());
-      // PC（非VRヘッドセット未接続）時のみホイール登録
+      // 非VR（PC等）のみホイール登録
       if (!AFRAME.utils.device.checkHeadsetConnected()) {
         cvs.addEventListener('wheel',e=>this.onWheelCanvas(e),{passive:true});
       }
@@ -148,15 +148,14 @@ AFRAME.registerComponent('earth-controls',{
       if(L && !L._thumbBound){
         L.addEventListener('thumbstickmoved', e=>{ this.stickInput.left={x:e.detail.x,y:e.detail.y}; });
         L.addEventListener('axismove', e=>{
-          const a=e.detail?.axis; if(Array.isArray(a) && a.length>=4){ this.stickInput.left={x:a[0]??0, y:a[1]??0}; }
+          const a=e.detail?.axis; if(Array.isArray(a) && a.length>=2){ this.stickInput.left={x:a[0]||0, y:a[1]||0}; }
         });
         L._thumbBound=true;
       }
       if(R && !R._thumbBound){
-        // 右手は laser-controls 主体（axismove で補足）
         R.addEventListener('thumbstickmoved', e=>{ this.stickInput.right={x:e.detail.x,y:e.detail.y}; });
         R.addEventListener('axismove', e=>{
-          const a=e.detail?.axis; if(Array.isArray(a) && a.length>=4){ this.stickInput.right={x:a[2]??0, y:a[3]??0}; }
+          const a=e.detail?.axis; if(Array.isArray(a) && a.length>=4){ this.stickInput.right={x:a[2]||0, y:a[3]||0}; }
         });
         R._thumbBound=true;
       }
@@ -172,14 +171,17 @@ AFRAME.registerComponent('earth-controls',{
     this.el.sceneEl.addEventListener('enter-vr', startBind);
     this.el.sceneEl.addEventListener('controllersupdated', this._bindThumbsticks);
     this.el.sceneEl.addEventListener('exit-vr', stopBind);
+
+    // 非VR：接続ログ（取れない環境もある）
+    window.addEventListener('gamepadconnected', e=>console.log('gamepadconnected:', e.gamepad));
+    window.addEventListener('gamepaddisconnected', e=>console.log('gamepaddisconnected:', e.gamepad));
   },
-  // 非VR：Gamepad APIでスティック取得
+  // 非VR：Gamepad API
   getNonVrSticks:function(){
     const pads = (navigator.getGamepads && navigator.getGamepads()) || [];
     const p = Array.from(pads).find(g=>g && g.connected);
     if(!p) return null;
     const ax = p.axes || [];
-    // 標準マッピング: 左(0,1), 右(2,3)
     return {
       left:  { x: ax[0] || 0, y: ax[1] || 0 },
       right: { x: ax[2] || 0, y: ax[3] || 0 }
@@ -213,7 +215,7 @@ AFRAME.registerComponent('earth-controls',{
   tick:function(){
     if(window.__panelOpen) return;
 
-    // --- キーボード入力 ---
+    // --- キーボード ---
     const rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
     const rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
     const scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
@@ -222,9 +224,9 @@ AFRAME.registerComponent('earth-controls',{
 
     // VR: WebXR入力 / 非VR: Gamepad API
     if (this.el.sceneEl.is('vr-mode')) {
-      stickRotX = this.stickInput.right.y; // 右スティック上下：X回転
-      stickRotY = this.stickInput.right.x; // 右スティック左右：Y回転
-      stickScale = this.stickInput.left.y;  // 左スティック上下：拡縮
+      stickRotX = this.stickInput.right.y;
+      stickRotY = this.stickInput.right.x;
+      stickScale = this.stickInput.left.y;
     } else {
       const gp = this.getNonVrSticks();
       if (gp){
@@ -234,17 +236,17 @@ AFRAME.registerComponent('earth-controls',{
       }
     }
 
-    // --- 拡大率に応じた回転・ズーム速度の調整 ---
+    // --- 拡大率による減速 ---
     const s = this.el.object3D.scale.x;
     const t = (s - 1.0) / (3.0 - 1.0);
     const mul = 1 - (t * (7 / 8));
 
-    // --- 入力の統合（ジョイスティック優先）---
+    // --- 入力の統合 ---
     const finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : rotY_k * this.data.rotationSpeed) * mul;
     const finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : rotX_k * this.data.rotationSpeed) * mul;
-    const finalScale = (stickScale !== 0 ? -stickScale : scale_k) * this.data.scaleSpeed; // 左Yは上下反転
+    const finalScale = (stickScale !== 0 ? -stickScale : scale_k) * this.data.scaleSpeed;
 
-    // --- 座標更新 ---
+    // --- 適用 ---
     this.el.object3D.rotation.y += finalRotY * (Math.PI / 180);
     this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation + finalRotX));
     this.el.object3D.rotation.x = this.currentXRotation * (Math.PI / 180);
@@ -411,7 +413,7 @@ AFRAME.registerComponent('marker-placer',{
 <a-scene
   renderer="highRefreshRate: true"
   vr-mode-ui="enabled: true"
-  webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay, bounded-floor, hand-tracking, layers; overlayElement: #hudPanel">
+  webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay, bounded-floor, layers; overlayElement: #hudPanel">
 
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
@@ -431,14 +433,11 @@ AFRAME.registerComponent('marker-placer',{
     <!-- 左手（VRスティック入力用） -->
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
 
-    <!-- 右手（レーザー／クリック用） -->
+    <!-- 右手（レーザー／クリック用）：showLineで常に可視化 -->
     <a-entity id="right-hand"
-              laser-controls="hand: right"
-              raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"
-              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup"
-              line="color: white; opacity: 0.95">
-      <!-- 任意：可視モデル（必要なければ削除可能） -->
-      <a-gltf-model src="https://cdn.aframe.io/examples/showcase/hands/models/right-hand.gltf"></a-gltf-model>
+              oculus-touch-controls="hand: right; model: false;"
+              raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
+              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend">
     </a-entity>
   </a-entity>
 
