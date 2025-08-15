@@ -122,7 +122,11 @@ AFRAME.registerComponent('earth-controls',{
       cvs.addEventListener('mousedown',e=>this.onMouseDown(e));
       window.addEventListener('mousemove',e=>this.onMouseMove(e));
       window.addEventListener('mouseup',()=>this.onMouseUp());
-      cvs.addEventListener('wheel',e=>this.onWheelCanvas(e),{passive:true});
+      
+      // ===== 修正箇所 1: PC（非モバイル）デバイスでのみホイールイベントを登録 =====
+      if (!AFRAME.utils.device.isMobile()) {
+        cvs.addEventListener('wheel',e=>this.onWheelCanvas(e),{passive:true});
+      }
     });
 
     // --- VR: コントローラー thumbstick の確実なバインド ---
@@ -188,7 +192,7 @@ AFRAME.registerComponent('earth-controls',{
 
     let stickRotX = 0, stickRotY = 0, stickScale = 0;
 
-    // ===== 修正箇所 1: VRモード中のみジョイスティック入力を処理 =====
+    // VRモード中のみジョイスティック入力を処理
     if (this.el.sceneEl.is('vr-mode')) {
       stickRotX = this.stickInput.right.y; // 右スティックの上下
       stickRotY = this.stickInput.right.x; // 右スティックの左右
@@ -376,16 +380,13 @@ AFRAME.registerComponent('marker-placer',{
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
 
-      <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false">
-        <a-gltf-model src="https://cdn.aframe.io/controllers/oculus-touch-v3/left.gltf"></a-gltf-model>
-      </a-entity>
+      <a-entity id="left-hand" hand-controls="hand: left;"></a-entity>
 
       <a-entity id="right-hand"
-                oculus-touch-controls="hand: right; model: false"
+                hand-controls="hand: right;"
                 laser-controls="hand: right"
-                cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup"
-                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true">
-        <a-gltf-model src="https://cdn.aframe.io/controllers/oculus-touch-v3/right.gltf"></a-gltf-model>
+                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
+                cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup">
       </a-entity>
     </a-entity>
   </a-entity>
