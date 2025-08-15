@@ -178,7 +178,6 @@ AFRAME.registerComponent('earth-controls',{
     this.el.object3D.scale.set(s,s,s);
   },
   
-  // ===== 修正箇所 =====
   tick:function(){
     if(window.__panelOpen) return;
 
@@ -187,10 +186,14 @@ AFRAME.registerComponent('earth-controls',{
     const rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
     const scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
 
-    // --- VRコントローラー入力（ここでロジックを明確化） ---
-    const stickRotX = this.stickInput.right.y; // 右スティックの上下
-    const stickRotY = this.stickInput.right.x; // 右スティックの左右
-    const stickScale = this.stickInput.left.y;  // 左スティックの上下
+    let stickRotX = 0, stickRotY = 0, stickScale = 0;
+
+    // ===== 修正箇所 1: VRモード中のみジョイスティック入力を処理 =====
+    if (this.el.sceneEl.is('vr-mode')) {
+      stickRotX = this.stickInput.right.y; // 右スティックの上下
+      stickRotY = this.stickInput.right.x; // 右スティックの左右
+      stickScale = this.stickInput.left.y;  // 左スティックの上下
+    }
 
     // --- 拡大率に応じた回転・ズーム速度の調整 ---
     const s = this.el.object3D.scale.x;
@@ -373,15 +376,16 @@ AFRAME.registerComponent('marker-placer',{
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
 
-      <a-entity id="left-hand"
-                oculus-touch-controls="hand: left; model: true">
+      <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false">
+        <a-gltf-model src="https://cdn.aframe.io/controllers/oculus-touch-v3/left.gltf"></a-gltf-model>
       </a-entity>
 
       <a-entity id="right-hand"
-                oculus-touch-controls="hand: right; model: true"
+                oculus-touch-controls="hand: right; model: false"
                 laser-controls="hand: right"
                 cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown; upEvents: triggerup"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true">
+        <a-gltf-model src="https://cdn.aframe.io/controllers/oculus-touch-v3/right.gltf"></a-gltf-model>
       </a-entity>
     </a-entity>
   </a-entity>
