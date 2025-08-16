@@ -252,10 +252,17 @@ AFRAME.registerComponent('earth-controls',{
       stickInput.right.y = rightGamepad.axes[3];
     }
 
+    // ▼▼▼ 修正点 ▼▼▼
+    // デバッグテキストを強化
     if (this.debugTextEl) {
-      var debugString = `L: ${stickInput.left.x.toFixed(2)}, ${stickInput.left.y.toFixed(2)}\nR: ${stickInput.right.x.toFixed(2)}, ${stickInput.right.y.toFixed(2)}`;
+      var lStatus = leftGamepad ? `L: Ok (axes:${leftGamepad.axes.length})` : "L: Not Found";
+      var rStatus = rightGamepad ? `R: Ok (axes:${rightGamepad.axes.length})` : "R: Not Found";
+      var lVal = `Val L: ${stickInput.left.x.toFixed(2)}, ${stickInput.left.y.toFixed(2)}`;
+      var rVal = `Val R: ${stickInput.right.x.toFixed(2)}, ${stickInput.right.y.toFixed(2)}`;
+      var debugString = `${lStatus}\n${rStatus}\n${lVal}\n${rVal}`;
       this.debugTextEl.setAttribute('troika-text', 'value', debugString);
     }
+    // ▲▲▲ 修正点 ▲▲▲
 
     if (window.__panelOpen) return;
 
@@ -398,9 +405,7 @@ AFRAME.registerComponent('marker-placer',{
       var marker=document.createElement('a-entity'); marker.setAttribute('position',pos);
 
       var yAxis=pos.clone().normalize(), worldUp=new THREE.Vector3(0,1,0);
-      // ▼▼▼ 修正点 ▼▼▼
       var xAxis=new THREE.Vector3().crossVectors(worldUp,yAxis).normalize(); if(xAxis.length()===0) xAxis.set(1,0,0);
-      // ▲▲▲ 修正点 ▲▲▲
       var zAxis=new THREE.Vector3().crossVectors(xAxis,yAxis);
       var rotM=new THREE.Matrix4().makeBasis(xAxis,yAxis,zAxis);
       marker.object3D.quaternion.setFromRotationMatrix(rotM);
@@ -480,11 +485,11 @@ AFRAME.registerComponent('marker-placer',{
       <a-entity id="debug-text"
                 troika-text="value: L: 0.00, 0.00\nR: 0.00, 0.00;
                              color: #F00;
-                             fontSize: 0.04;
-                             align: center;
+                             fontSize: 0.03;
+                             align: left;
                              anchor: center;
                              font: ${FONT_URL};"
-                position="0 -0.4 -1">
+                position="-0.5 -0.4 -1">
       </a-entity>
       
     </a-entity>
