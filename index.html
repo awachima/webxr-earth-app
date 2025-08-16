@@ -30,7 +30,7 @@
       border-radius:var(--panel-radius); box-shadow:0 10px 40px rgba(0,0,0,.35);
       backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
       pointer-events:auto; overflow:auto;
-      font-family:"NotoSansJPLocal",system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Kaku Gothic ProN","Meiryo",sans-serif; color:#fff;
+      font-family:"NotoSansJPLocal",system-ui,-apple-system,"Segoe UI",Roboto,"Hirino Kaku Gothic ProN","Meiryo",sans-serif; color:#fff;
     }
     #hudHeader{height:56px; display:flex; align-items:center; gap:12px; padding:0 18px; border-bottom:1px solid rgba(255,255,255,.22); user-select:none;}
     #hudTitle{font-size:22px; letter-spacing:.2px; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1 1 auto;}
@@ -241,6 +241,11 @@ AFRAME.registerComponent('earth-controls',{
     this.el.sceneEl.addEventListener('enter-vr', startBind);
     this.el.sceneEl.addEventListener('controllersupdated', this._bindThumbsticks);
     this.el.sceneEl.addEventListener('exit-vr', stopBind);
+    
+    // ▼▼▼ 修正点 ▼▼▼
+    // デバッグ用テキストのエレメントを取得
+    this.debugTextEl = document.querySelector('#debug-text');
+    // ▲▲▲ 修正点 ▲▲▲
   },
   onMouseDown:function(evt){
     if(window.__panelOpen) return;
@@ -277,6 +282,17 @@ AFRAME.registerComponent('earth-controls',{
     return { left:{x:ax[0]||0, y:ax[1]||0}, right:{x:ax[2]||0, y:ax[3]||0} };
   },
   tick: function() {
+    // ▼▼▼ 修正点 ▼▼▼
+    // デバッグテキストを更新
+    if (this.debugTextEl) {
+      var leftStick = this.stickInput.left;
+      var rightStick = this.stickInput.right;
+      // 2行で表示（\nは改行）
+      var debugString = `L: ${leftStick.x.toFixed(2)}, ${leftStick.y.toFixed(2)}\nR: ${rightStick.x.toFixed(2)}, ${rightStick.y.toFixed(2)}`;
+      this.debugTextEl.setAttribute('troika-text', 'value', debugString);
+    }
+    // ▲▲▲ 修正点 ▲▲▲
+
     if (window.__panelOpen) return;
 
     // --- キーボード入力 ---
@@ -503,7 +519,17 @@ AFRAME.registerComponent('marker-placer',{
       <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
-    </a-entity>
+      
+      <a-entity id="debug-text"
+                troika-text="value: L: 0.00, 0.00\nR: 0.00, 0.00;
+                             color: #F00;
+                             fontSize: 0.04;
+                             align: center;
+                             anchor: center;
+                             font: ${FONT_URL};"
+                position="0 -0.4 -1">
+      </a-entity>
+      </a-entity>
 
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
 
