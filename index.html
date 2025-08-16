@@ -25,7 +25,7 @@
 <body>
 
 <script>
-/* ===== パネル制御（3D パネルのみ） ===== */
+/* ===== 共通ユーティリティ ===== */
 const FONT_URL = 'static/NotoSansJP-Regular.ttf';
 window.__panelOpen = false;
 
@@ -44,7 +44,7 @@ function setRaycasterTargets(uiOnly){
   });
 }
 
-/* ---------- “文字を必ず最前面”にする強制コンポーネント ---------- */
+/* ----- テキストを確実に前面化（Troikaが再同期しても耐性） ----- */
 AFRAME.registerComponent('force-front',{
   schema:{ order:{type:'number',default:100010}, frames:{type:'int',default:12} },
   init:function(){ this._applied=0; },
@@ -57,63 +57,74 @@ AFRAME.registerComponent('force-front',{
       mesh.material.transparent = true;
       mesh.material.depthWrite  = false;
       mesh.material.depthTest   = true;
-      mesh.material.depthFunc   = THREE.AlwaysDepth; // 常にパス＝前面に描く
+      mesh.material.depthFunc   = THREE.AlwaysDepth;
     }
     this._applied++;
   }
 });
 
-/* ---------- 地球の近面より必ず手前に出すアンカー ---------- */
-AFRAME.registerComponent('panel-anchor',{
+/* ----- パネルを“表示時の位置”にワールド固定する（向きのみ追従可） ----- */
+AFRAME.registerComponent('panel-world-lock',{
   schema:{
-    baseDist:{type:'number',default:0.5},   // 希望距離(既定 0.5m)
-    baseScale:{type:'number',default:0.5},  // 希望スケール(既定 0.5)
-    margin:{type:'number',default:0.03},    // 地球前面からの余白
-    minDist:{type:'number',default:0.08}    // 最小距離（near対策）
+    baseDist:{type:'number',default:0.5},
+    baseScale:{type:'number',default:0.5},
+    margin:{type:'number',default:0.03},
+    minDist:{type:'number',default:0.08},
+    faceCamera:{type:'boolean',default:true}
   },
   init:function(){
     this.cam = document.querySelector('#camera');
     this.earth = document.querySelector('#earth');
-    this._camPos = new THREE.Vector3();
+    this._camPos   = new THREE.Vector3();
     this._earthPos = new THREE.Vector3();
-    this._fwd = new THREE.Vector3();
+    this._fwd      = new THREE.Vector3();
+    this._placed = false;
   },
   tick:function(){
-    if(!this.cam || !this.earth) return;
+    if(!this._placed) this.placeOnce();
+    if(this.data.faceCamera && this.cam){
+      this.cam.object3D.getWorldPosition(this._camPos);
+      this.el.object3D.lookAt(this._camPos);
+    }
+  },
+  placeOnce:function(){
+    if(this._placed || !this.cam) return;
+    this._placed = true;
 
-    // カメラ位置・前方ベクトル
+    // カメラ位置と前方
     this.cam.object3D.getWorldPosition(this._camPos);
     this._fwd.set(0,0,-1).applyQuaternion(this.cam.object3D.quaternion).normalize();
 
-    // 地球のワールド位置と半径（スケール反映）
-    this.earth.object3D.getWorldPosition(this._earthPos);
-    const s = this.earth.object3D.scale.x || 1;
-    const R = (this.earth.getAttribute('geometry')?.radius || 1) * s;
-
-    // カメラから見た地球中心の前方距離（前＝＋）
-    const toEarth = this._earthPos.clone().sub(this._camPos);
-    const along   = toEarth.dot(this._fwd);
-
-    // 地球前面までの距離
-    const nearAlong = along - R; // m
+    // 希望距離
     let dist = this.data.baseDist;
 
-    // ベース距離が地球前面より奥なら、手前側へ自動退避
-    if (nearAlong <= dist + this.data.margin){
-      dist = Math.max(this.data.minDist, nearAlong - this.data.margin);
+    // 地球前面より必ず手前へ
+    if(this.earth){
+      this.earth.object3D.getWorldPosition(this._earthPos);
+      const s = this.earth.object3D.scale.x || 1;
+      const R = (this.earth.getAttribute('geometry')?.radius || 1) * s;
+      const along = this._earthPos.clone().sub(this._camPos).dot(this._fwd);
+      const nearAlong = along - R;
+      if (nearAlong <= dist + this.data.margin){
+        dist = Math.max(this.data.minDist, nearAlong - this.data.margin);
+      }
     }
-    if(!isFinite(dist) || dist < this.data.minDist) dist = this.data.minDist;
+    dist = Math.max(this.data.minDist, dist);
 
-    // カメラ前方 dist に配置（カメラの子なのでローカルZ）
-    this.el.object3D.position.set(0,0,-dist);
+    // ワールド座標で固定配置
+    const worldPos = this._camPos.clone().add(this._fwd.clone().multiplyScalar(dist));
+    this.el.object3D.position.copy(worldPos);
 
-    // 見かけサイズ維持（距離比でスケール可変）
+    // 見かけスケール維持
     const scl = this.data.baseScale * (dist / this.data.baseDist);
     this.el.object3D.scale.set(scl, scl, scl);
+
+    // 初期はユーザーの方へ
+    this.el.object3D.lookAt(this._camPos);
   }
 });
 
-/* ---------- 新デザイン用ユーティリティ ---------- */
+/* ===== 新デザインの3Dパネル ===== */
 const PANEL_BASE = { DIST: 0.5, SCALE: 0.5, LINES: 12 };
 
 function safeText(s){ return String(s==null?'':s).replace(/;/g,'；'); }
@@ -133,7 +144,7 @@ function pm_btn(x,y,w,h,label,onClick){
     'anchor:center'
   ].join('; '));
   t.setAttribute('position','0 0 0.001');
-  t.setAttribute('force-front','order:100012');  // ボタンラベルも前面化
+  t.setAttribute('force-front','order:100012');
   e.appendChild(t);
   e.addEventListener('click',onClick);
   e.addEventListener('mouseenter',()=>e.setAttribute('material','color','#3a4049'));
@@ -142,7 +153,6 @@ function pm_btn(x,y,w,h,label,onClick){
 }
 
 function pm_liftRenderOrder(root){
-  // パネル面などは深度無効で“最前面風”
   root.object3D.renderOrder = 9999;
   root.object3D.traverse(function(obj){
     if(obj.material){
@@ -152,7 +162,7 @@ function pm_liftRenderOrder(root){
   });
 }
 
-/* 折り返しの実高さを troika の boundingBox で計測し、左上基準で縦積み配置 */
+/* 折り返し高さを計測して自動レイアウト */
 function pm_layoutWrappedList(panel){
   var items = Array.from(panel.querySelectorAll('.list-item'));
   if(!items.length) return;
@@ -161,10 +171,10 @@ function pm_layoutWrappedList(panel){
   var remaining = items.length;
 
   function placeAll(){
-    var y = 0.48;    // タイトル直下
-    var gap = 0.02;  // 行間
+    var y = 0.48;        // タイトル直下
+    var gap = 0.02;      // 行間
     items.forEach(function(el,i){
-      el.setAttribute('position', `${-0.45} ${y} 0.03`); // Zを少し前へ
+      el.setAttribute('position', `${-0.45} ${y} 0.03`); // テキストは面より前へ
       y -= (Math.max(heights[i], 0.035) + gap);
     });
   }
@@ -205,7 +215,7 @@ function pm_renderList(panel, list, from){
       'outlineWidth:0.004',
       'outlineColor:#000'
     ].join('; '));
-    item.setAttribute('force-front','order:100011'); // 各行テキスト前面化
+    item.setAttribute('force-front','order:100011');
     (function(url){
       item.addEventListener('click',function(){ try{ if(url) window.open(url,'_blank'); }catch(_){ } });
     })(list[i].url);
@@ -214,27 +224,30 @@ function pm_renderList(panel, list, from){
   pm_layoutWrappedList(panel);
 }
 
-/* ---------- 3D パネル（新デザイン + 自動距離調整） ---------- */
+/* 開閉API（既存呼び出し互換） */
+function openPanel(locations){ openVrPanel(locations); }
+function closePanel(){ closeVrPanel(); }
+
+/* ワールド固定の3Dパネル生成 */
 function openVrPanel(locations){
   closeVrPanel();
-  var cam = document.querySelector('#camera');
+  var scene = document.querySelector('a-scene');
   var panel=document.createElement('a-entity');
   panel.id='vrPanel';
   panel.classList.add('ui','collidable');
 
-  // カメラの子：基準は 0.5m / 0.5、ただし panel-anchor が毎フレーム安全距離へ補正
+  // ひとまず基準値（実配置は panel-world-lock が初回tickで決定）
   panel.setAttribute('position', `0 0 -${PANEL_BASE.DIST}`);
   panel.setAttribute('rotation','0 0 0');
   panel.setAttribute('scale', `${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE}`);
-  panel.setAttribute('panel-anchor', `baseDist:${PANEL_BASE.DIST}; baseScale:${PANEL_BASE.SCALE}; margin:0.03; minDist:0.08`);
+  panel.setAttribute('panel-world-lock', `baseDist:${PANEL_BASE.DIST}; baseScale:${PANEL_BASE.SCALE}; margin:0.03; minDist:0.08; faceCamera:true`);
 
-  // 枠
+  // 枠・背景
   var border=document.createElement('a-entity'); border.classList.add('ui');
   border.setAttribute('geometry','primitive:plane;width:1.12;height:1.22');
   border.setAttribute('material','shader:flat; color:#ffffff; opacity:0.12; transparent:true; side:double; depthTest:false');
   panel.appendChild(border);
 
-  // 背景
   var bg=document.createElement('a-entity'); bg.classList.add('ui');
   bg.setAttribute('geometry','primitive:plane;width:1.1;height:1.2');
   bg.setAttribute('material','shader:flat; color:#202428; opacity:0.98; transparent:true; side:double; depthTest:false');
@@ -256,10 +269,10 @@ function openVrPanel(locations){
     'lineHeight:1.1'
   ].join('; '));
   title.setAttribute('position','-0.45 0.55 0.03');
-  title.setAttribute('force-front','order:100012'); // タイトルも前面化
+  title.setAttribute('force-front','order:100012');
   panel.appendChild(title);
 
-  // リストルート
+  // リスト
   var listRoot=document.createElement('a-entity');
   listRoot.classList.add('ui','list-root');
   panel.appendChild(listRoot);
@@ -276,10 +289,9 @@ function openVrPanel(locations){
     if(scrollIndex < Math.max(0, locations.length - PANEL_BASE.LINES)){ scrollIndex++; rerender(); }
   }));
 
-  pm_liftRenderOrder(panel);       // 背景などは深度無効で最前面風
-  cam.appendChild(panel);
+  pm_liftRenderOrder(panel);
+  scene.appendChild(panel);
 
-  // 初回描画
   rerender();
 
   window.__panelOpen = true;
@@ -293,10 +305,6 @@ function closeVrPanel(){
   document.querySelector('a-scene').emit('panel-closed');
   setRaycasterTargets(false); refreshAllRaycasters();
 }
-
-/* --- オープナー統一（既存呼び出し互換） --- */
-function openPanel(locations){ openVrPanel(locations); }
-function closePanel(){ closeVrPanel(); }
 </script>
 
 <script>
@@ -406,9 +414,7 @@ AFRAME.registerComponent('earth-controls',{
     this.currentXRotation += dy*this.data.mouseRotationSpeed;
     this.previousMousePosition={x:evt.clientX,y:evt.clientY};
   },
-  onMouseUp:function(){
-    this.isDragging=false;
-  },
+  onMouseUp:function(){ this.isDragging=false; },
   onWheelCanvas:function(evt){
     if(window.__panelOpen) return;
     var s=this.el.object3D.scale.x;
@@ -464,7 +470,7 @@ AFRAME.registerComponent('earth-controls',{
   }
 });
 
-/* ============ hex-marker（Troika失敗時も落ちない） ============ */
+/* ============ hex-marker ============ */
 AFRAME.registerComponent('hex-marker',{
   schema:{ count:{type:'number',default:1}, color:{type:'color',default:'yellow'},
            baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001},
@@ -509,8 +515,8 @@ AFRAME.registerComponent('marker-placer',{
     this.markerPos=new THREE.Vector3();
     this.earthPos =new THREE.Vector3();
     this.previousEarthScale=0;
-    
-    // パネルが閉じた時にマーカーの色をリセットする
+
+    // パネルが閉じたらハイライト解除
     this.el.sceneEl.addEventListener('panel-closed', () => {
       this.currentMarkers.forEach(marker => {
         var mesh = marker.getObject3D('mesh');
@@ -543,10 +549,7 @@ AFRAME.registerComponent('marker-placer',{
     return locations;
   },
   updateClusters:function(){
-    for(var i=0;i<this.currentMarkers.length;i++){
-      var m=this.currentMarkers[i];
-      if(m && m.parentNode) m.parentNode.removeChild(m);
-    }
+    this.currentMarkers.forEach(m=>{ if(m && m.parentNode) m.parentNode.removeChild(m); });
     this.currentMarkers=[];
 
     var s=this.el.object3D.scale.x;
@@ -650,7 +653,6 @@ AFRAME.registerComponent('marker-placer',{
             earth-controls marker-placer></a-sphere>
 
   <a-entity id="rig">
-    <!-- 近クリップを小さくして安全側に -->
     <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 1.6 0" look-controls="enabled: false">
       <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
@@ -666,7 +668,7 @@ AFRAME.registerComponent('marker-placer',{
     </a-entity>
   </a-entity>
   
-  <!-- 画面内の地球操作UI（従来どおり近距離なので埋もれません） -->
+  <!-- 画面内の地球操作UI（カメラ近傍） -->
   <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
     <a-entity geometry="primitive: plane; width: 0.5; height: 0.7"
               material="color: #333; opacity: 0.7"></a-entity>
