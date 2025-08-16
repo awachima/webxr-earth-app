@@ -4,10 +4,8 @@
   <meta charset="utf-8" />
   <title>WebXR Earth Controls (stable)</title>
 
-  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-  <!-- Troika（※0.47.2 に統一。順序厳守） -->
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
@@ -43,7 +41,6 @@
 </head>
 <body>
 
-<!-- ===== DOM Overlay（使えるときだけ表示される） ===== -->
 <div id="hudPanel" aria-hidden="true">
   <div id="hudBackdrop"></div>
   <div id="hudCard" role="dialog" aria-modal="true" tabindex="-1">
@@ -166,12 +163,14 @@ function closeVrPanel(){
 
 /* --- オープナー統一 --- */
 function openPanel(locations){
-  if (domOverlayActive()) openHtmlPanel(locations);
-  else                    openVrPanel(locations);
+  // if (domOverlayActive()) openHtmlPanel(locations);
+  // else                    openVrPanel(locations);
+  openVrPanel(locations);
 }
 function closePanel(){
-  if (domOverlayActive()) closeHtmlPanel();
-  else                    closeVrPanel();
+  // if (domOverlayActive()) closeHtmlPanel();
+  // else                    closeVrPanel();
+  closeVrPanel();
 }
 </script>
 
@@ -498,10 +497,8 @@ AFRAME.registerComponent('marker-placer',{
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
     </a-entity>
 
-    <!-- 左手：スティック入力用（モデルは不要なら false でOK） -->
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
 
-    <!-- 右手：laser-controls で“aim”レイを使用（ズレ防止）。常時ライン表示。 -->
     <a-entity id="right-hand"
               laser-controls="hand: right"
               raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
