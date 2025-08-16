@@ -276,28 +276,36 @@ AFRAME.registerComponent('earth-controls',{
     var ax = p.axes || [];
     return { left:{x:ax[0]||0, y:ax[1]||0}, right:{x:ax[2]||0, y:ax[3]||0} };
   },
-  tick:function(){
-    if(window.__panelOpen) return;
+  tick: function() {
+    if (window.__panelOpen) return;
 
+    // --- キーボード入力 ---
     var rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
     var rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
     var scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
 
-    var stickRotX = 0, stickRotY = 0, stickScale = 0;
+    // --- コントローラー入力 ---
+    // 最初にA-Frameのスティック入力を取得
+    var stickRotX = this.stickInput.right.y;
+    var stickRotY = this.stickInput.right.x;
+    var stickScale = this.stickInput.left.y;
 
-    if (this.el.sceneEl.is('vr-mode')) {
-      stickRotX = this.stickInput.right.y;   // 右スティック上下：回転X
-      stickRotY = this.stickInput.right.x;   // 右スティック左右：回転Y
-      stickScale = this.stickInput.left.y;   // 左スティック上下：拡縮
-    } else {
+    // A-Frameの入力がなければ、PC用ゲームパッドを試す (フォールバック)
+    if (stickRotX === 0 && stickRotY === 0 && stickScale === 0) {
       var gp = this.getNonVrSticks();
-      if (gp){ stickRotX = gp.right.y; stickRotY = gp.right.x; stickScale = gp.left.y; }
+      if (gp) {
+        stickRotX = gp.right.y;
+        stickRotY = gp.right.x;
+        stickScale = gp.left.y;
+      }
     }
-
+    
+    // --- 値の適用 ---
     var s = this.el.object3D.scale.x;
     var t = (s - 1.0) / (3.0 - 1.0);
     var mul = 1 - (t * (7 / 8));
 
+    // ジョイスティック入力を優先し、なければキーボード入力を使う
     var finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : rotY_k * this.data.rotationSpeed) * mul;
     var finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : rotX_k * this.data.rotationSpeed) * mul;
     var finalScale = (stickScale !== 0 ? -stickScale : scale_k) * this.data.scaleSpeed;
