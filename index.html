@@ -186,6 +186,10 @@ AFRAME.registerComponent('earth-controls',{
     this.previousMousePosition={x:0,y:0};
     this.cameraEl=document.querySelector('#camera');
     this.debugTextEl = document.querySelector('#debug-text');
+    
+    // ▼▼▼ 修正点 ▼▼▼
+    this.uiState = { rotUp: false, rotDown: false, rotLeft: false, rotRight: false, zoomIn: false, zoomOut: false };
+    // ▲▲▲ 修正点 ▲▲▲
 
     var self=this;
     window.addEventListener('keydown',function(e){ self.keys[e.key]=true; });
@@ -199,10 +203,13 @@ AFRAME.registerComponent('earth-controls',{
       if (!AFRAME.utils.device.checkHeadsetConnected()) {
         cvs.addEventListener('wheel',function(e){ self.onWheelCanvas(e); },{passive:true});
       }
+      
+      // ▼▼▼ 修正点 ▼▼▼
+      // UIボタンのイベントリスナーを設定
+      self.setupUIListeners();
+      // ▲▲▲ 修正点 ▲▲▲
     });
     
-    // ▼▼▼ 修正点 ▼▼▼
-    // --- ジョイスティック監視を開始する関数 ---
     this._bindThumbsticks = function(){
       var L=document.querySelector('#left-hand');
       var R=document.querySelector('#right-hand');
@@ -230,16 +237,40 @@ AFRAME.registerComponent('earth-controls',{
       }
     };
 
-    // --- 各コントローラーの準備完了を待って、監視を開始 ---
     var leftHand = document.querySelector('#left-hand');
     var rightHand = document.querySelector('#right-hand');
     
-    // .bind(this) で、関数内の `this` が `earth-controls` を指すようにする
     if(leftHand)  leftHand.addEventListener('controllerconnected', this._bindThumbsticks.bind(this));
     if(rightHand) rightHand.addEventListener('controllerconnected', this._bindThumbsticks.bind(this));
-    // ▲▲▲ 修正点 ▲▲▲
   },
+  
+  // ▼▼▼ 修正点 ▼▼▼
+  // UIボタンのイベントリスナーを設定する関数を追加
+  setupUIListeners: function() {
+    var self = this;
+    var states = [
+      { id: '#btn-rot-up',    state: 'rotUp' },
+      { id: '#btn-rot-down',  state: 'rotDown' },
+      { id: '#btn-rot-left',  state: 'rotLeft' },
+      { id: '#btn-rot-right', state: 'rotRight' },
+      { id: '#btn-zoom-in',   state: 'zoomIn' },
+      { id: '#btn-zoom-out',  state: 'zoomOut' }
+    ];
+
+    states.forEach(function(item) {
+      var btn = document.querySelector(item.id);
+      if (btn) {
+        btn.addEventListener('mousedown', function() { self.uiState[item.state] = true; });
+        btn.addEventListener('mouseup', function() { self.uiState[item.state] = false; });
+        btn.addEventListener('mouseleave', function() { self.uiState[item.state] = false; });
+      }
+    });
+  },
+  // ▲▲▲ 修正点 ▲▲▲
+
   onMouseDown:function(evt){
+    // UI要素をクリックした場合はドラッグを開始しない
+    if (evt.target.classList.contains('ui')) return;
     if(window.__panelOpen) return;
     this.isDragging=true;
     this.previousMousePosition={x:evt.clientX,y:evt.clientY};
@@ -282,6 +313,13 @@ AFRAME.registerComponent('earth-controls',{
     var rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
     var rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
     var scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
+    
+    // ▼▼▼ 修正点 ▼▼▼
+    // UIボタンからの入力を追加
+    var rotY_ui = (this.uiState.rotRight ? 1 : 0) + (this.uiState.rotLeft ? -1 : 0);
+    var rotX_ui = (this.uiState.rotDown ? 1 : 0) + (this.uiState.rotUp ? -1 : 0);
+    var scale_ui = (this.uiState.zoomIn ? 1 : 0) + (this.uiState.zoomOut ? -1 : 0);
+    // ▲▲▲ 修正点 ▲▲▲
 
     var stickRotX = this.stickInput.right.y;
     var stickRotY = this.stickInput.right.x;
@@ -297,10 +335,13 @@ AFRAME.registerComponent('earth-controls',{
     var s = this.el.object3D.scale.x;
     var t = (s - 1.0) / (3.0 - 1.0);
     var mul = 1 - (t * (7 / 8));
-
-    var finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : rotY_k * this.data.rotationSpeed) * mul;
-    var finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : rotX_k * this.data.rotationSpeed) * mul;
-    var finalScale = (stickScale !== 0 ? -stickScale : scale_k) * this.data.scaleSpeed;
+    
+    // ▼▼▼ 修正点 ▼▼▼
+    // 入力の優先順位: ジョイスティック > UIボタン > キーボード
+    var finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : (rotY_ui !== 0 ? rotY_ui * this.data.rotationSpeed : rotY_k * this.data.rotationSpeed)) * mul;
+    var finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : (rotX_ui !== 0 ? rotX_ui * this.data.rotationSpeed : rotX_k * this.data.rotationSpeed)) * mul;
+    var finalScale = (stickScale !== 0 ? -stickScale : (scale_ui !== 0 ? scale_ui * 0.1 : scale_k)) * this.data.scaleSpeed;
+    // ▲▲▲ 修正点 ▲▲▲
 
     this.el.object3D.rotation.y += finalRotY * (Math.PI / 180);
     this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation + finalRotX));
@@ -515,7 +556,43 @@ AFRAME.registerComponent('marker-placer',{
               cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend">
     </a-entity>
   </a-entity>
+  
+  <a-entity id="ui-panel" position="-1.5 1.5 -2.5" rotation="0 25 0">
+    <a-entity geometry="primitive: plane; width: 0.6; height: 0.8"
+              material="color: #333; opacity: 0.7"></a-entity>
+              
+    <a-entity id="btn-rot-up" class="ui collidable"
+              geometry="primitive: plane; width: 0.15; height: 0.15" material="color: #555"
+              position="0 0.25 0.01">
+      <a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+    </a-entity>
+    <a-entity id="btn-rot-down" class="ui collidable"
+              geometry="primitive: plane; width: 0.15; height: 0.15" material="color: #555"
+              position="0 -0.05 0.01">
+      <a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+    </a-entity>
+    <a-entity id="btn-rot-left" class="ui collidable"
+              geometry="primitive: plane; width: 0.15; height: 0.15" material="color: #555"
+              position="-0.1 0.1 0.01">
+      <a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+    </a-entity>
+    <a-entity id="btn-rot-right" class="ui collidable"
+              geometry="primitive: plane; width: 0.15; height: 0.15" material="color: #555"
+              position="0.1 0.1 0.01">
+      <a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+    </a-entity>
 
+    <a-entity id="btn-zoom-in" class="ui collidable"
+              geometry="primitive: plane; width: 0.2; height: 0.15" material="color: #4CAF50"
+              position="0 -0.25 0.01">
+      <a-entity troika-text="value: +; color: #FFF; fontSize: 0.12; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+    </a-entity>
+    <a-entity id="btn-zoom-out" class="ui collidable"
+              geometry="primitive: plane; width: 0.2; height: 0.15" material="color: #F44336"
+              position="0 -0.45 0.01">
+      <a-entity troika-text="value: -; color: #FFF; fontSize: 0.12; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+    </a-entity>
+  </a-entity>
   <a-sky color="#ECECEC"></a-sky>
 </a-scene>
 </body>
