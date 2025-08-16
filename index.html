@@ -58,19 +58,21 @@ AFRAME.registerComponent('force-front',{
       mesh.material.depthWrite  = false;
       mesh.material.depthTest   = true;
       mesh.material.depthFunc   = THREE.AlwaysDepth;
+      mesh.material.side        = THREE.DoubleSide; // 背面カリング無効
     }
     this._applied++;
   }
 });
 
-/* ----- パネルを“表示時の位置”にワールド固定する（向きのみ追従可） ----- */
+/* ----- パネルを“表示時の位置”にワールド固定（ワールド水平垂直） ----- */
 AFRAME.registerComponent('panel-world-lock',{
   schema:{
     baseDist:{type:'number',default:0.5},
     baseScale:{type:'number',default:0.5},
     margin:{type:'number',default:0.03},
     minDist:{type:'number',default:0.08},
-    faceCamera:{type:'boolean',default:true}
+    faceCamera:{type:'boolean',default:false},   // ← デフォルトでカメラ追従なし
+    worldYaw:{type:'number',default:0}          // 水平向き（度）。0=ワールド -Z 方向を見る
   },
   init:function(){
     this.cam = document.querySelector('#camera');
@@ -82,9 +84,13 @@ AFRAME.registerComponent('panel-world-lock',{
   },
   tick:function(){
     if(!this._placed) this.placeOnce();
+    // 向きは固定。必要なら faceCamera:true で向きだけ追従可
     if(this.data.faceCamera && this.cam){
       this.cam.object3D.getWorldPosition(this._camPos);
       this.el.object3D.lookAt(this._camPos);
+      // ただしロール/ピッチは0に戻してYアップを維持
+      const e=this.el.object3D.rotation;
+      this.el.object3D.rotation.set(0,e.y,0);
     }
   },
   placeOnce:function(){
@@ -119,8 +125,9 @@ AFRAME.registerComponent('panel-world-lock',{
     const scl = this.data.baseScale * (dist / this.data.baseDist);
     this.el.object3D.scale.set(scl, scl, scl);
 
-    // 初期はユーザーの方へ
-    this.el.object3D.lookAt(this._camPos);
+    // ★ ワールド水平垂直（Yアップ、ロール/ピッチ0、ヨーは指定角）
+    const yawRad = THREE.MathUtils.degToRad(this.data.worldYaw);
+    this.el.object3D.rotation.set(0, yawRad, 0);
   }
 });
 
@@ -228,7 +235,7 @@ function pm_renderList(panel, list, from){
 function openPanel(locations){ openVrPanel(locations); }
 function closePanel(){ closeVrPanel(); }
 
-/* ワールド固定の3Dパネル生成 */
+/* ワールド固定の3Dパネル生成（カメラ追従なし） */
 function openVrPanel(locations){
   closeVrPanel();
   var scene = document.querySelector('a-scene');
@@ -240,7 +247,8 @@ function openVrPanel(locations){
   panel.setAttribute('position', `0 0 -${PANEL_BASE.DIST}`);
   panel.setAttribute('rotation','0 0 0');
   panel.setAttribute('scale', `${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE}`);
-  panel.setAttribute('panel-world-lock', `baseDist:${PANEL_BASE.DIST}; baseScale:${PANEL_BASE.SCALE}; margin:0.03; minDist:0.08; faceCamera:true`);
+  // ★ カメラ角度に合わせず、ワールド水平垂直へ固定（worldYawは必要なら調整）
+  panel.setAttribute('panel-world-lock', `baseDist:${PANEL_BASE.DIST}; baseScale:${PANEL_BASE.SCALE}; margin:0.03; minDist:0.08; faceCamera:false; worldYaw:0`);
 
   // 枠・背景
   var border=document.createElement('a-entity'); border.classList.add('ui');
