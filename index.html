@@ -1,535 +1,255 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>WebXR Earth Controls (stable)</title>
-
+  <title>WebXR Earth Controls</title>
+  <!-- 正しく動作したA-Frameのライブラリ -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-
-  <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
-
-  <style>
-    @font-face{
-      font-family:"NotoSansJPLocal";
-      src:url("static/NotoSansJP-Regular.ttf") format("truetype");
-      font-weight:400; font-style:normal; font-display:swap;
-    }
-    :root{ --panel-w:min(70vw,920px); --panel-h:min(70vh,580px); --panel-radius:18px; }
-    body{ margin:0; background:#eee; }
-
-    /* ----- DOM Overlay（使える環境のみ） ----- */
-    #hudPanel{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:99999; pointer-events:none;}
-    #hudPanel.show{display:flex;}
-    #hudBackdrop{position:absolute; inset:0; background:rgba(0,0,0,.12); pointer-events:auto;}
-    #hudCard{
-      position:relative; width:var(--panel-w); height:var(--panel-h);
-      background:rgba(45,45,48,.9); border:1px solid rgba(255,255,255,.35);
-      border-radius:var(--panel-radius); box-shadow:0 10px 40px rgba(0,0,0,.35);
-      backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
-      pointer-events:auto; overflow:auto;
-      font-family:"NotoSansJPLocal",system-ui,-apple-system,"Segoe UI",Roboto,"Hirino Kaku Gothic ProN","Meiryo",sans-serif; color:#fff;
-    }
-    #hudHeader{height:56px; display:flex; align-items:center; gap:12px; padding:0 18px; border-bottom:1px solid rgba(255,255,255,.22); user-select:none;}
-    #hudTitle{font-size:22px; letter-spacing:.2px; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1 1 auto;}
-    #hudClose{width:36px; height:36px; border-radius:50%; border:0; background:#DA2D2D; color:#fff; font-size:20px; line-height:36px; text-align:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.25);}
-    #hudList{padding:14px 18px 18px 18px; scrollbar-gutter:stable both-edges;}
-    .row{font-size:20px; line-height:1.25; padding:10px 12px; border-radius:10px; margin-bottom:6px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08);}
-  </style>
 </head>
 <body>
+  <!-- JavaScriptで独自の操作機能を定義 -->
+  <script>
+    // 'earth-controls'という名前の新しい部品（コンポーネント）を定義します
+    AFRAME.registerComponent('earth-controls', {
+      // 初期設定
+      schema: {
+        rotationSpeed: { type: 'number', default: 2.0 }, // 回転の速さ
+        scaleSpeed: { type: 'number', default: 0.01 }   // 拡大・縮小の速さ
+      },
 
-<div id="hudPanel" aria-hidden="true">
-  <div id="hudBackdrop"></div>
-  <div id="hudCard" role="dialog" aria-modal="true" tabindex="-1">
-    <div id="hudHeader">
-      <div id="hudTitle">Places</div>
-      <button id="hudClose" title="閉じる">×</button>
-    </div>
-    <div id="hudList"></div>
-  </div>
-</div>
+      // コンポーネントが初期化されるときに一度だけ呼ばれる関数
+      init: function () {
+        // 変数の準備
+        this.minScale = 1.0;
+        this.maxScale = 3.0;
+        this.currentXRotation = 0;
+        this.keys = {}; // 押されているキーの状態
+        this.stickInput = { left: {x: 0, y: 0}, right: {x: 0, y: 0} }; // スティックの入力状態
 
-<script>
-/* ===== パネル制御（DOM Overlay or 3D フォールバック） ===== */
-const FONT_URL = 'static/NotoSansJP-Regular.ttf';
-window.__panelOpen = false;
+        // --- イベントリスナーの登録 ---
+        this.onStickMoved = this.onStickMoved.bind(this);
+        this.el.sceneEl.addEventListener('thumbstickmoved', this.onStickMoved);
 
-function getXRSession(){
-  var scene = document.querySelector('a-scene');
-  if(!scene || !scene.renderer || !scene.renderer.xr || !scene.renderer.xr.getSession) return null;
-  return scene.renderer.xr.getSession();
-}
-function domOverlayActive(){
-  var s = getXRSession();
-  return !!(s && s.domOverlayState && s.domOverlayState.type);
-}
-function refreshAllRaycasters(){
-  ['#mouseCursor', '#right-hand'].forEach(function(sel){
-    var el=document.querySelector(sel);
-    var rc = el && el.components && el.components.raycaster;
-    if(rc && rc.refreshObjects) rc.refreshObjects();
-  });
-}
-function setRaycasterTargets(uiOnly){
-  var objs = uiOnly ? '.ui' : '.collidable, .ui';
-  ['#mouseCursor', '#right-hand'].forEach(function(sel){
-    var el=document.querySelector(sel);
-    if(el) el.setAttribute('raycaster','objects',objs);
-  });
-}
+        this.onKeyDown = this.onKeyDown.bind(this);
+        this.onKeyUp = this.onKeyUp.bind(this);
+        window.addEventListener('keydown', this.onKeyDown);
+        window.addEventListener('keyup', this.onKeyUp);
+      },
+      
+      onKeyDown: function (evt) { this.keys[evt.key] = true; },
+      onKeyUp: function (evt) { this.keys[evt.key] = false; },
 
-/* --- DOM Overlay パネル --- */
-var $panel = document.getElementById('hudPanel');
-var $list  = document.getElementById('hudList');
-var $title = document.getElementById('hudTitle');
-document.getElementById('hudClose').addEventListener('click', closeHtmlPanel);
-document.getElementById('hudBackdrop').addEventListener('click', closeHtmlPanel);
+      // VRコントローラーのスティックが動いた時の処理
+      onStickMoved: function (evt) {
+        if (evt.target.id === 'left-hand') {
+          this.stickInput.left = evt.detail;
+        } else if (evt.target.id === 'right-hand') {
+          this.stickInput.right = evt.detail;
+        }
+      },
 
-function openHtmlPanel(locations){
-  $title.textContent = locations.length ? (locations[0].title.split(' ')[0] + ' など（' + locations.length + '件）') : 'Places';
-  $list.innerHTML='';
-  for(var i=0;i<locations.length;i++){
-    var d=document.createElement('div');
-    d.className='row'; d.textContent=locations[i].title;
-    $list.appendChild(d);
-  }
-  window.__panelOpen=true;
-  $panel.classList.add('show'); $panel.setAttribute('aria-hidden','false');
-  document.querySelector('a-scene').emit('panel-opened');
-  setRaycasterTargets(true); refreshAllRaycasters();
-  document.getElementById('hudCard').focus();
-}
-function closeHtmlPanel(){
-  window.__panelOpen=false;
-  if (document.activeElement) { try{ document.activeElement.blur(); }catch(_){ } }
-  $panel.classList.remove('show'); $panel.setAttribute('aria-hidden','true');
-  document.querySelector('a-scene').emit('panel-closed');
-  setRaycasterTargets(false); refreshAllRaycasters();
-}
+      // 毎フレーム呼ばれる更新処理 (tick)
+      tick: function () {
+        // --- 入力値の取得 ---
+        const rotY_keyboard = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
+        const rotX_keyboard = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
+        const scale_keyboard = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
 
-/* --- VR用 3D パネル（フォールバック） --- */
-function openVrPanel(locations){
-  closeVrPanel();
-  var cam = document.querySelector('#camera');
-  var panel = document.createElement('a-entity');
-  panel.id = 'vrPanel';
-  panel.classList.add('ui','collidable');
-  panel.setAttribute('position','0 0 -0.9');         // 顔の90cm前
-  panel.setAttribute('geometry','primitive: plane; width: 0.9; height: 0.56');
-  panel.setAttribute('material','color: #2d2d30; opacity: 0.92; side: double');
+        // スケールに基づいて回転速度の倍率を計算
+        const currentScaleValue = this.el.object3D.scale.x;
+        const t = (currentScaleValue - this.minScale) / (this.maxScale - this.minScale);
+        const rotationMultiplier = 1 - (t * (7 / 8));
 
-  var head = locations.length ? (locations[0].title.split(' ')[0] + ' など（' + locations.length + '件）') : 'Places';
-  var title = document.createElement('a-entity');
-  title.setAttribute('text','value:'+head+'; width: 0.84; align: center; color: #fff;');
-  title.setAttribute('position','0 0.22 0.01');
-  panel.appendChild(title);
+        // --- 値の計算 ---
+        // 回転
+        const finalRotY = (this.stickInput.right.x !== 0 ? this.stickInput.right.x : rotY_keyboard) * this.data.rotationSpeed * rotationMultiplier;
+        const finalRotX = (this.stickInput.right.y !== 0 ? this.stickInput.right.y : rotX_keyboard) * this.data.rotationSpeed * rotationMultiplier;
+        
+        // 拡縮
+        const finalScale = (this.stickInput.left.y !== 0 ? -this.stickInput.left.y : scale_keyboard) * this.data.scaleSpeed;
 
-  var n = Math.min(12, locations.length);
-  for (var i=0;i<n;i++){
-    var row = document.createElement('a-entity');
-    row.setAttribute('text','value:'+locations[i].title+'; width: 0.84; color: #fff;');
-    row.setAttribute('position', (-0.42) + ' ' + (0.15 - i*0.05) + ' 0.01');
-    panel.appendChild(row);
-  }
+        // --- 計算結果の適用 ---
+        this.el.object3D.rotation.y += finalRotY * (Math.PI / 180);
+        this.currentXRotation -= finalRotX;
+        this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation));
+        this.el.object3D.rotation.x = this.currentXRotation * (Math.PI / 180);
 
-  var closeBtn = document.createElement('a-entity');
-  closeBtn.classList.add('ui','collidable');
-  closeBtn.setAttribute('geometry','primitive: plane; width: 0.07; height: 0.07');
-  closeBtn.setAttribute('material','color: #DA2D2D');
-  closeBtn.setAttribute('position','0.41 0.22 0.02');
-  closeBtn.addEventListener('click', closeVrPanel);
-  var closeText = document.createElement('a-entity');
-  closeText.setAttribute('text','value:×; align:center; width:0.1; color:#fff;');
-  closeText.setAttribute('position','0 0 0.01');
-  closeBtn.appendChild(closeText);
-  panel.appendChild(closeBtn);
+        let newScale = currentScaleValue + finalScale;
+        newScale = Math.max(this.minScale, Math.min(this.maxScale, newScale));
+        this.el.object3D.scale.set(newScale, newScale, newScale);
+      },
 
-  cam.appendChild(panel);
-  window.__panelOpen = true;
-  setRaycasterTargets(true); refreshAllRaycasters();
-}
-function closeVrPanel(){
-  var p = document.getElementById('vrPanel');
-  if (p && p.parentNode) p.parentNode.removeChild(p);
-  window.__panelOpen = false;
-  setRaycasterTargets(false); refreshAllRaycasters();
-}
-
-/* --- オープナー統一 --- */
-function openPanel(locations){
-  openVrPanel(locations);
-}
-function closePanel(){
-  closeVrPanel();
-}
-</script>
-
-<script>
-/* ============ Earth Controls（VR安定・非VR互換） ============ */
-AFRAME.registerComponent('earth-controls',{
-  schema:{
-    rotationSpeed:{type:'number',default:2.0},
-    joystickRotationSpeed:{type:'number',default:1.0},
-    scaleSpeed:{type:'number',default:0.01},
-    mouseRotationSpeed:{type:'number',default:0.2},
-    wheelScaleSpeed:{type:'number',default:0.0005}
-  },
-  // ▼▼▼ 修正点 ▼▼▼
-  init:function(){
-    this.minScale=1.0; this.maxScale=3.0;
-    this.currentXRotation=0;
-    this.keys={};
-    this.stickInput={ left:{x:0,y:0}, right:{x:0,y:0} }; // イベント監視用のオブジェクト
-    this.isDragging=false;
-    this.previousMousePosition={x:0,y:0};
-    this.cameraEl=document.querySelector('#camera');
-    this.debugTextEl = document.querySelector('#debug-text');
-
-    var self=this;
-    window.addEventListener('keydown',function(e){ self.keys[e.key]=true; });
-    window.addEventListener('keyup',function(e){ self.keys[e.key]=false; });
-
-    // --- マウス操作のリスナー設定 ---
-    this.el.sceneEl.addEventListener('loaded', function(){
-      var cvs=self.el.sceneEl.canvas;
-      cvs.addEventListener('mousedown',function(e){ self.onMouseDown(e); });
-      window.addEventListener('mousemove',function(e){ self.onMouseMove(e); });
-      window.addEventListener('mouseup',function(){ self.onMouseUp(); });
-      if (!AFRAME.utils.device.checkHeadsetConnected()) {
-        cvs.addEventListener('wheel',function(e){ self.onWheelCanvas(e); },{passive:true});
+      remove: function() {
+        this.el.sceneEl.removeEventListener('thumbstickmoved', this.onStickMoved);
+        window.removeEventListener('keydown', this.onKeyDown);
+        window.removeEventListener('keyup', this.onKeyUp);
       }
     });
 
-    // --- ジョイスティック監視を開始する関数 ---
-    this._bindThumbsticks = function(){
-      var L=document.querySelector('#left-hand');
-      var R=document.querySelector('#right-hand');
-      if(L && !L._thumbBound){
-        L.addEventListener('thumbstickmoved', function(e){ self.stickInput.left={x:e.detail.x,y:e.detail.y}; });
-        L.addEventListener('axismove', function(e){
-          var a=(e.detail && e.detail.axis) ? e.detail.axis : [];
-          // thumbstickmovedが優先されるように、値が0の場合のみaxismoveを採用
-          if (self.stickInput.left.x === 0 && self.stickInput.left.y === 0) {
-            self.stickInput.left={x:a[0]||0, y:a[1]||0};
+    // 六角柱マーカーを生成する新しいコンポーネント
+    AFRAME.registerComponent('hex-marker', {
+        schema: {
+            count: {type: 'number', default: 1},
+            color: {type: 'color', default: 'yellow'},
+            baseRadius: {type: 'number', default: 0.0075},
+            heightUnit: {type: 'number', default: 0.0005}
+        },
+        init: function() {
+            const data = this.data;
+            // デフォルトの高さを0.01に変更
+            this.height = 0.01 + (data.count * data.heightUnit);
+            
+            // 裾が少し広がった六角柱のジオメトリを作成
+            const geometry = new THREE.CylinderGeometry(data.baseRadius * 0.9, data.baseRadius, this.height, 6);
+            // flatShading: true を追加して、表示をカクカクさせる
+            const material = new THREE.MeshStandardMaterial({color: data.color, flatShading: true});
+            const mesh = new THREE.Mesh(geometry, material);
+            this.el.setObject3D('mesh', mesh);
+
+            // マーカー表面に表示するテキストを作成
+            const textEntity = document.createElement('a-text');
+            textEntity.setAttribute('value', data.count);
+            // テキストが六角柱の上面と平行になるように回転
+            textEntity.setAttribute('rotation', {x: -90, y: 0, z: 0});
+            textEntity.setAttribute('align', 'center');
+            textEntity.setAttribute('color', 'black');
+            // マーカーのサイズに合わせてテキストの幅を調整
+            textEntity.setAttribute('width', 0.1);
+            
+            this.el.appendChild(textEntity);
+            this.textEntity = textEntity;
+        },
+        tick: function() {
+            if (!this.textEntity) return;
+
+            const parentScale = this.el.object3D.scale.y;
+            if (parentScale === 0) return;
+
+            // 親のスケールが大きくなるほど、隙間を小さくして、見た目の距離を一定に保つ
+            const desiredGap = 0.0001;
+            const adjustedGap = desiredGap / parentScale;
+
+            this.textEntity.setAttribute('position', {x: 0, y: this.height / 2 + adjustedGap, z: 0});
+        }
+    });
+
+
+    // マーカーを配置するためのコンポーネント
+    AFRAME.registerComponent('marker-placer', {
+      schema: {
+        maxMarkerMultiplier: {type: 'number', default: 12}
+      },
+      init: function() {
+        this.markers = []; // 作成したマーカーを保存する配列
+        // ★★★ 2000個のランダムなサンプルデータを生成 ★★★
+        const locations = [];
+        for (let i = 0; i < 2000; i++) {
+            locations.push({
+                title: `Point ${i + 1}`,
+                lat: Math.random() * 180 - 90, // -90 to 90
+                lon: Math.random() * 360 - 180, // -180 to 180
+                url: '...',
+                count: Math.floor(Math.random() * 50) + 1 // 1 to 50
+            });
+        }
+
+        // 球体の半径をコンポーネントから直接取得
+        const earthRadius = this.el.getAttribute('geometry').radius;
+
+        locations.forEach(loc => {
+          // 緯度経度を3D座標に変換
+          const pos = this.latLonTo3D(loc.lat, loc.lon, earthRadius);
+
+          // a-sphereの代わりに、新しいhex-markerコンポーネントを持つa-entityを作成
+          const marker = document.createElement('a-entity');
+          marker.setAttribute('position', pos);
+
+          // マーカーの向きを、北極を基準に安定させる
+          const yAxis = pos.clone().normalize();
+          const worldUp = new THREE.Vector3(0, 1, 0);
+          const xAxis = new THREE.Vector3().crossVectors(worldUp, yAxis).normalize();
+          if (xAxis.length() === 0) {
+            xAxis.set(1, 0, 0);
           }
-        });
-        L._thumbBound=true;
-      }
-      if(R && !R._thumbBound){
-        R.addEventListener('thumbstickmoved', function(e){ self.stickInput.right={x:e.detail.x,y:e.detail.y}; });
-        R.addEventListener('axismove', function(e){
-          var a=(e.detail && e.detail.axis) ? e.detail.axis : [];
-           if (self.stickInput.right.x === 0 && self.stickInput.right.y === 0) {
-            var rx = (typeof a[2] === 'number') ? a[2] : (a[0]||0);
-            var ry = (typeof a[3] === 'number') ? a[3] : (a[1]||0);
-            self.stickInput.right={x:rx, y:ry};
-          }
-        });
-        R._thumbBound=true;
-      }
-    };
+          const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis);
+          const rotationMatrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+          marker.object3D.quaternion.setFromRotationMatrix(rotationMatrix);
 
-    // --- シーンロード完了後に、コントローラーの準備ができるまで監視を試みる ---
-    this.el.sceneEl.addEventListener('loaded', () => {
-      this._bindThumbsticks(); // まず一度試す
-      this._bindTimer = setInterval(this._bindThumbsticks, 500); // 準備できるまで0.5秒ごとに試す
-      setTimeout(() => clearInterval(this._bindTimer), 5000); // 5秒で試行を終了
+          // countを渡してマーカーを生成
+          marker.setAttribute('hex-marker', {count: loc.count});
+          
+          // マーカーを地球の子要素として追加
+          this.el.appendChild(marker);
+          this.markers.push(marker);
+        });
+      },
+
+      // マーカーのスケールを毎フレーム更新するtick関数
+      tick: function() {
+        if (!this.markers || this.markers.length === 0) return;
+
+        // 地球の現在のスケールを取得
+        const earthScale = this.el.object3D.scale.x;
+
+        // earthScaleが1から3の間で変化する時、tは0から1の間で変化する
+        const t = (earthScale - 1) / (3 - 1); 
+        // マーカーの倍率を、maxMarkerMultiplierから1まで線形補間で計算
+        const markerScale = this.data.maxMarkerMultiplier - t * (this.data.maxMarkerMultiplier - 1);
+
+        // 全てのマーカーのスケールを更新
+        for (const marker of this.markers) {
+            marker.object3D.scale.set(markerScale, markerScale, markerScale);
+        }
+      },
+
+      // 緯度経度を3D座標に変換するヘルパー関数
+      latLonTo3D: function(lat, lon, radius) {
+        const phi = (90 - lat) * (Math.PI / 180);
+        const theta = (lon + 180) * (Math.PI / 180);
+
+        const x = -(radius * Math.sin(phi) * Math.cos(theta));
+        const y = radius * Math.cos(phi);
+        const z = radius * Math.sin(phi) * Math.sin(theta);
+
+        return new THREE.Vector3(x, y, z);
+      }
     });
 
-    // --- VRモード出入りでも監視を再試行 ---
-    this.el.sceneEl.addEventListener('enter-vr', this._bindThumbsticks);
-    this.el.sceneEl.addEventListener('exit-vr', () => {
-        // VRを出た後も再バインドが必要な場合がある
-        setTimeout(this._bindThumbsticks, 500);
-    });
-  },
-  // ▲▲▲ 修正点 ▲▲▲
-  onMouseDown:function(evt){
-    if(window.__panelOpen) return;
-    this.isDragging=true;
-    this.previousMousePosition={x:evt.clientX,y:evt.clientY};
-    if(this.cameraEl) this.cameraEl.setAttribute('look-controls','enabled',false);
-  },
-  onMouseMove:function(evt){
-    if(!this.isDragging || window.__panelOpen) return;
-    var dx=evt.clientX-this.previousMousePosition.x;
-    var dy=evt.clientY-this.previousMousePosition.y;
-    this.el.object3D.rotation.y += dx*(Math.PI/180)*this.data.mouseRotationSpeed;
-    this.currentXRotation += dy*this.data.mouseRotationSpeed;
-    this.previousMousePosition={x:evt.clientX,y:evt.clientY};
-  },
-  onMouseUp:function(){
-    this.isDragging=false;
-  },
-  onWheelCanvas:function(evt){
-    if(window.__panelOpen) return;
-    var s=this.el.object3D.scale.x;
-    s += evt.deltaY*-1*this.data.wheelScaleSpeed;
-    s=Math.max(this.minScale,Math.min(this.maxScale,s));
-    this.el.object3D.scale.set(s,s,s);
-  },
-  getNonVrSticks:function(){
-    var pads = (navigator.getGamepads && navigator.getGamepads()) ? navigator.getGamepads() : [];
-    var p = null;
-    for (var i=0;i<pads.length;i++){ if(pads[i] && pads[i].connected){ p=pads[i]; break; } }
-    if(!p) return null;
-    var ax = p.axes || [];
-    return { left:{x:ax[0]||0, y:ax[1]||0}, right:{x:ax[2]||0, y:ax[3]||0} };
-  },
-  // ▼▼▼ 修正点 ▼▼▼
-  tick: function() {
-    // デバッグテキストはイベントで更新されたthis.stickInputをただ表示する
-    if (this.debugTextEl) {
-      var debugString = `L: ${this.stickInput.left.x.toFixed(2)}, ${this.stickInput.left.y.toFixed(2)}\nR: ${this.stickInput.right.x.toFixed(2)}, ${this.stickInput.right.y.toFixed(2)}`;
-      this.debugTextEl.setAttribute('troika-text', 'value', debugString);
-    }
+  </script>
 
-    if (window.__panelOpen) return;
-
-    var rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
-    var rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
-    var scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
-
-    // イベントで更新された値を利用する
-    var stickRotX = this.stickInput.right.y;
-    var stickRotY = this.stickInput.right.x;
-    var stickScale = this.stickInput.left.y;
-
-    // PC用ゲームパッドのフォールバック
-    if (stickRotX === 0 && stickRotY === 0 && stickScale === 0) {
-      var gp = this.getNonVrSticks();
-      if (gp) {
-        stickRotX = gp.right.y; stickRotY = gp.right.x; stickScale = gp.left.y;
-      }
-    }
+  <!-- renderer="antialias: true" を追加して、描画を滑らかにする -->
+  <a-scene renderer="antialias: true">
+    <!-- シーンに照明を追加 -->
+    <a-light type="ambient" color="#CCC"></a-light>
+    <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
     
-    var s = this.el.object3D.scale.x;
-    var t = (s - 1.0) / (3.0 - 1.0);
-    var mul = 1 - (t * (7 / 8));
+    <a-sphere
+      id="earth"
+      position="0 1.5 -3.2"
+      radius="1"
+      scale="1 1 1"
+      src="eartn_model/world.topo.200409.3x10800x5400.jpg"
+      segments-height="64"
+      segments-width="128"
+      earth-controls
+      marker-placer>
+    </a-sphere>
 
-    var finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : rotY_k * this.data.rotationSpeed) * mul;
-    var finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : rotX_k * this.data.rotationSpeed) * mul;
-    var finalScale = (stickScale !== 0 ? -stickScale : scale_k) * this.data.scaleSpeed;
-
-    this.el.object3D.rotation.y += finalRotY * (Math.PI / 180);
-    this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation + finalRotX));
-    this.el.object3D.rotation.x = this.currentXRotation * (Math.PI / 180);
-
-    var ns = s + finalScale;
-    ns = Math.max(this.minScale, Math.min(this.maxScale, ns));
-    this.el.object3D.scale.set(ns, ns, ns);
-  }
-  // ▲▲▲ 修正点 ▲▲▲
-});
-
-/* ============ hex-marker（Troika失敗時も落ちない） ============ */
-AFRAME.registerComponent('hex-marker',{
-  schema:{ count:{type:'number',default:1}, color:{type:'color',default:'yellow'},
-           baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001},
-           fontUrl:{type:'string',default:FONT_URL} },
-  init:function(){
-    var d=this.data;
-    this.height=0.01+(d.count*d.heightUnit);
-    var geom=new THREE.CylinderGeometry(d.baseRadius*0.9,d.baseRadius,this.height,6);
-    var mat =new THREE.MeshStandardMaterial({color:d.color,flatShading:true});
-    this.el.setObject3D('mesh', new THREE.Mesh(geom,mat));
-
-    try{
-      var baseFontSize=d.baseRadius*0.8;
-      var text=document.createElement('a-entity');
-      text.setAttribute('troika-text',{
-        value:String(d.count),
-        font:d.fontUrl,
-        fontSize:baseFontSize,
-        color:'#111',
-        outlineColor:'#fff',
-        outlineWidth:0.0006,
-        outlineBlur:0.00001,
-        anchor:'center'
-      });
-      text.setAttribute('rotation','-90 0 0');
-      text.setAttribute('position',{x:0,y:this.height/2+0.00012,z:0});
-      this.el.appendChild(text);
-      this.el.textEl=text;
-    }catch(err){
-      console.warn('Troika text disabled:', err);
-    }
-  }
-});
-
-/* ============ marker-placer ============ */
-AFRAME.registerComponent('marker-placer',{
-  schema:{ maxMarkerMultiplier:{type:'number',default:12} },
-  init:async function(){
-    this.allLocations=[]; this.currentMarkers=[];
-    this.cameraEl=document.querySelector('#camera');
-    this.cameraPos=new THREE.Vector3();
-    this.markerPos=new THREE.Vector3();
-    this.earthPos =new THREE.Vector3();
-    this.previousEarthScale=0;
-
-    var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
-    try{
-      var res=await fetch(sheetUrl,{cache:'no-store'});
-      if(res.ok){
-        var text=await res.text();
-        this.allLocations=this.parseCsv(text);
-      }else{
-        console.error('CSV fetch failed:', res.status);
-      }
-    }catch(e){ console.error("データ取得エラー:",e); }
-    this.updateClusters();
-    this.previousEarthScale=this.el.object3D.scale.x;
-  },
-  parseCsv:function(csvText){
-    var locations=[]; var lines=csvText.trim().split('\n');
-    var startIndex=lines[0].toLowerCase().includes('title')?1:0;
-    for(var i=startIndex;i<lines.length;i++){
-      var parts=lines[i].trim().split(',');
-      if(parts.length>=4){
-        locations.push({ title:parts[0].replace(/"/g,''), lat:parseFloat(parts[1]), lon:parseFloat(parts[2]), url:parts[3].replace(/"/g,'') });
-      }
-    }
-    return locations;
-  },
-  updateClusters:function(){
-    for(var i=0;i<this.currentMarkers.length;i++){
-      var m=this.currentMarkers[i];
-      if(m && m.parentNode) m.parentNode.removeChild(m);
-    }
-    this.currentMarkers=[];
-
-    var s=this.el.object3D.scale.x;
-    var t=(s-1.0)/(3.0-1.0);
-    var th=0.2 - t*(0.2-0.0035);
-
-    var unclustered=this.allLocations.slice();
-    var clusters=[];
-    while(unclustered.length>0){
-      var p=unclustered.shift();
-      var cluster=[p];
-      var rest=[];
-      for(var i2=0;i2<unclustered.length;i2++){
-        var q=unclustered[i2];
-        var dist=this.haversineDistance(p,q);
-        if(dist<th) cluster.push(q); else rest.push(q);
-      }
-      unclustered=rest; clusters.push(cluster);
-    }
-    this.placeMarkersFromClusters(clusters);
-  },
-  placeMarkersFromClusters:function(clusters){
-    var R=this.el.getAttribute('geometry').radius;
-    var self=this;
-    clusters.forEach(function(cluster){
-      var lat=0,lon=0; cluster.forEach(function(p){lat+=p.lat;lon+=p.lon;}); lat/=cluster.length; lon/=cluster.length;
-
-      var pos=self.latLonTo3D(lat,lon,R);
-      var marker=document.createElement('a-entity'); marker.setAttribute('position',pos);
-
-      var yAxis=pos.clone().normalize(), worldUp=new THREE.Vector3(0,1,0);
-      var xAxis=new THREE.Vector3().crossVectors(worldUp,yAxis).normalize(); if(xAxis.length()===0) xAxis.set(1,0,0);
-      var zAxis=new THREE.Vector3().crossVectors(xAxis,yAxis);
-      var rotM=new THREE.Matrix4().makeBasis(xAxis,yAxis,zAxis);
-      marker.object3D.quaternion.setFromRotationMatrix(rotM);
-
-      marker.setAttribute('hex-marker',{count:cluster.length});
-      marker.classList.add('collidable');
-      marker.dataset.locations=JSON.stringify(cluster);
-
-      marker.addEventListener('mouseenter',function(){ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('green'); });
-      marker.addEventListener('mouseleave',function(){ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
-      marker.addEventListener('click', function(e){ if(window.__panelOpen) return; openPanel(JSON.parse(e.currentTarget.dataset.locations)); });
-
-      self.el.appendChild(marker);
-      self.currentMarkers.push(marker);
-    });
-    refreshAllRaycasters();
-  },
-  haversineDistance:function(a,b){
-    function toRad(x){ return x*Math.PI/180; }
-    var dLat=toRad(b.lat-a.lat), dLon=toRad(b.lon-a.lon);
-    var lat1=toRad(a.lat), lat2=toRad(b.lat);
-    var h=Math.sin(dLat/2)*Math.sin(dLat/2) + Math.sin(dLon/2)*Math.sin(dLon/2)*Math.cos(lat1)*Math.cos(lat2);
-    return 2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
-  },
-  tick:function(){
-    if(this.currentMarkers.length===0 || !this.cameraEl) return;
-    var s=this.el.object3D.scale.x;
-    if(Math.abs(s-this.previousEarthScale)>0.1){ this.updateClusters(); this.previousEarthScale=s; }
-
-    this.el.object3D.getWorldPosition(this.earthPos);
-    this.cameraEl.object3D.getWorldPosition(this.cameraPos);
-
-    var t=(s-1)/(3-1);
-    var markerScale=this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier-1);
-
-    for(var i=0;i<this.currentMarkers.length;i++){
-      var marker=this.currentMarkers[i];
-      marker.object3D.scale.set(markerScale,markerScale,markerScale);
-      marker.object3D.getWorldPosition(this.markerPos);
-      var normal=this.markerPos.clone().sub(this.earthPos).normalize();
-      var camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
-      var visible=(normal.dot(camDir)<0);
-      marker.object3D.visible=visible;
-      if(marker.textEl) marker.textEl.object3D.visible=visible;
-    }
-  },
-  latLonTo3D:function(lat,lon,R){
-    var phi=(90-lat)*(Math.PI/180), theta=(lon+180)*(Math.PI/180);
-    return new THREE.Vector3(
-      -(R*Math.sin(phi)*Math.cos(theta)),
-      R*Math.cos(phi),
-      R*Math.sin(phi)*Math.sin(theta)
-    );
-  }
-});
-</script>
-
-<a-scene
-  renderer="highRefreshRate: true"
-  vr-mode-ui="enabled: true"
-  webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay, bounded-floor, layers; overlayElement: #hudPanel">
-
-  <a-light type="ambient" color="#CCC"></a-light>
-  <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
-
-  <a-sphere id="earth" position="0 1.5 -3.2" radius="1" scale="1 1 1"
-            src="eartn_model/world.topo.200409.3x10800x5400.jpg"
-            segments-height="64" segments-width="128"
-            earth-controls marker-placer></a-sphere>
-
-  <a-entity id="rig">
-    <a-entity id="camera" camera position="0 1.6 0" look-controls="enabled: false">
-      <a-entity id="mouseCursor"
-                cursor="rayOrigin: mouse; fuse: false"
-                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
+    <!-- カメラとコントローラーをリグで囲む -->
+    <a-entity id="rig">
+      <!-- カメラ -->
+      <a-entity id="camera" camera position="0 1.6 0" look-controls></a-entity>
       
-      <a-entity id="debug-text"
-                troika-text="value: L: 0.00, 0.00\nR: 0.00, 0.00;
-                             color: #F00;
-                             fontSize: 0.04;
-                             align: left;
-                             anchor: center;
-                             font: ${FONT_URL};"
-                position="-0.5 -0.4 -1">
+      <!-- コントローラー -->
+      <a-entity id="left-hand" oculus-touch-controls="hand: left"></a-entity>
+      <a-entity id="right-hand" 
+                oculus-touch-controls="hand: right"
+                laser-controls="hand: right"
+                raycaster="objects: .collidable; far: 5;">
       </a-entity>
-      
     </a-entity>
 
-    <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
-
-    <a-entity id="right-hand"
-              laser-controls="hand: right"
-              raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
-              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend">
-    </a-entity>
-  </a-entity>
-
-  <a-sky color="#ECECEC"></a-sky>
-</a-scene>
+    <!-- 背景色を明るくして見やすくする -->
+    <a-sky color="#ECECEC"></a-sky>
+  </a-scene>
 </body>
 </html>
