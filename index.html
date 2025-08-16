@@ -163,13 +163,9 @@ function closeVrPanel(){
 
 /* --- オープナー統一 --- */
 function openPanel(locations){
-  // if (domOverlayActive()) openHtmlPanel(locations);
-  // else                    openVrPanel(locations);
   openVrPanel(locations);
 }
 function closePanel(){
-  // if (domOverlayActive()) closeHtmlPanel();
-  // else                    closeVrPanel();
   closeVrPanel();
 }
 </script>
@@ -230,6 +226,9 @@ AFRAME.registerComponent('earth-controls',{
         R._thumbBound=true;
       }
     };
+    
+    // ▼▼▼ 修正点 ▼▼▼
+    // VRモード移行時の処理をstartBindにまとめる
     var startBind = ()=>{
       this._bindThumbsticks();
       if(this._bindTimer) clearInterval(this._bindTimer);
@@ -238,14 +237,16 @@ AFRAME.registerComponent('earth-controls',{
     };
     var stopBind = ()=>{ if(this._bindTimer) clearInterval(this._bindTimer); };
 
+    // 常にバインド処理を開始する
+    startBind();
+    // ▲▲▲ 修正点 ▲▲▲
+
     this.el.sceneEl.addEventListener('enter-vr', startBind);
     this.el.sceneEl.addEventListener('controllersupdated', this._bindThumbsticks);
     this.el.sceneEl.addEventListener('exit-vr', stopBind);
     
-    // ▼▼▼ 修正点 ▼▼▼
     // デバッグ用テキストのエレメントを取得
     this.debugTextEl = document.querySelector('#debug-text');
-    // ▲▲▲ 修正点 ▲▲▲
   },
   onMouseDown:function(evt){
     if(window.__panelOpen) return;
@@ -263,7 +264,10 @@ AFRAME.registerComponent('earth-controls',{
   },
   onMouseUp:function(){
     this.isDragging=false;
-    if(this.cameraEl && !window.__panelOpen) this.cameraEl.setAttribute('look-controls','enabled',true);
+    // ▼▼▼ 修正点 ▼▼▼
+    // look-controlsを再有効化しないようにする
+    // if(this.cameraEl && !window.__panelOpen) this.cameraEl.setAttribute('look-controls','enabled',true);
+    // ▲▲▲ 修正点 ▲▲▲
   },
   onWheelCanvas:function(evt){
     if(window.__panelOpen) return;
@@ -272,7 +276,6 @@ AFRAME.registerComponent('earth-controls',{
     s=Math.max(this.minScale,Math.min(this.maxScale,s));
     this.el.object3D.scale.set(s,s,s);
   },
-  // 非VRで外付けゲームパッドがある場合のみ取得（Quest標準ブラウザのコントローラは通常非公開）
   getNonVrSticks:function(){
     var pads = (navigator.getGamepads && navigator.getGamepads()) ? navigator.getGamepads() : [];
     var p = null;
@@ -282,31 +285,23 @@ AFRAME.registerComponent('earth-controls',{
     return { left:{x:ax[0]||0, y:ax[1]||0}, right:{x:ax[2]||0, y:ax[3]||0} };
   },
   tick: function() {
-    // ▼▼▼ 修正点 ▼▼▼
-    // デバッグテキストを更新
     if (this.debugTextEl) {
       var leftStick = this.stickInput.left;
       var rightStick = this.stickInput.right;
-      // 2行で表示（\nは改行）
       var debugString = `L: ${leftStick.x.toFixed(2)}, ${leftStick.y.toFixed(2)}\nR: ${rightStick.x.toFixed(2)}, ${rightStick.y.toFixed(2)}`;
       this.debugTextEl.setAttribute('troika-text', 'value', debugString);
     }
-    // ▲▲▲ 修正点 ▲▲▲
 
     if (window.__panelOpen) return;
 
-    // --- キーボード入力 ---
     var rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
     var rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
     var scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
 
-    // --- コントローラー入力 ---
-    // 最初にA-Frameのスティック入力を取得
     var stickRotX = this.stickInput.right.y;
     var stickRotY = this.stickInput.right.x;
     var stickScale = this.stickInput.left.y;
 
-    // A-Frameの入力がなければ、PC用ゲームパッドを試す (フォールバック)
     if (stickRotX === 0 && stickRotY === 0 && stickScale === 0) {
       var gp = this.getNonVrSticks();
       if (gp) {
@@ -316,12 +311,10 @@ AFRAME.registerComponent('earth-controls',{
       }
     }
     
-    // --- 値の適用 ---
     var s = this.el.object3D.scale.x;
     var t = (s - 1.0) / (3.0 - 1.0);
     var mul = 1 - (t * (7 / 8));
 
-    // ジョイスティック入力を優先し、なければキーボード入力を使う
     var finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : rotY_k * this.data.rotationSpeed) * mul;
     var finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : rotX_k * this.data.rotationSpeed) * mul;
     var finalScale = (stickScale !== 0 ? -stickScale : scale_k) * this.data.scaleSpeed;
@@ -348,7 +341,6 @@ AFRAME.registerComponent('hex-marker',{
     var mat =new THREE.MeshStandardMaterial({color:d.color,flatShading:true});
     this.el.setObject3D('mesh', new THREE.Mesh(geom,mat));
 
-    // 数字ラベル（失敗しても全体は動く）
     try{
       var baseFontSize=d.baseRadius*0.8;
       var text=document.createElement('a-entity');
@@ -515,8 +507,8 @@ AFRAME.registerComponent('marker-placer',{
             earth-controls marker-placer></a-sphere>
 
   <a-entity id="rig">
-    <a-entity id="camera" camera position="0 1.6 0" look-controls>
-      <a-entity id="mouseCursor"
+    <a-entity id="camera" camera position="0 1.6 0" look-controls="enabled: false">
+    <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
       
@@ -529,7 +521,8 @@ AFRAME.registerComponent('marker-placer',{
                              font: ${FONT_URL};"
                 position="0 -0.4 -1">
       </a-entity>
-      </a-entity>
+      
+    </a-entity>
 
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
 
