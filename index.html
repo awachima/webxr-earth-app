@@ -4,8 +4,10 @@
   <meta charset="utf-8" />
   <title>WebXR Earth Controls (stable)</title>
 
+  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
+  <!-- Troika / A-Frame troika-text -->
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
@@ -17,55 +19,16 @@
       src:url("static/NotoSansJP-Regular.ttf") format("truetype");
       font-weight:400; font-style:normal; font-display:swap;
     }
-    :root{ --panel-w:min(70vw,920px); --panel-h:min(70vh,580px); --panel-radius:18px; }
     body{ margin:0; background:#eee; }
-
-    /* ----- DOM Overlay（使える環境のみ） ----- */
-    #hudPanel{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:99999; pointer-events:none;}
-    #hudPanel.show{display:flex;}
-    #hudBackdrop{position:absolute; inset:0; background:rgba(0,0,0,.12); pointer-events:auto;}
-    #hudCard{
-      position:relative; width:var(--panel-w); height:var(--panel-h);
-      background:rgba(45,45,48,.9); border:1px solid rgba(255,255,255,.35);
-      border-radius:var(--panel-radius); box-shadow:0 10px 40px rgba(0,0,0,.35);
-      backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
-      pointer-events:auto; overflow:auto;
-      font-family:"NotoSansJPLocal",system-ui,-apple-system,"Segoe UI",Roboto,"Hirino Kaku Gothic ProN","Meiryo",sans-serif; color:#fff;
-    }
-    #hudHeader{height:56px; display:flex; align-items:center; gap:12px; padding:0 18px; border-bottom:1px solid rgba(255,255,255,.22); user-select:none;}
-    #hudTitle{font-size:22px; letter-spacing:.2px; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1 1 auto;}
-    #hudClose{width:36px; height:36px; border-radius:50%; border:0; background:#DA2D2D; color:#fff; font-size:20px; line-height:36px; text-align:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.25);}
-    #hudList{padding:14px 18px 18px 18px; scrollbar-gutter:stable both-edges;}
-    .row{font-size:20px; line-height:1.25; padding:10px 12px; border-radius:10px; margin-bottom:6px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08);}
   </style>
 </head>
 <body>
 
-<div id="hudPanel" aria-hidden="true">
-  <div id="hudBackdrop"></div>
-  <div id="hudCard" role="dialog" aria-modal="true" tabindex="-1">
-    <div id="hudHeader">
-      <div id="hudTitle">Places</div>
-      <button id="hudClose" title="閉じる">×</button>
-    </div>
-    <div id="hudList"></div>
-  </div>
-</div>
-
 <script>
-/* ===== パネル制御（DOM Overlay or 3D フォールバック） ===== */
+/* ===== パネル制御（3D パネルのみ） ===== */
 const FONT_URL = 'static/NotoSansJP-Regular.ttf';
 window.__panelOpen = false;
 
-function getXRSession(){
-  var scene = document.querySelector('a-scene');
-  if(!scene || !scene.renderer || !scene.renderer.xr || !scene.renderer.xr.getSession) return null;
-  return scene.renderer.xr.getSession();
-}
-function domOverlayActive(){
-  var s = getXRSession();
-  return !!(s && s.domOverlayState && s.domOverlayState.type);
-}
 function refreshAllRaycasters(){
   ['#mouseCursor', '#right-hand'].forEach(function(sel){
     var el=document.querySelector(sel);
@@ -81,90 +44,259 @@ function setRaycasterTargets(uiOnly){
   });
 }
 
-/* --- DOM Overlay パネル --- */
-var $panel = document.getElementById('hudPanel');
-var $list  = document.getElementById('hudList');
-var $title = document.getElementById('hudTitle');
-document.getElementById('hudClose').addEventListener('click', closeHtmlPanel);
-document.getElementById('hudBackdrop').addEventListener('click', closeHtmlPanel);
-
-function openHtmlPanel(locations){
-  $title.textContent = locations.length ? (locations[0].title.split(' ')[0] + ' など（' + locations.length + '件）') : 'Places';
-  $list.innerHTML='';
-  for(var i=0;i<locations.length;i++){
-    var d=document.createElement('div');
-    d.className='row'; d.textContent=locations[i].title;
-    $list.appendChild(d);
+/* ---------- “文字を必ず最前面”にする強制コンポーネント ---------- */
+AFRAME.registerComponent('force-front',{
+  schema:{ order:{type:'number',default:100010}, frames:{type:'int',default:12} },
+  init:function(){ this._applied=0; },
+  tick:function(){
+    if(this._applied >= this.data.frames) return;
+    const mesh = this.el.getObject3D('text') || this.el.getObject3D('mesh');
+    if(!mesh) return;
+    mesh.renderOrder = this.data.order;
+    if(mesh.material){
+      mesh.material.transparent = true;
+      mesh.material.depthWrite  = false;
+      mesh.material.depthTest   = true;
+      mesh.material.depthFunc   = THREE.AlwaysDepth; // 常にパス＝前面に描く
+    }
+    this._applied++;
   }
-  window.__panelOpen=true;
-  $panel.classList.add('show'); $panel.setAttribute('aria-hidden','false');
-  document.querySelector('a-scene').emit('panel-opened');
-  setRaycasterTargets(true); refreshAllRaycasters();
-  document.getElementById('hudCard').focus();
-}
-function closeHtmlPanel(){
-  window.__panelOpen=false;
-  if (document.activeElement) { try{ document.activeElement.blur(); }catch(_){ } }
-  $panel.classList.remove('show'); $panel.setAttribute('aria-hidden','true');
-  document.querySelector('a-scene').emit('panel-closed');
-  setRaycasterTargets(false); refreshAllRaycasters();
+});
+
+/* ---------- 地球の近面より必ず手前に出すアンカー ---------- */
+AFRAME.registerComponent('panel-anchor',{
+  schema:{
+    baseDist:{type:'number',default:0.5},   // 希望距離(既定 0.5m)
+    baseScale:{type:'number',default:0.5},  // 希望スケール(既定 0.5)
+    margin:{type:'number',default:0.03},    // 地球前面からの余白
+    minDist:{type:'number',default:0.08}    // 最小距離（near対策）
+  },
+  init:function(){
+    this.cam = document.querySelector('#camera');
+    this.earth = document.querySelector('#earth');
+    this._camPos = new THREE.Vector3();
+    this._earthPos = new THREE.Vector3();
+    this._fwd = new THREE.Vector3();
+  },
+  tick:function(){
+    if(!this.cam || !this.earth) return;
+
+    // カメラ位置・前方ベクトル
+    this.cam.object3D.getWorldPosition(this._camPos);
+    this._fwd.set(0,0,-1).applyQuaternion(this.cam.object3D.quaternion).normalize();
+
+    // 地球のワールド位置と半径（スケール反映）
+    this.earth.object3D.getWorldPosition(this._earthPos);
+    const s = this.earth.object3D.scale.x || 1;
+    const R = (this.earth.getAttribute('geometry')?.radius || 1) * s;
+
+    // カメラから見た地球中心の前方距離（前＝＋）
+    const toEarth = this._earthPos.clone().sub(this._camPos);
+    const along   = toEarth.dot(this._fwd);
+
+    // 地球前面までの距離
+    const nearAlong = along - R; // m
+    let dist = this.data.baseDist;
+
+    // ベース距離が地球前面より奥なら、手前側へ自動退避
+    if (nearAlong <= dist + this.data.margin){
+      dist = Math.max(this.data.minDist, nearAlong - this.data.margin);
+    }
+    if(!isFinite(dist) || dist < this.data.minDist) dist = this.data.minDist;
+
+    // カメラ前方 dist に配置（カメラの子なのでローカルZ）
+    this.el.object3D.position.set(0,0,-dist);
+
+    // 見かけサイズ維持（距離比でスケール可変）
+    const scl = this.data.baseScale * (dist / this.data.baseDist);
+    this.el.object3D.scale.set(scl, scl, scl);
+  }
+});
+
+/* ---------- 新デザイン用ユーティリティ ---------- */
+const PANEL_BASE = { DIST: 0.5, SCALE: 0.5, LINES: 12 };
+
+function safeText(s){ return String(s==null?'':s).replace(/;/g,'；'); }
+
+function pm_btn(x,y,w,h,label,onClick){
+  var e=document.createElement('a-entity');
+  e.classList.add('ui','collidable');
+  e.setAttribute('geometry',`primitive:plane;width:${w};height:${h}`);
+  e.setAttribute('material','shader:flat; color:#2b2f36; opacity:0.95; transparent:true; side:double; depthTest:false');
+  e.setAttribute('position',`${x} ${y} 0.01`);
+  var t=document.createElement('a-entity'); t.classList.add('ui');
+  t.setAttribute('troika-text',[
+    `value:${safeText(label)}`,
+    `font:${FONT_URL}`,
+    'fontSize:0.04',
+    'color:#fff',
+    'anchor:center'
+  ].join('; '));
+  t.setAttribute('position','0 0 0.001');
+  t.setAttribute('force-front','order:100012');  // ボタンラベルも前面化
+  e.appendChild(t);
+  e.addEventListener('click',onClick);
+  e.addEventListener('mouseenter',()=>e.setAttribute('material','color','#3a4049'));
+  e.addEventListener('mouseleave',()=>e.setAttribute('material','color','#2b2f36'));
+  return e;
 }
 
-/* --- VR用 3D パネル（フォールバック） --- */
+function pm_liftRenderOrder(root){
+  // パネル面などは深度無効で“最前面風”
+  root.object3D.renderOrder = 9999;
+  root.object3D.traverse(function(obj){
+    if(obj.material){
+      obj.material.depthTest=false;
+      obj.material.transparent=true;
+    }
+  });
+}
+
+/* 折り返しの実高さを troika の boundingBox で計測し、左上基準で縦積み配置 */
+function pm_layoutWrappedList(panel){
+  var items = Array.from(panel.querySelectorAll('.list-item'));
+  if(!items.length) return;
+
+  var heights = new Array(items.length).fill(0);
+  var remaining = items.length;
+
+  function placeAll(){
+    var y = 0.48;    // タイトル直下
+    var gap = 0.02;  // 行間
+    items.forEach(function(el,i){
+      el.setAttribute('position', `${-0.45} ${y} 0.03`); // Zを少し前へ
+      y -= (Math.max(heights[i], 0.035) + gap);
+    });
+  }
+
+  items.forEach(function(el,i){
+    function tryMeasure(){
+      var mesh = el.getObject3D('text') || el.getObject3D('mesh');
+      if(!mesh){ requestAnimationFrame(tryMeasure); return; }
+      var afterSync=function(){
+        if(!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+        var bb = mesh.geometry.boundingBox;
+        heights[i] = Math.max((bb.max.y - bb.min.y), mesh.fontSize || 0.035);
+        if(--remaining===0) placeAll();
+      };
+      if(typeof mesh.sync === 'function'){ mesh.sync(afterSync); }
+      else { requestAnimationFrame(afterSync); }
+    }
+    tryMeasure();
+  });
+}
+
+function pm_renderList(panel, list, from){
+  var root=panel.querySelector('.list-root'); root.innerHTML='';
+  var end=Math.min(from+PANEL_BASE.LINES, list.length);
+
+  for(var i=from;i<end;i++){
+    var item=document.createElement('a-entity');
+    item.classList.add('ui','list-item');
+    item.setAttribute('troika-text',[
+      `value:${safeText(list[i].title)}`,
+      `font:${FONT_URL}`,
+      'fontSize:0.035',
+      'lineHeight:1.25',
+      'color:#fff',
+      'maxWidth:0.9',
+      'anchor:left',
+      'baseline:top',
+      'outlineWidth:0.004',
+      'outlineColor:#000'
+    ].join('; '));
+    item.setAttribute('force-front','order:100011'); // 各行テキスト前面化
+    (function(url){
+      item.addEventListener('click',function(){ try{ if(url) window.open(url,'_blank'); }catch(_){ } });
+    })(list[i].url);
+    root.appendChild(item);
+  }
+  pm_layoutWrappedList(panel);
+}
+
+/* ---------- 3D パネル（新デザイン + 自動距離調整） ---------- */
 function openVrPanel(locations){
   closeVrPanel();
   var cam = document.querySelector('#camera');
-  var panel = document.createElement('a-entity');
-  panel.id = 'vrPanel';
+  var panel=document.createElement('a-entity');
+  panel.id='vrPanel';
   panel.classList.add('ui','collidable');
-  panel.setAttribute('position','0 0 -0.9');         // 顔の90cm前
-  panel.setAttribute('geometry','primitive: plane; width: 0.9; height: 0.56');
-  panel.setAttribute('material','color: #2d2d30; opacity: 0.92; side: double');
 
-  var head = locations.length ? (locations[0].title.split(' ')[0] + ' など（' + locations.length + '件）') : 'Places';
-  var title = document.createElement('a-entity');
-  title.setAttribute('text','value:'+head+'; width: 0.84; align: center; color: #fff;');
-  title.setAttribute('position','0 0.22 0.01');
+  // カメラの子：基準は 0.5m / 0.5、ただし panel-anchor が毎フレーム安全距離へ補正
+  panel.setAttribute('position', `0 0 -${PANEL_BASE.DIST}`);
+  panel.setAttribute('rotation','0 0 0');
+  panel.setAttribute('scale', `${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE}`);
+  panel.setAttribute('panel-anchor', `baseDist:${PANEL_BASE.DIST}; baseScale:${PANEL_BASE.SCALE}; margin:0.03; minDist:0.08`);
+
+  // 枠
+  var border=document.createElement('a-entity'); border.classList.add('ui');
+  border.setAttribute('geometry','primitive:plane;width:1.12;height:1.22');
+  border.setAttribute('material','shader:flat; color:#ffffff; opacity:0.12; transparent:true; side:double; depthTest:false');
+  panel.appendChild(border);
+
+  // 背景
+  var bg=document.createElement('a-entity'); bg.classList.add('ui');
+  bg.setAttribute('geometry','primitive:plane;width:1.1;height:1.2');
+  bg.setAttribute('material','shader:flat; color:#202428; opacity:0.98; transparent:true; side:double; depthTest:false');
+  panel.appendChild(bg);
+
+  // タイトル
+  var head = locations.length ? (String(locations[0].title).split(/\s+/)[0] + ' など（' + locations.length + '件）') : 'Places';
+  var title=document.createElement('a-entity'); title.classList.add('ui');
+  title.setAttribute('troika-text',[
+    `value:${safeText(head)}`,
+    `font:${FONT_URL}`,
+    'fontSize:0.05',
+    'color:#CCFF00',
+    'maxWidth:1.0',
+    'anchor:left',
+    'baseline:top',
+    'outlineWidth:0.004',
+    'outlineColor:#000',
+    'lineHeight:1.1'
+  ].join('; '));
+  title.setAttribute('position','-0.45 0.55 0.03');
+  title.setAttribute('force-front','order:100012'); // タイトルも前面化
   panel.appendChild(title);
 
-  var n = Math.min(12, locations.length);
-  for (var i=0;i<n;i++){
-    var row = document.createElement('a-entity');
-    row.setAttribute('text','value:'+locations[i].title+'; width: 0.84; color: #fff;');
-    row.setAttribute('position', (-0.42) + ' ' + (0.15 - i*0.05) + ' 0.01');
-    panel.appendChild(row);
-  }
+  // リストルート
+  var listRoot=document.createElement('a-entity');
+  listRoot.classList.add('ui','list-root');
+  panel.appendChild(listRoot);
 
-  var closeBtn = document.createElement('a-entity');
-  closeBtn.classList.add('ui','collidable');
-  closeBtn.setAttribute('geometry','primitive: plane; width: 0.07; height: 0.07');
-  closeBtn.setAttribute('material','color: #DA2D2D');
-  closeBtn.setAttribute('position','0.41 0.22 0.02');
-  closeBtn.addEventListener('click', closeVrPanel);
-  var closeText = document.createElement('a-entity');
-  closeText.setAttribute('text','value:×; align:center; width:0.1; color:#fff;');
-  closeText.setAttribute('position','0 0 0.01');
-  closeBtn.appendChild(closeText);
-  panel.appendChild(closeBtn);
+  // ボタン（× / ▲ / ▼）
+  var scrollIndex=0;
+  function rerender(){ pm_renderList(panel, locations, scrollIndex); }
 
+  panel.appendChild(pm_btn( 0.50, 0.55, 0.12, 0.12, '×', function(){ closeVrPanel(); }));
+  panel.appendChild(pm_btn( 0.45, 0.40, 0.12, 0.12, '▲', function(){
+    if(scrollIndex>0){ scrollIndex--; rerender(); }
+  }));
+  panel.appendChild(pm_btn( 0.45,-0.40, 0.12, 0.12, '▼', function(){
+    if(scrollIndex < Math.max(0, locations.length - PANEL_BASE.LINES)){ scrollIndex++; rerender(); }
+  }));
+
+  pm_liftRenderOrder(panel);       // 背景などは深度無効で最前面風
   cam.appendChild(panel);
+
+  // 初回描画
+  rerender();
+
   window.__panelOpen = true;
   setRaycasterTargets(true); refreshAllRaycasters();
+  document.querySelector('a-scene').emit('panel-opened');
 }
 function closeVrPanel(){
   var p = document.getElementById('vrPanel');
   if (p && p.parentNode) p.parentNode.removeChild(p);
   window.__panelOpen = false;
+  document.querySelector('a-scene').emit('panel-closed');
   setRaycasterTargets(false); refreshAllRaycasters();
 }
 
-/* --- オープナー統一 --- */
-function openPanel(locations){
-  openVrPanel(locations);
-}
-function closePanel(){
-  closeVrPanel();
-}
+/* --- オープナー統一（既存呼び出し互換） --- */
+function openPanel(locations){ openVrPanel(locations); }
+function closePanel(){ closeVrPanel(); }
 </script>
 
 <script>
@@ -185,11 +317,8 @@ AFRAME.registerComponent('earth-controls',{
     this.isDragging=false;
     this.previousMousePosition={x:0,y:0};
     this.cameraEl=document.querySelector('#camera');
-    this.debugTextEl = document.querySelector('#debug-text');
     
-    // ▼▼▼ 修正点 ▼▼▼
     this.uiState = { rotUp: false, rotDown: false, rotLeft: false, rotRight: false, zoomIn: false, zoomOut: false };
-    // ▲▲▲ 修正点 ▲▲▲
 
     var self=this;
     window.addEventListener('keydown',function(e){ self.keys[e.key]=true; });
@@ -204,10 +333,7 @@ AFRAME.registerComponent('earth-controls',{
         cvs.addEventListener('wheel',function(e){ self.onWheelCanvas(e); },{passive:true});
       }
       
-      // ▼▼▼ 修正点 ▼▼▼
-      // UIボタンのイベントリスナーを設定
       self.setupUIListeners();
-      // ▲▲▲ 修正点 ▲▲▲
     });
     
     this._bindThumbsticks = function(){
@@ -244,8 +370,6 @@ AFRAME.registerComponent('earth-controls',{
     if(rightHand) rightHand.addEventListener('controllerconnected', this._bindThumbsticks.bind(this));
   },
   
-  // ▼▼▼ 修正点 ▼▼▼
-  // UIボタンのイベントリスナーを設定する関数を追加
   setupUIListeners: function() {
     var self = this;
     var states = [
@@ -266,10 +390,8 @@ AFRAME.registerComponent('earth-controls',{
       }
     });
   },
-  // ▲▲▲ 修正点 ▲▲▲
 
   onMouseDown:function(evt){
-    // UI要素をクリックした場合はドラッグを開始しない
     if (evt.target.classList.contains('ui')) return;
     if(window.__panelOpen) return;
     this.isDragging=true;
@@ -303,23 +425,15 @@ AFRAME.registerComponent('earth-controls',{
     return { left:{x:ax[0]||0, y:ax[1]||0}, right:{x:ax[2]||0, y:ax[3]||0} };
   },
   tick: function() {
-    if (this.debugTextEl) {
-      var debugString = `L: ${this.stickInput.left.x.toFixed(2)}, ${this.stickInput.left.y.toFixed(2)}\nR: ${this.stickInput.right.x.toFixed(2)}, ${this.stickInput.right.y.toFixed(2)}`;
-      this.debugTextEl.setAttribute('troika-text', 'value', debugString);
-    }
-
     if (window.__panelOpen) return;
 
     var rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
     var rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
     var scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
     
-    // ▼▼▼ 修正点 ▼▼▼
-    // UIボタンからの入力を追加
     var rotY_ui = (this.uiState.rotRight ? 1 : 0) + (this.uiState.rotLeft ? -1 : 0);
     var rotX_ui = (this.uiState.rotDown ? 1 : 0) + (this.uiState.rotUp ? -1 : 0);
     var scale_ui = (this.uiState.zoomIn ? 1 : 0) + (this.uiState.zoomOut ? -1 : 0);
-    // ▲▲▲ 修正点 ▲▲▲
 
     var stickRotX = this.stickInput.right.y;
     var stickRotY = this.stickInput.right.x;
@@ -336,12 +450,9 @@ AFRAME.registerComponent('earth-controls',{
     var t = (s - 1.0) / (3.0 - 1.0);
     var mul = 1 - (t * (7 / 8));
     
-    // ▼▼▼ 修正点 ▼▼▼
-    // 入力の優先順位: ジョイスティック > UIボタン > キーボード
     var finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : (rotY_ui !== 0 ? rotY_ui * this.data.rotationSpeed : rotY_k * this.data.rotationSpeed)) * mul;
     var finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : (rotX_ui !== 0 ? rotX_ui * this.data.rotationSpeed : rotX_k * this.data.rotationSpeed)) * mul;
-    var finalScale = (stickScale !== 0 ? -stickScale : (scale_ui !== 0 ? scale_ui * 0.1 : scale_k)) * this.data.scaleSpeed;
-    // ▲▲▲ 修正点 ▲▲▲
+    var finalScale = (stickScale !== 0 ? -stickScale : (scale_ui !== 0 ? scale_ui : scale_k)) * this.data.scaleSpeed;
 
     this.el.object3D.rotation.y += finalRotY * (Math.PI / 180);
     this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation + finalRotX));
@@ -361,12 +472,12 @@ AFRAME.registerComponent('hex-marker',{
   init:function(){
     var d=this.data;
     this.height=0.01+(d.count*d.heightUnit);
-    var geom=new THREE.CylinderGeometry(d.baseRadius*0.9,d.baseRadius,this.height,6);
+    var geom=new THREE.CylinderGeometry(d.baseRadius*0.7,d.baseRadius,this.height,6);
     var mat =new THREE.MeshStandardMaterial({color:d.color,flatShading:true});
     this.el.setObject3D('mesh', new THREE.Mesh(geom,mat));
 
     try{
-      var baseFontSize=d.baseRadius*0.8;
+      var baseFontSize=d.baseRadius*0.7;
       var text=document.createElement('a-entity');
       text.setAttribute('troika-text',{
         value:String(d.count),
@@ -398,6 +509,14 @@ AFRAME.registerComponent('marker-placer',{
     this.markerPos=new THREE.Vector3();
     this.earthPos =new THREE.Vector3();
     this.previousEarthScale=0;
+    
+    // パネルが閉じた時にマーカーの色をリセットする
+    this.el.sceneEl.addEventListener('panel-closed', () => {
+      this.currentMarkers.forEach(marker => {
+        var mesh = marker.getObject3D('mesh');
+        if (mesh) mesh.material.color.set('yellow');
+      });
+    });
 
     var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
     try{
@@ -520,7 +639,7 @@ AFRAME.registerComponent('marker-placer',{
 <a-scene
   renderer="highRefreshRate: true"
   vr-mode-ui="enabled: true"
-  webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay, bounded-floor, layers; overlayElement: #hudPanel">
+  webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers">
 
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
@@ -531,21 +650,11 @@ AFRAME.registerComponent('marker-placer',{
             earth-controls marker-placer></a-sphere>
 
   <a-entity id="rig">
-    <a-entity id="camera" camera position="0 1.6 0" look-controls="enabled: false">
+    <!-- 近クリップを小さくして安全側に -->
+    <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 1.6 0" look-controls="enabled: false">
       <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
-      
-      <a-entity id="debug-text"
-                troika-text="value: L: 0.00, 0.00\nR: 0.00, 0.00;
-                             color: #F00;
-                             fontSize: 0.04;
-                             align: left;
-                             anchor: center;
-                             font: ${FONT_URL};"
-                position="-0.5 -0.4 -1">
-      </a-entity>
-      
     </a-entity>
 
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
@@ -557,42 +666,44 @@ AFRAME.registerComponent('marker-placer',{
     </a-entity>
   </a-entity>
   
-  <a-entity id="ui-panel" position="-1.5 1.5 -2.5" rotation="0 25 0">
-    <a-entity geometry="primitive: plane; width: 0.6; height: 0.8"
+  <!-- 画面内の地球操作UI（従来どおり近距離なので埋もれません） -->
+  <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
+    <a-entity geometry="primitive: plane; width: 0.5; height: 0.7"
               material="color: #333; opacity: 0.7"></a-entity>
               
     <a-entity id="btn-rot-up" class="ui collidable"
-              geometry="primitive: plane; width: 0.15; height: 0.15" material="color: #555"
-              position="0 0.25 0.01">
-      <a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
+              position="0.01 0.25 0.01">
+      <a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
     <a-entity id="btn-rot-down" class="ui collidable"
-              geometry="primitive: plane; width: 0.15; height: 0.15" material="color: #555"
-              position="0 -0.05 0.01">
-      <a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
+              position="0.01 -0.25 0.01">
+      <a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
     <a-entity id="btn-rot-left" class="ui collidable"
-              geometry="primitive: plane; width: 0.15; height: 0.15" material="color: #555"
-              position="-0.1 0.1 0.01">
-      <a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
+              position="-0.14 0 0.01">
+      <a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
     <a-entity id="btn-rot-right" class="ui collidable"
-              geometry="primitive: plane; width: 0.15; height: 0.15" material="color: #555"
-              position="0.1 0.1 0.01">
-      <a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
+              position="0.165 0 0.01">
+      <a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
 
     <a-entity id="btn-zoom-in" class="ui collidable"
-              geometry="primitive: plane; width: 0.2; height: 0.15" material="color: #4CAF50"
-              position="0 -0.25 0.01">
-      <a-entity troika-text="value: +; color: #FFF; fontSize: 0.12; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
+              position="0.01 0.07 0.01">
+      <a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
     <a-entity id="btn-zoom-out" class="ui collidable"
-              geometry="primitive: plane; width: 0.2; height: 0.15" material="color: #F44336"
-              position="0 -0.45 0.01">
-      <a-entity troika-text="value: -; color: #FFF; fontSize: 0.12; align: center; anchor: center; font: ${FONT_URL};" position="0 0 0.01"></a-entity>
+              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
+              position="0.01 -0.07 0.01">
+      <a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
   </a-entity>
+
   <a-sky color="#ECECEC"></a-sky>
 </a-scene>
 </body>
