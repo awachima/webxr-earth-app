@@ -121,14 +121,12 @@ function openVrPanel(locations){
   panel.setAttribute('geometry','primitive: plane; width: 0.9; height: 0.56');
   panel.setAttribute('material','color: #2d2d30; opacity: 0.92; side: double');
 
-  // タイトル
   var head = locations.length ? (locations[0].title.split(' ')[0] + ' など（' + locations.length + '件）') : 'Places';
   var title = document.createElement('a-entity');
   title.setAttribute('text','value:'+head+'; width: 0.84; align: center; color: #fff;');
   title.setAttribute('position','0 0.22 0.01');
   panel.appendChild(title);
 
-  // リスト（最大12件まで描画）
   var n = Math.min(12, locations.length);
   for (var i=0;i<n;i++){
     var row = document.createElement('a-entity');
@@ -137,7 +135,6 @@ function openVrPanel(locations){
     panel.appendChild(row);
   }
 
-  // 閉じるボタン
   var closeBtn = document.createElement('a-entity');
   closeBtn.classList.add('ui','collidable');
   closeBtn.setAttribute('geometry','primitive: plane; width: 0.07; height: 0.07');
@@ -184,10 +181,12 @@ AFRAME.registerComponent('earth-controls',{
     this.minScale=1.0; this.maxScale=3.0;
     this.currentXRotation=0;
     this.keys={};
-    this.stickInput={ left:{x:0,y:0}, right:{x:0,y:0} };
     this.isDragging=false;
     this.previousMousePosition={x:0,y:0};
     this.cameraEl=document.querySelector('#camera');
+    this.leftHandEl=document.querySelector('#left-hand');
+    this.rightHandEl=document.querySelector('#right-hand');
+    this.debugTextEl = document.querySelector('#debug-text');
 
     var self=this;
     window.addEventListener('keydown',function(e){ self.keys[e.key]=true; });
@@ -202,51 +201,6 @@ AFRAME.registerComponent('earth-controls',{
         cvs.addEventListener('wheel',function(e){ self.onWheelCanvas(e); },{passive:true});
       }
     });
-
-    // --- VR: thumbstick 入力（axismove をフォールバックで拾う） ---
-    this._bindThumbsticks = function(){
-      var L=document.querySelector('#left-hand');
-      var R=document.querySelector('#right-hand');
-      if(L && !L._thumbBound){
-        L.addEventListener('thumbstickmoved', function(e){ self.stickInput.left={x:e.detail.x,y:e.detail.y}; });
-        L.addEventListener('axismove', function(e){
-          var a=(e.detail && e.detail.axis) ? e.detail.axis : [];
-          self.stickInput.left={x:a[0]||0, y:a[1]||0};
-        });
-        L._thumbBound=true;
-      }
-      if(R && !R._thumbBound){
-        R.addEventListener('thumbstickmoved', function(e){ self.stickInput.right={x:e.detail.x,y:e.detail.y}; });
-        R.addEventListener('axismove', function(e){
-          var a=(e.detail && e.detail.axis) ? e.detail.axis : [];
-          var rx = (typeof a[2] === 'number') ? a[2] : (a[0]||0);
-          var ry = (typeof a[3] === 'number') ? a[3] : (a[1]||0);
-          self.stickInput.right={x:rx, y:ry};
-        });
-        R._thumbBound=true;
-      }
-    };
-    
-    // ▼▼▼ 修正点 ▼▼▼
-    // VRモード移行時の処理をstartBindにまとめる
-    var startBind = ()=>{
-      this._bindThumbsticks();
-      if(this._bindTimer) clearInterval(this._bindTimer);
-      this._bindTimer=setInterval(this._bindThumbsticks, 500);
-      setTimeout(()=>clearInterval(this._bindTimer), 5000);
-    };
-    var stopBind = ()=>{ if(this._bindTimer) clearInterval(this._bindTimer); };
-
-    // 常にバインド処理を開始する
-    startBind();
-    // ▲▲▲ 修正点 ▲▲▲
-
-    this.el.sceneEl.addEventListener('enter-vr', startBind);
-    this.el.sceneEl.addEventListener('controllersupdated', this._bindThumbsticks);
-    this.el.sceneEl.addEventListener('exit-vr', stopBind);
-    
-    // デバッグ用テキストのエレメントを取得
-    this.debugTextEl = document.querySelector('#debug-text');
   },
   onMouseDown:function(evt){
     if(window.__panelOpen) return;
@@ -264,10 +218,6 @@ AFRAME.registerComponent('earth-controls',{
   },
   onMouseUp:function(){
     this.isDragging=false;
-    // ▼▼▼ 修正点 ▼▼▼
-    // look-controlsを再有効化しないようにする
-    // if(this.cameraEl && !window.__panelOpen) this.cameraEl.setAttribute('look-controls','enabled',true);
-    // ▲▲▲ 修正点 ▲▲▲
   },
   onWheelCanvas:function(evt){
     if(window.__panelOpen) return;
@@ -285,10 +235,25 @@ AFRAME.registerComponent('earth-controls',{
     return { left:{x:ax[0]||0, y:ax[1]||0}, right:{x:ax[2]||0, y:ax[3]||0} };
   },
   tick: function() {
+    var stickInput = { left: {x:0, y:0}, right: {x:0, y:0} };
+
+    var leftGamepad = this.leftHandEl && this.leftHandEl.components['oculus-touch-controls'] && this.leftHandEl.components['oculus-touch-controls'].gamepad;
+    var rightGamepad = this.rightHandEl && this.rightHandEl.components['oculus-touch-controls'] && this.rightHandEl.components['oculus-touch-controls'].gamepad;
+    if (!rightGamepad) {
+      rightGamepad = this.rightHandEl && this.rightHandEl.components['laser-controls'] && this.rightHandEl.components['laser-controls'].gamepad;
+    }
+
+    if (leftGamepad && leftGamepad.axes.length >= 4) {
+      stickInput.left.x = leftGamepad.axes[2];
+      stickInput.left.y = leftGamepad.axes[3];
+    }
+    if (rightGamepad && rightGamepad.axes.length >= 4) {
+      stickInput.right.x = rightGamepad.axes[2];
+      stickInput.right.y = rightGamepad.axes[3];
+    }
+
     if (this.debugTextEl) {
-      var leftStick = this.stickInput.left;
-      var rightStick = this.stickInput.right;
-      var debugString = `L: ${leftStick.x.toFixed(2)}, ${leftStick.y.toFixed(2)}\nR: ${rightStick.x.toFixed(2)}, ${rightStick.y.toFixed(2)}`;
+      var debugString = `L: ${stickInput.left.x.toFixed(2)}, ${stickInput.left.y.toFixed(2)}\nR: ${stickInput.right.x.toFixed(2)}, ${stickInput.right.y.toFixed(2)}`;
       this.debugTextEl.setAttribute('troika-text', 'value', debugString);
     }
 
@@ -298,16 +263,14 @@ AFRAME.registerComponent('earth-controls',{
     var rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
     var scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
 
-    var stickRotX = this.stickInput.right.y;
-    var stickRotY = this.stickInput.right.x;
-    var stickScale = this.stickInput.left.y;
+    var stickRotX = stickInput.right.y;
+    var stickRotY = stickInput.right.x;
+    var stickScale = stickInput.left.y;
 
     if (stickRotX === 0 && stickRotY === 0 && stickScale === 0) {
       var gp = this.getNonVrSticks();
       if (gp) {
-        stickRotX = gp.right.y;
-        stickRotY = gp.right.x;
-        stickScale = gp.left.y;
+        stickRotX = gp.right.y; stickRotY = gp.right.x; stickScale = gp.left.y;
       }
     }
     
@@ -435,7 +398,9 @@ AFRAME.registerComponent('marker-placer',{
       var marker=document.createElement('a-entity'); marker.setAttribute('position',pos);
 
       var yAxis=pos.clone().normalize(), worldUp=new THREE.Vector3(0,1,0);
+      // ▼▼▼ 修正点 ▼▼▼
       var xAxis=new THREE.Vector3().crossVectors(worldUp,yAxis).normalize(); if(xAxis.length()===0) xAxis.set(1,0,0);
+      // ▲▲▲ 修正点 ▲▲▲
       var zAxis=new THREE.Vector3().crossVectors(xAxis,yAxis);
       var rotM=new THREE.Matrix4().makeBasis(xAxis,yAxis,zAxis);
       marker.object3D.quaternion.setFromRotationMatrix(rotM);
@@ -508,7 +473,7 @@ AFRAME.registerComponent('marker-placer',{
 
   <a-entity id="rig">
     <a-entity id="camera" camera position="0 1.6 0" look-controls="enabled: false">
-    <a-entity id="mouseCursor"
+      <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
       
