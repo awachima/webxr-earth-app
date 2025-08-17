@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (stable, worker)</title>
+  <title>WebXR Earth Controls (stable, worker, vis-fix)</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -143,7 +143,7 @@ AFRAME.registerComponent('panel-world-lock',{
 
 /* ===== 新デザインの3Dパネル ===== */
 const PANEL_BASE = { DIST: 0.5, SCALE: 0.5, LINES: 12 };
-const PANEL_POS  = { DIST: 0.8, SCALE: 0.8, YOFFSET: -0.15 }; // ← 位置・スケール・高さをここで集中管理
+const PANEL_POS  = { DIST: 0.8, SCALE: 0.8, YOFFSET: -0.15 }; // 位置・スケール・高さ
 function safeText(s){ return String(s==null?'':s).replace(/;/g,'；'); }
 
 function pm_btn(x,y,w,h,label,onClick){
@@ -507,7 +507,6 @@ AFRAME.registerComponent('hex-marker',{
   _build:function(count){
     const d=this.data;
     this.height=0.01+(count*d.heightUnit);
-
     const geom=new THREE.CylinderGeometry(d.baseRadius*0.7,d.baseRadius,this.height,6);
     const mat =new THREE.MeshStandardMaterial({color:d.color,flatShading:true});
     const mesh=new THREE.Mesh(geom,mat);
@@ -546,7 +545,7 @@ AFRAME.registerComponent('hex-marker',{
 </script>
 
 <script>
-/* ======== Web Worker（クラスタリング）を作る ======== */
+/* ======== Web Worker（クラスタリング） ======== */
 function createClusterWorker(){
   const source = `
   let POINTS = []; // {lat,lon,url,title,v:[x,y,z]}
@@ -630,6 +629,7 @@ AFRAME.registerComponent('marker-placer',{
   init:async function(){
     this.allLocations=[];          // {title,lat,lon,url,v:[x,y,z]}
     this.currentMarkers=[];        // プール
+    this._activeMarkers=0;         // ★ 現役マーカー数（←追加）
     this.cameraEl=document.querySelector('#camera');
     this.cameraPos=new THREE.Vector3();
     this.markerPos=new THREE.Vector3();
@@ -644,7 +644,7 @@ AFRAME.registerComponent('marker-placer',{
 
     // パネル閉で色戻す
     this.el.sceneEl.addEventListener('panel-closed', () => {
-      this.currentMarkers.forEach(m => {
+      this.currentMarkers.slice(0,this._activeMarkers).forEach(m => {
         const mesh=m.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow');
       });
     });
@@ -739,7 +739,6 @@ AFRAME.registerComponent('marker-placer',{
         });
         marker.addEventListener('click',()=>{
           if(window.__panelOpen) return;
-          // Workerはindex配列を返すため、ここでオブジェクト化して渡す
           const idxs = marker._idxs || [];
           const clusterObjs = idxs.map(j=>this.allLocations[j]);
           openPanel(clusterObjs);
@@ -768,17 +767,23 @@ AFRAME.registerComponent('marker-placer',{
       const rotM=new THREE.Matrix4().makeBasis(xAxis,yAxis,zAxis);
       marker.object3D.quaternion.setFromRotationMatrix(rotM);
 
-      // カウント更新（軽量）
+      // カウント更新
       marker.setAttribute('hex-marker','count',idxs.length);
 
+      // いったん表示ON（可視/不可視はtickで決定）
       marker.object3D.visible=true;
       if(marker.textEl) marker.textEl.object3D.visible=true;
     }
-    // 余剰は非表示
+
+    // 余剰は非表示（退役）
     for(let i=clustersIdx.length;i<this.currentMarkers.length;i++){
       const m=this.currentMarkers[i];
       if(m){ m.object3D.visible=false; if(m.textEl) m.textEl.object3D.visible=false; }
     }
+
+    // ★ 現役数を記録（tickはこの数だけ処理）
+    this._activeMarkers = clustersIdx.length;
+
     refreshAllRaycasters();
   },
 
@@ -790,7 +795,7 @@ AFRAME.registerComponent('marker-placer',{
     const needByTime  = (time - this._lastRecalc) > this.data.recalcMinIntervalMs;
     if (needByScale && needByTime) this.reclusterNow();
 
-    // 可視性・スケールは毎フレーム更新
+    // 可視性・スケールは毎フレーム更新（★ 非表示も含めて評価するため、スキップしない）
     this.el.object3D.getWorldPosition(this.earthPos);
     this.cameraEl.object3D.getWorldPosition(this.cameraPos);
 
@@ -802,15 +807,18 @@ AFRAME.registerComponent('marker-placer',{
     const a=this.data.maxMarkerMultiplier, b=this.data.minMarkerMultiplier;
     const markerScale = a - t * (a - b);
 
-    for(let i=0;i<this.currentMarkers.length;i++){
+    // ★ 退役（余剰）マーカーは対象外：0.._activeMarkers-1 のみ
+    for(let i=0;i<this._activeMarkers;i++){
       const marker=this.currentMarkers[i];
-      if(!marker || !marker.object3D.visible) continue;
+      if(!marker) continue;
+
       marker.object3D.scale.set(markerScale,markerScale,markerScale);
 
       marker.object3D.getWorldPosition(this.markerPos);
       const normal=this.markerPos.clone().sub(this.earthPos).normalize();
       const camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
-      const visible=(normal.dot(camDir)<0);
+      const visible=(normal.dot(camDir)<0); // 前面=表示
+
       marker.object3D.visible=visible;
       if(marker.textEl) marker.textEl.object3D.visible=visible;
     }
