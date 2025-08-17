@@ -523,7 +523,7 @@ AFRAME.registerComponent('marker-placer',{
   // 最大/最小ズーム時の倍率をパラメータ化
   schema:{
     maxMarkerMultiplier:{type:'number',default:20},  // 最小ズーム時（地球が小さい時）
-    minMarkerMultiplier:{type:'number',default:1}    // 最大ズーム時（地球が大きい時）
+    minMarkerMultiplier:{type:'number',default:3}    // 最大ズーム時（地球が大きい時）
   },
   
   init:async function(){
@@ -681,15 +681,15 @@ AFRAME.registerComponent('marker-placer',{
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
 
   <!-- ★ ここで min-marker-multiplier を上げると最大ズーム時のクラスタが大きくなる -->
-  <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
+  <a-sphere id="earth" position="0 -0.1 -7" radius="2" scale="1 1 1"
             src="eartn_model/world.topo.200409.3x10800x5400.jpg"
             segments-height="64" segments-width="128"
             earth-controls
-            marker-placer="max-marker-multiplier:20; min-marker-multiplier:1">
+            marker-placer="max-marker-multiplier:20; min-marker-multiplier:2.6">
   </a-sphere>
 
   <a-entity id="rig">
-    <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 1.6 0" look-controls="enabled: false">
+    <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 0 0" look-controls="enabled: false">
       <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
@@ -705,7 +705,7 @@ AFRAME.registerComponent('marker-placer',{
   </a-entity>
   
   <!-- 画面内の地球操作UI（カメラ近傍） -->
-  <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
+  <a-entity id="ui-panel" position="-0.14 0.0 -0.2" rotation="0 0 0" scale="0.12 0.12 0.12">
     <a-entity geometry="primitive: plane; width: 0.5; height: 0.7"
               material="color: #333; opacity: 0.7"></a-entity>
               
