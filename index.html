@@ -64,7 +64,7 @@ AFRAME.registerComponent('force-front',{
   }
 });
 
-/* ----- パネルを“表示時の位置”にワールド固定（ワールド水平垂直） ----- */
+/* ----- パネルを“表示時の位置”にワールド固定（yOffset動的反映） ----- */
 AFRAME.registerComponent('panel-world-lock',{
   schema:{
     baseDist:{type:'number',default:0.5},
@@ -73,7 +73,7 @@ AFRAME.registerComponent('panel-world-lock',{
     minDist:{type:'number',default:0.08},
     faceCamera:{type:'boolean',default:false},
     worldYaw:{type:'number',default:0},
-    yOffset:{type:'number',default:0.20} // ← 相対高さ（m）
+    yOffset:{type:'number',default:-0.20}
   },
   init:function(){
     this.cam = document.querySelector('#camera');
@@ -81,7 +81,23 @@ AFRAME.registerComponent('panel-world-lock',{
     this._camPos   = new THREE.Vector3();
     this._earthPos = new THREE.Vector3();
     this._fwd      = new THREE.Vector3();
-    this._placed = false;
+    this._placed   = false;
+    this._baseY    = null; // 初期配置の実座標Y
+  },
+  update:function(oldData){
+    if (!this._placed) return; // まだ未配置
+    // yOffsetだけ変わったらその場で上下のみ反映
+    if (oldData && oldData.yOffset !== undefined && oldData.yOffset !== this.data.yOffset){
+      const dy = this.data.yOffset - oldData.yOffset;
+      this.el.object3D.position.y += dy;
+      this._baseY += dy;
+      return;
+    }
+    // 重要パラメータ変更時は再配置フラグ
+    const keys = ['baseDist','baseScale','margin','minDist','faceCamera','worldYaw'];
+    if (oldData && keys.some(k => oldData[k] !== this.data[k])){
+      this._placed = false;
+    }
   },
   tick:function(){
     if(!this._placed) this.placeOnce();
@@ -94,16 +110,15 @@ AFRAME.registerComponent('panel-world-lock',{
   },
   placeOnce:function(){
     if(this._placed || !this.cam) return;
-    this._placed = true;
 
-    // カメラ位置と前方
+    // カメラ前方ベクトル
     this.cam.object3D.getWorldPosition(this._camPos);
     this._fwd.set(0,0,-1).applyQuaternion(this.cam.object3D.quaternion).normalize();
 
     // 希望距離
     let dist = this.data.baseDist;
 
-    // 地球前面より必ず手前へ
+    // 地球手前までクリップ
     if(this.earth){
       this.earth.object3D.getWorldPosition(this._earthPos);
       const s = this.earth.object3D.scale.x || 1;
@@ -116,18 +131,19 @@ AFRAME.registerComponent('panel-world-lock',{
     }
     dist = Math.max(this.data.minDist, dist);
 
-    // ワールド座標で固定配置（Yに相対オフセットを足す）
+    // 位置・スケール・向き
     const worldPos = this._camPos.clone().add(this._fwd.clone().multiplyScalar(dist));
     worldPos.y += this.data.yOffset;
     this.el.object3D.position.copy(worldPos);
 
-    // 見かけスケール維持
     const scl = this.data.baseScale * (dist / this.data.baseDist);
     this.el.object3D.scale.set(scl, scl, scl);
 
-    // ワールド水平垂直（Yアップ、ロール/ピッチ0、ヨーは指定角）
     const yawRad = THREE.MathUtils.degToRad(this.data.worldYaw);
     this.el.object3D.rotation.set(0, yawRad, 0);
+
+    this._baseY  = worldPos.y;
+    this._placed = true;
   }
 });
 
@@ -243,17 +259,14 @@ function openVrPanel(locations){
   panel.id='vrPanel';
   panel.classList.add('ui','collidable');
 
-  // ひとまず基準値（実配置は panel-world-lock が初回tickで決定）
   panel.setAttribute('position', `0 0 -${PANEL_BASE.DIST}`);
   panel.setAttribute('rotation','0 0 0');
   panel.setAttribute('scale', `${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE}`);
-  // カメラ角度に合わせず、ワールド水平垂直へ固定 + 高さオフセット（相対）
   panel.setAttribute(
     'panel-world-lock',
-    'base-dist:0.5; base-scale:0.5; margin:0.03; min-dist:0.08; face-camera:false; world-yaw:0; y-offset:-0.07'
+    'base-dist:0.5; base-scale:0.5; margin:0.03; min-dist:0.08; face-camera:false; world-yaw:0; y-offset:-0.05'
   );
 
-  // 枠・背景
   var border=document.createElement('a-entity'); border.classList.add('ui');
   border.setAttribute('geometry','primitive:plane;width:1.12;height:1.22');
   border.setAttribute('material','shader:flat; color:#ffffff; opacity:0.12; transparent:true; side:double; depthTest:false');
@@ -264,7 +277,6 @@ function openVrPanel(locations){
   bg.setAttribute('material','shader:flat; color:#202428; opacity:0.98; transparent:true; side:double; depthTest:false');
   panel.appendChild(bg);
 
-  // タイトル
   var head = locations.length ? (String(locations[0].title).split(/\s+/)[0] + ' など（' + locations.length + '件）') : 'Places';
   var title=document.createElement('a-entity'); title.classList.add('ui');
   title.setAttribute('troika-text',[
@@ -283,12 +295,10 @@ function openVrPanel(locations){
   title.setAttribute('force-front','order:100012');
   panel.appendChild(title);
 
-  // リスト
   var listRoot=document.createElement('a-entity');
   listRoot.classList.add('ui','list-root');
   panel.appendChild(listRoot);
 
-  // ボタン（× / ▲ / ▼）
   var scrollIndex=0;
   function rerender(){ pm_renderList(panel, locations, scrollIndex); }
 
@@ -372,7 +382,7 @@ AFRAME.registerComponent('earth-controls',{
         R.addEventListener('thumbstickmoved', function(e){ self.stickInput.right={x:e.detail.x,y:e.detail.y}; });
         R.addEventListener('axismove', function(e){
           var a=(e.detail && e.detail.axis) ? e.detail.axis : [];
-           if (self.stickInput.right.x === 0 && self.stickInput.right.y === 0) {
+          if (self.stickInput.right.x === 0 && self.stickInput.right.y === 0) {
             var rx = (typeof a[2] === 'number') ? a[2] : (a[0]||0);
             var ry = (typeof a[3] === 'number') ? a[3] : (a[1]||0);
             self.stickInput.right={x:rx, y:ry};
@@ -464,7 +474,6 @@ AFRAME.registerComponent('earth-controls',{
     }
     
     var s = this.el.object3D.scale.x;
-    // 正規化を min/maxScale 参照に
     var t = (s - this.minScale) / (this.maxScale - this.minScale);
     t = Math.max(0, Math.min(1, t));
     var mul = 1 - (t * (7 / 8));
@@ -520,10 +529,9 @@ AFRAME.registerComponent('hex-marker',{
 
 /* ============ marker-placer ============ */
 AFRAME.registerComponent('marker-placer',{
-  // 最大/最小ズーム時の倍率をパラメータ化
   schema:{
-    maxMarkerMultiplier:{type:'number',default:20},  // 最小ズーム時（地球が小さい時）
-    minMarkerMultiplier:{type:'number',default:3}    // 最大ズーム時（地球が大きい時）
+    maxMarkerMultiplier:{type:'number',default:20},  // 最小ズーム時
+    minMarkerMultiplier:{type:'number',default:3}    // 最大ズーム時（最小サイズ）
   },
   
   init:async function(){
@@ -534,7 +542,6 @@ AFRAME.registerComponent('marker-placer',{
     this.earthPos =new THREE.Vector3();
     this.previousEarthScale=0;
 
-    // パネルが閉じたらハイライト解除
     this.el.sceneEl.addEventListener('panel-closed', () => {
       this.currentMarkers.forEach(marker => {
         var mesh = marker.getObject3D('mesh');
@@ -571,14 +578,11 @@ AFRAME.registerComponent('marker-placer',{
     this.currentMarkers=[];
 
     var s=this.el.object3D.scale.x;
-
-    // 正規化を earth-controls の min/max に合わせる
     var ec = this.el.components['earth-controls'];
     var min = ec ? ec.minScale : 1.0;
     var max = ec ? ec.maxScale : 3.0;
     var t = (s - min) / (max - min); t = Math.max(0, Math.min(1, t));
 
-    // クラスタ距離しきい値（t で補間）
     var th = 0.2 - t * (0.2 - 0.0035);
 
     var unclustered=this.allLocations.slice();
@@ -639,13 +643,11 @@ AFRAME.registerComponent('marker-placer',{
     this.el.object3D.getWorldPosition(this.earthPos);
     this.cameraEl.object3D.getWorldPosition(this.cameraPos);
 
-    // earth-controls の min/max に基づく正規化
     var ec = this.el.components['earth-controls'];
     var min = ec ? ec.minScale : 1.0;
     var max = ec ? ec.maxScale : 3.0;
     var t = (s - min) / (max - min); t = Math.max(0, Math.min(1, t));
 
-    // 最小ズーム→maxMarkerMultiplier、最大ズーム→minMarkerMultiplier
     var a = this.data.maxMarkerMultiplier, b = this.data.minMarkerMultiplier;
     var markerScale = a - t * (a - b);
 
@@ -680,16 +682,16 @@ AFRAME.registerComponent('marker-placer',{
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
 
-  <!-- ★ ここで min-marker-multiplier を上げると最大ズーム時のクラスタが大きくなる -->
-  <a-sphere id="earth" position="0 -0.1 -7" radius="2" scale="1 1 1"
+  <!-- 地球 -->
+  <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
             src="eartn_model/world.topo.200409.3x10800x5400.jpg"
             segments-height="64" segments-width="128"
             earth-controls
-            marker-placer="max-marker-multiplier:20; min-marker-multiplier:2.6">
+            marker-placer="max-marker-multiplier:20; min-marker-multiplier:3">
   </a-sphere>
 
   <a-entity id="rig">
-    <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 0 0" look-controls="enabled: false">
+    <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 1.6 0" look-controls="enabled: false">
       <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
                 raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0"></a-entity>
@@ -704,8 +706,8 @@ AFRAME.registerComponent('marker-placer',{
     </a-entity>
   </a-entity>
   
-  <!-- 画面内の地球操作UI（カメラ近傍） -->
-  <a-entity id="ui-panel" position="-0.14 0.0 -0.2" rotation="0 0 0" scale="0.12 0.12 0.12">
+  <!-- 画面内の地球操作UI（カメラ近傍に置くUI） -->
+  <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
     <a-entity geometry="primitive: plane; width: 0.5; height: 0.7"
               material="color: #333; opacity: 0.7"></a-entity>
               
@@ -744,5 +746,28 @@ AFRAME.registerComponent('marker-placer',{
 
   <a-sky color="#ECECEC"></a-sky>
 </a-scene>
+
+<!-- ▼ 非VRでは右手レーザーを無効化。VR入室時のみ有効化 -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const scene = document.querySelector('a-scene');
+  const right = document.querySelector('#right-hand');
+
+  function setRightHand(enabled) {
+    if (!right) return;
+    right.setAttribute('raycaster', 'enabled', enabled);
+    right.setAttribute('cursor',    'enabled', enabled);
+  }
+
+  scene.addEventListener('loaded', () => {
+    if (!AFRAME.utils.device.checkHeadsetConnected()) {
+      setRightHand(false); // 非VRではOFF（起動直後の誤ホバーを防止）
+    }
+  });
+  scene.addEventListener('enter-vr', () => setRightHand(true));
+  scene.addEventListener('exit-vr',  () => setRightHand(false));
+});
+</script>
+<!-- ▲ 非VRレーザーOFF -->
 </body>
 </html>
