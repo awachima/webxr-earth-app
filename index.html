@@ -551,7 +551,7 @@ function createClusterWorker(){
   let POINTS = []; // {lat,lon,url,title,v:[x,y,z]}
   function computeThreshold(s,min,max){
     const t = Math.max(0, Math.min(1, (s - min) / (max - min)));
-    return 0.2 - t * (0.2 - 0.0035); // radians
+    return 0.2 - t * (0.2 - 0.008); // radians
   }
   function buildGrid(points, cellSizeChord){
     const cs = Math.max(0.02, Math.min(0.5, cellSizeChord));
