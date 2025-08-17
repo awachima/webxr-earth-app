@@ -72,7 +72,8 @@ AFRAME.registerComponent('panel-world-lock',{
     margin:{type:'number',default:0.03},
     minDist:{type:'number',default:0.08},
     faceCamera:{type:'boolean',default:false},
-    worldYaw:{type:'number',default:0}
+    worldYaw:{type:'number',default:0},
+    yOffset:{type:'number',default:0.20} // ← 相対高さ（m）
   },
   init:function(){
     this.cam = document.querySelector('#camera');
@@ -115,8 +116,9 @@ AFRAME.registerComponent('panel-world-lock',{
     }
     dist = Math.max(this.data.minDist, dist);
 
-    // ワールド座標で固定配置
+    // ワールド座標で固定配置（Yに相対オフセットを足す）
     const worldPos = this._camPos.clone().add(this._fwd.clone().multiplyScalar(dist));
+    worldPos.y += this.data.yOffset;
     this.el.object3D.position.copy(worldPos);
 
     // 見かけスケール維持
@@ -130,7 +132,7 @@ AFRAME.registerComponent('panel-world-lock',{
 });
 
 /* ===== 新デザインの3Dパネル ===== */
-const PANEL_BASE = { DIST: 0.8, SCALE: 0.7, LINES: 12 };
+const PANEL_BASE = { DIST: 0.5, SCALE: 0.5, LINES: 12 };
 
 function safeText(s){ return String(s==null?'':s).replace(/;/g,'；'); }
 
@@ -245,8 +247,11 @@ function openVrPanel(locations){
   panel.setAttribute('position', `0 0 -${PANEL_BASE.DIST}`);
   panel.setAttribute('rotation','0 0 0');
   panel.setAttribute('scale', `${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE}`);
-  // カメラ角度に合わせず、ワールド水平垂直へ固定
-  panel.setAttribute('panel-world-lock', `baseDist:${PANEL_BASE.DIST}; baseScale:${PANEL_BASE.SCALE}; margin:0.03; minDist:0.08; faceCamera:false; worldYaw:0`);
+  // カメラ角度に合わせず、ワールド水平垂直へ固定 + 高さオフセット（相対）
+  panel.setAttribute(
+    'panel-world-lock',
+    'base-dist:0.5; base-scale:0.5; margin:0.03; min-dist:0.08; face-camera:false; world-yaw:0; y-offset:-0.07'
+  );
 
   // 枠・背景
   var border=document.createElement('a-entity'); border.classList.add('ui');
@@ -459,7 +464,7 @@ AFRAME.registerComponent('earth-controls',{
     }
     
     var s = this.el.object3D.scale.x;
-    // ★ 正規化を min/maxScale 参照に
+    // 正規化を min/maxScale 参照に
     var t = (s - this.minScale) / (this.maxScale - this.minScale);
     t = Math.max(0, Math.min(1, t));
     var mul = 1 - (t * (7 / 8));
@@ -515,10 +520,10 @@ AFRAME.registerComponent('hex-marker',{
 
 /* ============ marker-placer ============ */
 AFRAME.registerComponent('marker-placer',{
-  // ★ 最大/最小ズーム時の倍率をパラメータ化
+  // 最大/最小ズーム時の倍率をパラメータ化
   schema:{
     maxMarkerMultiplier:{type:'number',default:20},  // 最小ズーム時（地球が小さい時）
-    minMarkerMultiplier:{type:'number',default:3}    // 最大ズーム時（地球が大きい時）
+    minMarkerMultiplier:{type:'number',default:1}    // 最大ズーム時（地球が大きい時）
   },
   
   init:async function(){
@@ -567,13 +572,13 @@ AFRAME.registerComponent('marker-placer',{
 
     var s=this.el.object3D.scale.x;
 
-    // ★ 正規化を earth-controls の min/max に合わせる
+    // 正規化を earth-controls の min/max に合わせる
     var ec = this.el.components['earth-controls'];
     var min = ec ? ec.minScale : 1.0;
     var max = ec ? ec.maxScale : 3.0;
     var t = (s - min) / (max - min); t = Math.max(0, Math.min(1, t));
 
-    // クラスタ距離しきい値（従来式を t に合わせて補間）
+    // クラスタ距離しきい値（t で補間）
     var th = 0.2 - t * (0.2 - 0.0035);
 
     var unclustered=this.allLocations.slice();
@@ -634,18 +639,17 @@ AFRAME.registerComponent('marker-placer',{
     this.el.object3D.getWorldPosition(this.earthPos);
     this.cameraEl.object3D.getWorldPosition(this.cameraPos);
 
-    // ★ earth-controls の min/max に基づく正規化
+    // earth-controls の min/max に基づく正規化
     var ec = this.el.components['earth-controls'];
     var min = ec ? ec.minScale : 1.0;
     var max = ec ? ec.maxScale : 3.0;
     var t = (s - min) / (max - min); t = Math.max(0, Math.min(1, t));
 
-    // ★ 最小ズーム→maxMarkerMultiplier、最大ズーム→minMarkerMultiplier
+    // 最小ズーム→maxMarkerMultiplier、最大ズーム→minMarkerMultiplier
     var a = this.data.maxMarkerMultiplier, b = this.data.minMarkerMultiplier;
     var markerScale = a - t * (a - b);
 
-    var markerLen=this.currentMarkers.length;
-    for(var i=0;i<markerLen;i++){
+    for(var i=0;i<this.currentMarkers.length;i++){
       var marker=this.currentMarkers[i];
       marker.object3D.scale.set(markerScale,markerScale,markerScale);
 
@@ -676,13 +680,12 @@ AFRAME.registerComponent('marker-placer',{
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
 
-  <!-- ★ ここで minMarkerMultiplier を指定すれば、最大ズーム時の大きさを調整できます -->
-  <!-- 例: 最大ズーム時でも1.4倍にしたい → minMarkerMultiplier:1.4 -->
+  <!-- ★ ここで min-marker-multiplier を上げると最大ズーム時のクラスタが大きくなる -->
   <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
             src="eartn_model/world.topo.200409.3x10800x5400.jpg"
             segments-height="64" segments-width="128"
             earth-controls
-            marker-placer="max-marker-multiplier: 20; min-marker-multiplier: 3">
+            marker-placer="max-marker-multiplier:20; min-marker-multiplier:1">
   </a-sphere>
 
   <a-entity id="rig">
