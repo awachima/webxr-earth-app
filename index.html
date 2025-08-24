@@ -440,8 +440,8 @@ AFRAME.registerComponent('marker-placer',{
   const FUDGE_FIXED=FONT_SIZE*0.10, FUDGE_PERLINE=FONT_SIZE*0.10, EST_COLS=19, EST_SCALE=1.08;
 
   // ★FIX2: ジョイスティック・ポーリング用パラメータ
-  const JOY_DEADZONE = 0.15;   // 無効域
-  const JOY_SPEED    = 0.010;  // スクロール係数（大きいほど速い）
+  const JOY_DEADZONE = 0.10;   // 無効域
+  const JOY_SPEED    = 0.030;  // スクロール係数（大きいほど速い）
 
   // 状態ハンドル
   let currentOnWheelListener=null;
@@ -474,6 +474,13 @@ AFRAME.registerComponent('marker-placer',{
     panel.setAttribute('position','0 0 -0.5'); panel.setAttribute('rotation','0 0 0'); panel.setAttribute('scale','0.5 0.5 0.5');
     if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','baseDist:0.5; baseScale:0.5; margin:0.03; minDist:0.08; worldYaw:0; yOffset:0.00');
     scene.appendChild(panel);
+
+    // ▼ デバッグ表示：右スティックのY値を可視化
+    const dbg = document.createElement('a-entity');
+    dbg.id = 'joyDebugText';
+    dbg.setAttribute('troika-text', {value: 'JOY: 0.00', fontSize: 0.03, color: '#9ee', anchor: 'left', baseline: 'top', font: PANEL_FONT_URL});
+    dbg.setAttribute('position', `${PANEL.CONTENT_LEFT} ${PANEL.CONTENT_TOP + 0.06} 0.06`);
+    panel.appendChild(dbg);
 
     const rightX=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
     const track=document.createElement('a-entity'); track.classList.add('ui','scroll-track');
@@ -562,32 +569,54 @@ AFRAME.registerComponent('marker-placer',{
 
     // ★FIX2: VRジョイスティック（右スティックY）を WebXR / Gamepad から毎フレーム取得
     function getRightThumbY(){
-      // 1) WebXR inputSources から
+      // 1) WebXR inputSources から優先取得（右手を優先、なければ最大値のもの）
+      let best = { y: 0, axes: '-', src: 'none' };
       try{
         const scene = AFRAME.scenes && AFRAME.scenes[0];
         const session = scene && scene.renderer && scene.renderer.xr && scene.renderer.xr.getSession && scene.renderer.xr.getSession();
         if(session && session.inputSources){
           for(const src of session.inputSources){
-            if(src && src.handedness==='right' && src.gamepad && src.gamepad.axes){
-              const ax = src.gamepad.axes;
-              // 4軸 (0,1:left; 2,3:right) or 2軸 (0,1:right)
-              let y = (typeof ax[3]==='number')? ax[3] : (typeof ax[1]==='number'? ax[1] : 0);
-              if (isFinite(y)) return y;
+            if(!src || !src.gamepad) continue;
+            const ax = Array.from(src.gamepad.axes || []);
+            let y = 0;
+            if (ax.length >= 4) y = ax[3];
+            else if (ax.length >= 2) y = ax[1];
+            // 予備：一番大きい絶対値の軸をYとして扱う（念のため）
+            if (ax.length > 0 && Math.abs(y) < 0.001){
+              let maxI = 0; for (let i=1;i<ax.length;i++){ if (Math.abs(ax[i]) > Math.abs(ax[maxI])) maxI = i; }
+              y = ax[maxI];
             }
+            const cand = { y: (isFinite(y)? y: 0), axes: ax.map(n=>Number(n).toFixed(2)).join(','), src: src.handedness || 'unknown' };
+            // 右手優先、または絶対値がより大きいものを採用
+            if (cand.src === 'right') { best = cand; break; }
+            if (Math.abs(cand.y) > Math.abs(best.y)) best = cand;
           }
+          if (best.src !== 'none') return best;
         }
       }catch(_){ /* ignore */ }
-      // 2) navigator.getGamepads() から（互換）
+      // 2) navigator.getGamepads からのフォールバック
       try{
         const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-        for(const p of pads){ if(!p || !p.connected) continue; const ax=p.axes||[]; if(ax.length>=4){ if (Math.abs(ax[3])>Math.abs(ax[1]||0)) return ax[3]; return ax[1]||0; } if(ax.length>=2){ return ax[1]||0; } }
+        for(const p of pads){
+          if(!p || !p.connected) continue;
+          const ax = Array.from(p.axes || []);
+          if(ax.length >= 4){ return { y: ax[3], axes: ax.map(n=>Number(n).toFixed(2)).join(','), src: 'gamepad' }; }
+          if(ax.length >= 2){ return { y: ax[1], axes: ax.map(n=>Number(n).toFixed(2)).join(','), src: 'gamepad2' }; }
+        }
       }catch(_){ /* ignore */ }
-      return 0;
+      return { y: 0, axes: '-', src: 'none' };
     }
 
     function joyLoop(){
       if(!window.__panelOpen){ joyPollId=null; return; }
-      const y = getRightThumbY();
+      const sample = getRightThumbY();
+      const y = sample.y;
+      // デバッグ表示更新
+      const dbgEl = document.getElementById('joyDebugText');
+      if (dbgEl) {
+        const txt = `JOY:${y.toFixed(2)} src:${sample.src} axes:[${sample.axes}]`;
+        dbgEl.setAttribute('troika-text', 'value', txt);
+      }
       if (Math.abs(y) > JOY_DEADZONE){
         const delta = -y * JOY_SPEED * viewportH; // 上で正方向に
         setOffset(currentOffset + delta, false);
