@@ -2,16 +2,16 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (stable, worker, vis-fix)</title>
+  <title>WebXR Earth Controls (stable)</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.min.js"></script>
 
   <!-- Troika / A-Frame troika-text -->
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
   <style>
     @font-face{
@@ -19,7 +19,7 @@
       src:url("static/NotoSansJP-Regular.ttf") format("truetype");
       font-weight:400; font-style:normal; font-display:swap;
     }
-    body{ margin:0; background:#eee; }
+    html,body{ height:100%; margin:0; overflow:hidden; background:#eee; }
   </style>
 </head>
 <body>
@@ -44,7 +44,7 @@ function setRaycasterTargets(uiOnly){
   });
 }
 
-/* ----- テキストを前面化（Troika再同期にも耐性） ----- */
+/* ----- テキストを前面化（Troika同期で戻されても耐性） ----- */
 AFRAME.registerComponent('force-front',{
   schema:{ order:{type:'number',default:100010}, frames:{type:'int',default:12} },
   init:function(){ this._applied=0; },
@@ -64,16 +64,15 @@ AFRAME.registerComponent('force-front',{
   }
 });
 
-/* ----- パネルを“表示時の位置”にワールド固定（yOffset動的反映） ----- */
+/* ----- パネルを“表示時の位置”でワールド固定（水平垂直） ----- */
 AFRAME.registerComponent('panel-world-lock',{
   schema:{
-    baseDist:{type:'number',default:0.8},
-    baseScale:{type:'number',default:0.8},
+    baseDist:{type:'number',default:0.5},
+    baseScale:{type:'number',default:0.5},
     margin:{type:'number',default:0.03},
     minDist:{type:'number',default:0.08},
-    faceCamera:{type:'boolean',default:false},
-    worldYaw:{type:'number',default:0},
-    yOffset:{type:'number',default:-0.15}
+    worldYaw:{type:'number',default:0},        // 0=ワールド -Z 向き
+    yOffset:{type:'number',default:0.00}       // カメラ視線方向に対する上下オフセット（m）
   },
   init:function(){
     this.cam = document.querySelector('#camera');
@@ -81,39 +80,22 @@ AFRAME.registerComponent('panel-world-lock',{
     this._camPos   = new THREE.Vector3();
     this._earthPos = new THREE.Vector3();
     this._fwd      = new THREE.Vector3();
-    this._placed   = false;
-    this._baseY    = null;
+    this._up       = new THREE.Vector3(0,1,0);
+    this._placed = false;
   },
-  update:function(oldData){
-    if (!this._placed) return;
-    if (oldData && oldData.yOffset !== undefined && oldData.yOffset !== this.data.yOffset){
-      const dy = this.data.yOffset - oldData.yOffset;
-      this.el.object3D.position.y += dy;
-      this._baseY += dy;
-      return;
-    }
-    const keys = ['baseDist','baseScale','margin','minDist','faceCamera','worldYaw'];
-    if (oldData && keys.some(k => oldData[k] !== this.data[k])){
-      this._placed = false;
-    }
-  },
-  tick:function(){
-    if(!this._placed) this.placeOnce();
-    if(this.data.faceCamera && this.cam){
-      this.cam.object3D.getWorldPosition(this._camPos);
-      this.el.object3D.lookAt(this._camPos);
-      const e=this.el.object3D.rotation;
-      this.el.object3D.rotation.set(0,e.y,0);
-    }
-  },
+  tick:function(){ if(!this._placed) this.placeOnce(); },
   placeOnce:function(){
     if(this._placed || !this.cam) return;
+    this._placed = true;
 
+    // カメラ位置・前方
     this.cam.object3D.getWorldPosition(this._camPos);
     this._fwd.set(0,0,-1).applyQuaternion(this.cam.object3D.quaternion).normalize();
 
+    // 希望距離
     let dist = this.data.baseDist;
 
+    // 地球前面より手前に来るよう調整
     if(this.earth){
       this.earth.object3D.getWorldPosition(this._earthPos);
       const s = this.earth.object3D.scale.x || 1;
@@ -126,24 +108,27 @@ AFRAME.registerComponent('panel-world-lock',{
     }
     dist = Math.max(this.data.minDist, dist);
 
-    const worldPos = this._camPos.clone().add(this._fwd.clone().multiplyScalar(dist));
-    worldPos.y += this.data.yOffset;
+    // 位置（視線方向に yOffset 反映）
+    const side = new THREE.Vector3().crossVectors(this._fwd, this._up).normalize();
+    const up   = new THREE.Vector3().crossVectors(side, this._fwd).normalize();
+    const worldPos = this._camPos.clone()
+      .add(this._fwd.clone().multiplyScalar(dist))
+      .add(up.multiplyScalar(this.data.yOffset));
     this.el.object3D.position.copy(worldPos);
 
+    // スケール（距離比例）
     const scl = this.data.baseScale * (dist / this.data.baseDist);
     this.el.object3D.scale.set(scl, scl, scl);
 
+    // 水平垂直に固定
     const yawRad = THREE.MathUtils.degToRad(this.data.worldYaw);
     this.el.object3D.rotation.set(0, yawRad, 0);
-
-    this._baseY  = worldPos.y;
-    this._placed = true;
   }
 });
 
-/* ===== 新デザインの3Dパネル ===== */
+/* ===== パネルUI（推定→実測で改行高さを確定） ===== */
 const PANEL_BASE = { DIST: 0.5, SCALE: 0.5, LINES: 12 };
-const PANEL_POS  = { DIST: 0.8, SCALE: 0.8, YOFFSET: -0.15 }; // 位置・スケール・高さ
+
 function safeText(s){ return String(s==null?'':s).replace(/;/g,'；'); }
 
 function pm_btn(x,y,w,h,label,onClick){
@@ -179,43 +164,76 @@ function pm_liftRenderOrder(root){
   });
 }
 
-/* 折り返し高さを計測して自動レイアウト */
-function pm_layoutWrappedList(panel){
-  var items = Array.from(panel.querySelectorAll('.list-item'));
-  if(!items.length) return;
+/* --- 半角=0.5, 全角=1 の桁カウントで「見込み行数」を出す --- */
+function estimateLinesByColumns(str, maxCols = 21){
+  let lines = 1, col = 0;
+  for (const ch of str) {
+    if (ch === '\n'){ lines++; col = 0; continue; }
+    const w = /[ -~]/.test(ch) ? 0.5 : 1; // ASCIIは半角
+    if (col + w > maxCols){ lines++; col = w; } else { col += w; }
+  }
+  return lines;
+}
 
-  var heights = new Array(items.length).fill(0);
-  var remaining = items.length;
+/* --- 折り返し高さ：推定→実測で最終確定＆再配置 --- */
+function pm_layoutWrappedList(panel, opts){
+  const fontSize   = opts.fontSize   ?? 0.035;
+  const lineHeight = opts.lineHeight ?? 1.35;
+  const maxCols    = opts.maxCols    ?? 21;
+  const gap        = opts.gap        ?? 0.02;
+  const startY     = opts.startY     ?? 0.48;
+  const leftX      = opts.leftX      ?? -0.45;
 
-  function placeAll(){
-    var y = 0.48;
-    var gap = 0.02;
-    items.forEach(function(el,i){
-      el.setAttribute('position', `${-0.45} ${y} 0.03`);
-      y -= (Math.max(heights[i], 0.035) + gap);
-    });
+  const items = Array.from(panel.querySelectorAll('.list-item'));
+  if (!items.length) return;
+
+  // 1) 推定で先に並べる
+  let y = startY;
+  const estHeights = [];
+  for (const el of items){
+    const tt = el.getAttribute('troika-text') || '';
+    const value = (tt.match(/value:([^;]+)/)?.[1] ?? '').replace(/^"|"$/g,'');
+    const estLines = estimateLinesByColumns(value, maxCols);
+    const h = estLines * fontSize * lineHeight;
+    estHeights.push(h);
+    el.setAttribute('position', `${leftX} ${y} 0.03`);
+    y -= (h + gap);
   }
 
-  items.forEach(function(el,i){
-    function tryMeasure(){
-      var mesh = el.getObject3D('text') || el.getObject3D('mesh');
-      if(!mesh){ requestAnimationFrame(tryMeasure); return; }
-      var afterSync=function(){
-        if(!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-        var bb = mesh.geometry.boundingBox;
-        heights[i] = Math.max((bb.max.y - bb.min.y), mesh.fontSize || 0.035);
-        if(--remaining===0) placeAll();
-      };
-      if(typeof mesh.sync === 'function'){ mesh.sync(afterSync); }
-      else { requestAnimationFrame(afterSync); }
+  // 2) Troika 実測に置き換え（sync 後）
+  let pending = items.length;
+  const realH = new Array(items.length).fill(null);
+
+  function finalize(){
+    let y2 = startY;
+    for (let i=0;i<items.length;i++){
+      const hh = realH[i] ?? estHeights[i];
+      items[i].setAttribute('position', `${leftX} ${y2} 0.03`);
+      y2 -= (hh + gap);
     }
-    tryMeasure();
+  }
+
+  items.forEach((el,i)=>{
+    const settle = ()=>{
+      const mesh = el.getObject3D('text') || el.getObject3D('mesh');
+      if (!mesh || !mesh.textRenderInfo){ requestAnimationFrame(settle); return; }
+      const b = mesh.textRenderInfo.blockBounds; // [minX,minY,maxX,maxY]
+      const h = b ? (b[3]-b[1]) : estHeights[i];
+      realH[i] = Math.max(h, fontSize*lineHeight*0.9); // 念のため下限
+      if(--pending === 0) finalize();
+    };
+    const m = el.getObject3D('text') || el.getObject3D('mesh');
+    if(m && typeof m.sync === 'function'){ m.sync(settle); } else { settle(); }
   });
 }
 
+/* リスト描画（▲/▼ の右ボタンと被らない maxWidth） */
 function pm_renderList(panel, list, from){
-  var root=panel.querySelector('.list-root'); root.innerHTML='';
-  var end=Math.min(from+PANEL_BASE.LINES, list.length);
+  const fontSize = 0.035;
+  const lineHeight = 1.35;
+
+  const root=panel.querySelector('.list-root'); root.innerHTML='';
+  const end=Math.min(from+PANEL_BASE.LINES, list.length);
 
   for(var i=from;i<end;i++){
     var item=document.createElement('a-entity');
@@ -223,10 +241,10 @@ function pm_renderList(panel, list, from){
     item.setAttribute('troika-text',[
       `value:${safeText(list[i].title)}`,
       `font:${FONT_URL}`,
-      'fontSize:0.035',
-      'lineHeight:1.25',
+      `fontSize:${fontSize}`,
+      `lineHeight:${lineHeight}`,
       'color:#fff',
-      'maxWidth:0.9',
+      'maxWidth:0.84',      // ← 右のボタンと被らない幅
       'anchor:left',
       'baseline:top',
       'outlineWidth:0.004',
@@ -238,14 +256,17 @@ function pm_renderList(panel, list, from){
     })(list[i].url);
     root.appendChild(item);
   }
-  pm_layoutWrappedList(panel);
+
+  pm_layoutWrappedList(panel, {
+    fontSize, lineHeight, maxCols: 21, gap: 0.02, startY: 0.48, leftX: -0.45
+  });
 }
 
-/* 開閉API（既存呼び出し互換） */
+/* パネル開閉（既存呼び出し互換） */
 function openPanel(locations){ openVrPanel(locations); }
 function closePanel(){ closeVrPanel(); }
 
-/* ワールド固定の3Dパネル生成（カメラ追従なし） */
+/* ワールド固定の3Dパネル（カメラ追従なし） */
 function openVrPanel(locations){
   closeVrPanel();
   var scene = document.querySelector('a-scene');
@@ -256,11 +277,9 @@ function openVrPanel(locations){
   panel.setAttribute('position', `0 0 -${PANEL_BASE.DIST}`);
   panel.setAttribute('rotation','0 0 0');
   panel.setAttribute('scale', `${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE} ${PANEL_BASE.SCALE}`);
-  panel.setAttribute(
-    'panel-world-lock',
-    `base-dist:${PANEL_POS.DIST}; base-scale:${PANEL_POS.SCALE}; margin:0.03; min-dist:0.08; face-camera:false; world-yaw:0; y-offset:${PANEL_POS.YOFFSET}`
-  );
+  panel.setAttribute('panel-world-lock', `baseDist:${PANEL_BASE.DIST}; baseScale:${PANEL_BASE.SCALE}; margin:0.03; minDist:0.08; worldYaw:0; yOffset:0.00`);
 
+  // 枠・背景
   var border=document.createElement('a-entity'); border.classList.add('ui');
   border.setAttribute('geometry','primitive:plane;width:1.12;height:1.22');
   border.setAttribute('material','shader:flat; color:#ffffff; opacity:0.12; transparent:true; side:double; depthTest:false');
@@ -271,6 +290,7 @@ function openVrPanel(locations){
   bg.setAttribute('material','shader:flat; color:#202428; opacity:0.98; transparent:true; side:double; depthTest:false');
   panel.appendChild(bg);
 
+  // タイトル
   var head = locations.length ? (String(locations[0].title).split(/\s+/)[0] + ' など（' + locations.length + '件）') : 'Places';
   var title=document.createElement('a-entity'); title.classList.add('ui');
   title.setAttribute('troika-text',[
@@ -289,15 +309,17 @@ function openVrPanel(locations){
   title.setAttribute('force-front','order:100012');
   panel.appendChild(title);
 
+  // リスト
   var listRoot=document.createElement('a-entity');
   listRoot.classList.add('ui','list-root');
   panel.appendChild(listRoot);
 
+  // ボタン（× / ▲ / ▼）
   var scrollIndex=0;
   function rerender(){ pm_renderList(panel, locations, scrollIndex); }
 
-  panel.appendChild(pm_btn( 0.50, 0.55, 0.12, 0.12, '×', function(){ closeVrPanel(); }));
-  panel.appendChild(pm_btn( 0.45, 0.40, 0.12, 0.12, '▲', function(){
+  panel.appendChild(pm_btn( 0.45, 0.54, 0.12, 0.12, '×', function(){ closeVrPanel(); }));
+panel.appendChild(pm_btn( 0.45, 0.40, 0.12, 0.12, '▲', function(){
     if(scrollIndex>0){ scrollIndex--; rerender(); }
   }));
   panel.appendChild(pm_btn( 0.45,-0.40, 0.12, 0.12, '▼', function(){
@@ -340,7 +362,7 @@ AFRAME.registerComponent('earth-controls',{
     this.isDragging=false;
     this.previousMousePosition={x:0,y:0};
     this.cameraEl=document.querySelector('#camera');
-    
+
     this.uiState = { rotUp: false, rotDown: false, rotLeft: false, rotRight: false, zoomIn: false, zoomOut: false };
 
     var self=this;
@@ -349,16 +371,18 @@ AFRAME.registerComponent('earth-controls',{
 
     this.el.sceneEl.addEventListener('loaded', function(){
       var cvs=self.el.sceneEl.canvas;
-      cvs.addEventListener('mousedown',function(e){ self.onMouseDown(e); });
-      window.addEventListener('mousemove',function(e){ self.onMouseMove(e); });
+      // 起動直後の誤ホバー防止：少しだけ遅らせて有効化
+      setTimeout(()=>{ 
+        cvs.addEventListener('mousedown',function(e){ self.onMouseDown(e); });
+        window.addEventListener('mousemove',function(e){ self.onMouseMove(e); });
+      }, 150);
       window.addEventListener('mouseup',function(){ self.onMouseUp(); });
       if (!AFRAME.utils.device.checkHeadsetConnected()) {
         cvs.addEventListener('wheel',function(e){ self.onWheelCanvas(e); },{passive:true});
       }
-      
       self.setupUIListeners();
     });
-    
+
     this._bindThumbsticks = function(){
       var L=document.querySelector('#left-hand');
       var R=document.querySelector('#right-hand');
@@ -388,11 +412,10 @@ AFRAME.registerComponent('earth-controls',{
 
     var leftHand = document.querySelector('#left-hand');
     var rightHand = document.querySelector('#right-hand');
-    
     if(leftHand)  leftHand.addEventListener('controllerconnected', this._bindThumbsticks.bind(this));
     if(rightHand) rightHand.addEventListener('controllerconnected', this._bindThumbsticks.bind(this));
   },
-  
+
   setupUIListeners: function() {
     var self = this;
     var states = [
@@ -403,13 +426,12 @@ AFRAME.registerComponent('earth-controls',{
       { id: '#btn-zoom-in',   state: 'zoomIn' },
       { id: '#btn-zoom-out',  state: 'zoomOut' }
     ];
-
     states.forEach(function(item) {
       var btn = document.querySelector(item.id);
       if (btn) {
         btn.addEventListener('mousedown', function() { self.uiState[item.state] = true; });
-        btn.addEventListener('mouseup', function() { self.uiState[item.state] = false; });
-        btn.addEventListener('mouseleave', function() { self.uiState[item.state] = false; });
+        btn.addEventListener('mouseup', function()   { self.uiState[item.state] = false; });
+        btn.addEventListener('mouseleave', function(){ self.uiState[item.state] = false; });
       }
     });
   },
@@ -434,8 +456,8 @@ AFRAME.registerComponent('earth-controls',{
     if(window.__panelOpen) return;
     var s=this.el.object3D.scale.x;
     s += evt.deltaY*-1*this.data.wheelScaleSpeed;
-    var ns=Math.max(this.minScale,Math.min(this.maxScale,s));
-    this.el.object3D.scale.set(ns,ns,ns);
+    s=Math.max(this.minScale,Math.min(this.maxScale,s));
+    this.el.object3D.scale.set(s,s,s);
   },
   getNonVrSticks:function(){
     var pads = (navigator.getGamepads && navigator.getGamepads()) ? navigator.getGamepads() : [];
@@ -451,7 +473,7 @@ AFRAME.registerComponent('earth-controls',{
     var rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
     var rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
     var scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
-    
+
     var rotY_ui = (this.uiState.rotRight ? 1 : 0) + (this.uiState.rotLeft ? -1 : 0);
     var rotX_ui = (this.uiState.rotDown ? 1 : 0) + (this.uiState.rotUp ? -1 : 0);
     var scale_ui = (this.uiState.zoomIn ? 1 : 0) + (this.uiState.zoomOut ? -1 : 0);
@@ -466,12 +488,11 @@ AFRAME.registerComponent('earth-controls',{
         stickRotX = gp.right.y; stickRotY = gp.right.x; stickScale = gp.left.y;
       }
     }
-    
+
     var s = this.el.object3D.scale.x;
-    var t = (s - this.minScale) / (this.maxScale - this.minScale);
-    t = Math.max(0, Math.min(1, t));
+    var t = (s - 1.0) / (3.0 - 1.0);
     var mul = 1 - (t * (7 / 8));
-    
+
     var finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : (rotY_ui !== 0 ? rotY_ui * this.data.rotationSpeed : rotY_k * this.data.rotationSpeed)) * mul;
     var finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : (rotX_ui !== 0 ? rotX_ui * this.data.rotationSpeed : rotX_k * this.data.rotationSpeed)) * mul;
     var finalScale = (stickScale !== 0 ? -stickScale : (scale_ui !== 0 ? scale_ui : scale_k)) * this.data.scaleSpeed;
@@ -485,347 +506,177 @@ AFRAME.registerComponent('earth-controls',{
     this.el.object3D.scale.set(ns, ns, ns);
   }
 });
-</script>
 
-<script>
-/* ============ hex-marker（更新対応・再利用） ============ */
+/* ============ hex-marker ============ */
 AFRAME.registerComponent('hex-marker',{
-  schema:{
-    count:{type:'number',default:1},
-    color:{type:'color',default:'yellow'},
-    baseRadius:{type:'number',default:0.0075},
-    heightUnit:{type:'number',default:0.0001},
-    fontUrl:{type:'string',default:FONT_URL}
-  },
-  init:function(){ this._build(this.data.count); },
-  update:function(old){
-    if (old && old.count !== this.data.count) this._updateVisual(this.data.count);
-    if (old && old.color !== this.data.color) {
-      const mesh=this.el.getObject3D('mesh'); if(mesh) mesh.material.color.set(this.data.color);
-    }
-  },
-  _build:function(count){
-    const d=this.data;
-    this.height=0.01+(count*d.heightUnit);
-    const geom=new THREE.CylinderGeometry(d.baseRadius*0.7,d.baseRadius,this.height,6);
-    const mat =new THREE.MeshStandardMaterial({color:d.color,flatShading:true});
-    const mesh=new THREE.Mesh(geom,mat);
-    this.el.setObject3D('mesh', mesh);
+  schema:{ count:{type:'number',default:1}, color:{type:'color',default:'yellow'},
+           baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001},
+           fontUrl:{type:'string',default:FONT_URL} },
+  init:function(){
+    var d=this.data;
+    this.height=0.01+(d.count*d.heightUnit);
+    var geom=new THREE.CylinderGeometry(d.baseRadius*0.7,d.baseRadius,this.height,6);
+    var mat =new THREE.MeshStandardMaterial({color:d.color,flatShading:true});
+    this.el.setObject3D('mesh', new THREE.Mesh(geom,mat));
 
-    const text=document.createElement('a-entity');
-    text.setAttribute('troika-text',{
-      value:String(count),
-      font:d.fontUrl,
-      fontSize:d.baseRadius*0.7,
-      color:'#111',
-      outlineColor:'#fff',
-      outlineWidth:0.0006,
-      outlineBlur:0.00001,
-      anchor:'center'
-    });
-    text.setAttribute('rotation','-90 0 0');
-    text.setAttribute('position',{x:0,y:this.height/2+0.00012,z:0});
-    this.el.appendChild(text);
-    this.textEl=text;
-  },
-  _updateVisual:function(count){
-    const d=this.data;
-    this.height=0.01+(count*d.heightUnit);
-    const mesh=this.el.getObject3D('mesh');
-    if (mesh) {
-      mesh.geometry.dispose();
-      mesh.geometry=new THREE.CylinderGeometry(d.baseRadius*0.7,d.baseRadius,this.height,6);
-    }
-    if (this.textEl) {
-      this.textEl.setAttribute('troika-text','value',String(count));
-      this.textEl.setAttribute('position',{x:0,y:this.height/2+0.00012,z:0});
+    try{
+      var baseFontSize=d.baseRadius*0.7;
+      var text=document.createElement('a-entity');
+      text.setAttribute('troika-text',{
+        value:String(d.count),
+        font:d.fontUrl,
+        fontSize:baseFontSize,
+        color:'#111',
+        outlineColor:'#fff',
+        outlineWidth:0.0006,
+        outlineBlur:0.00001,
+        anchor:'center'
+      });
+      text.setAttribute('rotation','-90 0 0');
+      text.setAttribute('position',{x:0,y:this.height/2+0.00012,z:0});
+      this.el.appendChild(text);
+      this.el.textEl=text;
+    }catch(err){
+      console.warn('Troika text disabled:', err);
     }
   }
 });
-</script>
 
-<script>
-/* ======== Web Worker（クラスタリング） ======== */
-function createClusterWorker(){
-  const source = `
-  let POINTS = []; // {lat,lon,url,title,v:[x,y,z]}
-  function computeThreshold(s,min,max){
-    const t = Math.max(0, Math.min(1, (s - min) / (max - min)));
-    return 0.2 - t * (0.2 - 0.008); // radians
-  }
-  function buildGrid(points, cellSizeChord){
-    const cs = Math.max(0.02, Math.min(0.5, cellSizeChord));
-    const inv = 1.0 / cs;
-    const grid = new Map();
-    const keyOf = (x,y,z)=> (Math.floor((x+1)*inv)+","+Math.floor((y+1)*inv)+","+Math.floor((z+1)*inv));
-    for(let i=0;i<points.length;i++){
-      const [x,y,z]=points[i].v;
-      const k=keyOf(x,y,z);
-      let arr=grid.get(k); if(!arr){ arr=[]; grid.set(k,arr); }
-      arr.push(i);
-    }
-    return {grid,inv,cs};
-  }
-  function neighborCandidates(v, gridObj){
-    const [x,y,z]=v;
-    const {grid,inv} = gridObj;
-    const ix=Math.floor((x+1)*inv), iy=Math.floor((y+1)*inv), iz=Math.floor((z+1)*inv);
-    const out=[];
-    for(let dx=-1;dx<=1;dx++){
-      for(let dy=-1;dy<=1;dy++){
-        for(let dz=-1;dz<=1;dz++){
-          const a = grid.get((ix+dx)+","+(iy+dy)+","+(iz+dz));
-          if(a) out.push(a);
-        }
-      }
-    }
-    return out.length ? out.reduce((acc,cur)=>(acc.push.apply(acc,cur),acc),[]) : [];
-  }
-  self.onmessage = function(e){
-    const d=e.data;
-    if(d.cmd==='init'){
-      POINTS = d.points||[];
-      self.postMessage({cmd:'inited', count:POINTS.length});
-    }else if(d.cmd==='recluster'){
-      const s=d.scale, min=d.minScale||1.0, max=d.maxScale||3.0;
-      const th=computeThreshold(s,min,max);
-      const cosTh=Math.cos(th);
-      const chord = 2*Math.sin(th/2);
-      const gridObj=buildGrid(POINTS, chord);
-
-      const used = new Uint8Array(POINTS.length);
-      const clustersIdx=[];
-      for(let i=0;i<POINTS.length;i++){
-        if(used[i]) continue;
-        used[i]=1;
-        const seed=POINTS[i], seedV=seed.v;
-        const cand = neighborCandidates(seedV, gridObj);
-        const cluster=[i];
-        for(let k=0;k<cand.length;k++){
-          const j=cand[k]; if(j===i || used[j]) continue;
-          const v=POINTS[j].v;
-          const dot = seedV[0]*v[0] + seedV[1]*v[1] + seedV[2]*v[2];
-          if(dot >= cosTh){ cluster.push(j); used[j]=1; }
-        }
-        clustersIdx.push(cluster);
-      }
-      self.postMessage({cmd:'clusters', clustersIdx});
-    }
-  }`;
-  const blob = new Blob([source], {type:'application/javascript'});
-  return new Worker(URL.createObjectURL(blob));
-}
-</script>
-
-<script>
-/* ============ marker-placer（Worker版・高速） ============ */
+/* ============ marker-placer（クラスタ距離: 0.2→0.008） ============ */
 AFRAME.registerComponent('marker-placer',{
-  schema:{
-    maxMarkerMultiplier:{type:'number',default:20}, // 最小ズーム時サイズ
-    minMarkerMultiplier:{type:'number',default:3},  // 最大ズーム時（最小サイズ）
-    recalcMinIntervalMs:{type:'number',default:80}, // スロットル(時間)
-    recalcScaleEpsilon:{type:'number',default:0.06} // スロットル(スケール差)
-  },
+  schema:{ maxMarkerMultiplier:{type:'number',default:20} },
+
   init:async function(){
-    this.allLocations=[];          // {title,lat,lon,url,v:[x,y,z]}
-    this.currentMarkers=[];        // プール
-    this._activeMarkers=0;         // ★ 現役マーカー数（←追加）
+    this.allLocations=[]; this.currentMarkers=[];
     this.cameraEl=document.querySelector('#camera');
     this.cameraPos=new THREE.Vector3();
     this.markerPos=new THREE.Vector3();
     this.earthPos =new THREE.Vector3();
-
     this.previousEarthScale=0;
-    this._lastRecalc=0;
-    this._workerBusy=false;
-    this._pending=false;
-    this._worker=null;
-    this._inited=false;
 
-    // パネル閉で色戻す
+    // パネルが閉じたらハイライト解除
     this.el.sceneEl.addEventListener('panel-closed', () => {
-      this.currentMarkers.slice(0,this._activeMarkers).forEach(m => {
-        const mesh=m.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow');
+      this.currentMarkers.forEach(marker => {
+        var mesh = marker.getObject3D('mesh');
+        if (mesh) mesh.material.color.set('yellow');
       });
     });
 
-    // CSV 取得
-    const sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
+    var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
     try{
-      const res=await fetch(sheetUrl,{cache:'no-store'});
+      var res=await fetch(sheetUrl,{cache:'no-store'});
       if(res.ok){
-        const text=await res.text();
-        const raw=this.parseCsv(text);
-        this.allLocations = raw.map(r=>{
-          const radLat = r.lat * Math.PI/180;
-          const radLon = r.lon * Math.PI/180;
-          const x = Math.cos(radLat)*Math.cos(radLon);
-          const y = Math.sin(radLat);
-          const z = Math.cos(radLat)*Math.sin(radLon);
-          return {...r, v:[x,y,z]};
-        });
-      } else {
-        console.error('CSV fetch failed:', res.status);
-      }
+        var text=await res.text();
+        this.allLocations=this.parseCsv(text);
+      }else{ console.error('CSV fetch failed:', res.status); }
     }catch(e){ console.error("データ取得エラー:",e); }
-
-    // Worker 準備＆初回クラスタ
-    this.setupWorker();
+    this.updateClusters();
+    this.previousEarthScale=this.el.object3D.scale.x;
   },
-
-  setupWorker:function(){
-    this._worker = createClusterWorker();
-    this._worker.onmessage = (e)=>{
-      const d=e.data;
-      if(d.cmd==='inited'){
-        this._inited=true;
-        this.reclusterNow(); // 初回
-      }else if(d.cmd==='clusters'){
-        this._workerBusy=false;
-        this.applyClustersFromIdx(d.clustersIdx);
-        if (this._pending) { this._pending=false; this.reclusterNow(); }
-      }
-    };
-    this._worker.postMessage({cmd:'init', points:this.allLocations});
-  },
-
   parseCsv:function(csvText){
-    const locations=[]; const lines=csvText.trim().split('\n');
-    const startIndex=lines[0].toLowerCase().includes('title')?1:0;
-    for(let i=startIndex;i<lines.length;i++){
-      const parts=lines[i].trim().split(',');
+    var locations=[]; var lines=csvText.trim().split('\n');
+    var startIndex=lines[0].toLowerCase().includes('title')?1:0;
+    for(var i=startIndex;i<lines.length;i++){
+      var parts=lines[i].trim().split(',');
       if(parts.length>=4){
-        locations.push({
-          title:parts[0].replace(/"/g,''),
-          lat:parseFloat(parts[1]),
-          lon:parseFloat(parts[2]),
-          url:parts[3].replace(/"/g,'')
-        });
+        locations.push({ title:parts[0].replace(/"/g,''), lat:parseFloat(parts[1]), lon:parseFloat(parts[2]), url:parts[3].replace(/"/g,'') });
       }
     }
     return locations;
   },
 
-  reclusterNow:function(){
-    if(!this._inited || !this._worker) return;
-    const s=this.el.object3D.scale.x;
-    const ec=this.el.components['earth-controls'];
-    const min=ec?ec.minScale:1.0;
-    const max=ec?ec.maxScale:3.0;
-
-    if (this._workerBusy){ this._pending=true; return; }
-    this._workerBusy=true;
-    this._worker.postMessage({cmd:'recluster', scale:s, minScale:min, maxScale:max});
-    this._lastRecalc=performance.now();
-    this.previousEarthScale=s;
+  /* スケールに応じたクラスタ距離（radian） */
+  computeThreshold:function(){
+    var s = this.el.object3D.scale.x;       // 1.0〜3.0
+    var t = (s - 1.0) / (3.0 - 1.0);
+    return 0.2 - t * (0.2 - 0.008);         // ★ご指定の式
   },
 
-  applyClustersFromIdx:function(clustersIdx){
-    const R=this.el.getAttribute('geometry').radius;
+  updateClusters:function(){
+    // 既存をクリア
+    this.currentMarkers.forEach(m=>{ if(m && m.parentNode) m.parentNode.removeChild(m); });
+    this.currentMarkers=[];
 
-    for(let i=0;i<clustersIdx.length;i++){
-      let marker=this.currentMarkers[i];
-      if(!marker){
-        marker=document.createElement('a-entity');
-        marker.classList.add('collidable');
-        marker.setAttribute('hex-marker',{count:clustersIdx[i].length});
-        marker.addEventListener('mouseenter',()=>{
-          if(window.__panelOpen) return;
-          const mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('green');
-        });
-        marker.addEventListener('mouseleave',()=>{
-          if(window.__panelOpen) return;
-          const mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow');
-        });
-        marker.addEventListener('click',()=>{
-          if(window.__panelOpen) return;
-          const idxs = marker._idxs || [];
-          const clusterObjs = idxs.map(j=>this.allLocations[j]);
-          openPanel(clusterObjs);
-        });
-        this.el.appendChild(marker);
-        this.currentMarkers[i]=marker;
+    var th=this.computeThreshold();               // 角距離の閾値（radian）
+    var unclustered=this.allLocations.slice();
+    var clusters=[];
+    while(unclustered.length>0){
+      var p=unclustered.shift();
+      var cluster=[p];
+      var rest=[];
+      for(var i2=0;i2<unclustered.length;i2++){
+        var q=unclustered[i2];
+        var dist=this.haversineDistance(p,q);
+        if(dist<th) cluster.push(q); else rest.push(q);
       }
+      unclustered=rest; clusters.push(cluster);
+    }
+    this.placeMarkersFromClusters(clusters);
+  },
 
-      const idxs=clustersIdx[i];
-      marker._idxs = idxs;
+  placeMarkersFromClusters:function(clusters){
+    var R=this.el.getAttribute('geometry').radius;
+    var self=this;
+    clusters.forEach(function(cluster){
+      var lat=0,lon=0; cluster.forEach(function(p){lat+=p.lat;lon+=p.lon;}); lat/=cluster.length; lon/=cluster.length;
 
-      // クラスタ中心（lat/lon平均）
-      let lat=0, lon=0;
-      for(let k=0;k<idxs.length;k++){
-        const p=this.allLocations[idxs[k]];
-        lat+=p.lat; lon+=p.lon;
-      }
-      lat/=idxs.length; lon/=idxs.length;
+      var pos=self.latLonTo3D(lat,lon,R);
+      var marker=document.createElement('a-entity'); marker.setAttribute('position',pos);
 
-      const pos=this.latLonTo3D(lat,lon,R);
-      marker.setAttribute('position', pos);
-
-      const yAxis=pos.clone().normalize(), worldUp=new THREE.Vector3(0,1,0);
-      const xAxis=new THREE.Vector3().crossVectors(worldUp,yAxis).normalize(); if(xAxis.length()===0) xAxis.set(1,0,0);
-      const zAxis=new THREE.Vector3().crossVectors(xAxis,yAxis);
-      const rotM=new THREE.Matrix4().makeBasis(xAxis,yAxis,zAxis);
+      var yAxis=pos.clone().normalize(), worldUp=new THREE.Vector3(0,1,0);
+      var xAxis=new THREE.Vector3().crossVectors(worldUp,yAxis).normalize(); if(xAxis.length()===0) xAxis.set(1,0,0);
+      var zAxis=new THREE.Vector3().crossVectors(xAxis,yAxis);
+      var rotM=new THREE.Matrix4().makeBasis(xAxis,yAxis,zAxis);
       marker.object3D.quaternion.setFromRotationMatrix(rotM);
 
-      // カウント更新
-      marker.setAttribute('hex-marker','count',idxs.length);
+      marker.setAttribute('hex-marker',{count:cluster.length});
+      marker.classList.add('collidable');
+      marker.dataset.locations=JSON.stringify(cluster);
 
-      // いったん表示ON（可視/不可視はtickで決定）
-      marker.object3D.visible=true;
-      if(marker.textEl) marker.textEl.object3D.visible=true;
-    }
+      marker.addEventListener('mouseenter',function(){ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('green'); });
+      marker.addEventListener('mouseleave',function(){ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
+      marker.addEventListener('click', function(e){ if(window.__panelOpen) return; openPanel(JSON.parse(e.currentTarget.dataset.locations)); });
 
-    // 余剰は非表示（退役）
-    for(let i=clustersIdx.length;i<this.currentMarkers.length;i++){
-      const m=this.currentMarkers[i];
-      if(m){ m.object3D.visible=false; if(m.textEl) m.textEl.object3D.visible=false; }
-    }
-
-    // ★ 現役数を記録（tickはこの数だけ処理）
-    this._activeMarkers = clustersIdx.length;
-
+      self.el.appendChild(marker);
+      self.currentMarkers.push(marker);
+    });
     refreshAllRaycasters();
   },
 
-  tick:function(time){
-    if(this.allLocations.length===0 || !this.cameraEl) return;
+  haversineDistance:function(a,b){
+    function toRad(x){ return x*Math.PI/180; }
+    var dLat=toRad(b.lat-a.lat), dLon=toRad(b.lon-a.lon);
+    var lat1=toRad(a.lat), lat2=toRad(b.lat);
+    var h=Math.sin(dLat/2)*Math.sin(dLat/2) + Math.sin(dLon/2)*Math.sin(dLon/2)*Math.cos(lat1)*Math.cos(lat2);
+    return 2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+  },
 
-    const s=this.el.object3D.scale.x;
-    const needByScale = Math.abs(s - this.previousEarthScale) > this.data.recalcScaleEpsilon;
-    const needByTime  = (time - this._lastRecalc) > this.data.recalcMinIntervalMs;
-    if (needByScale && needByTime) this.reclusterNow();
+  tick:function(){
+    if(this.currentMarkers.length===0 || !this.cameraEl) return;
 
-    // 可視性・スケールは毎フレーム更新（★ 非表示も含めて評価するため、スキップしない）
+    var s=this.el.object3D.scale.x;
+    if(Math.abs(s-this.previousEarthScale)>0.1){ this.updateClusters(); this.previousEarthScale=s; }
+
     this.el.object3D.getWorldPosition(this.earthPos);
     this.cameraEl.object3D.getWorldPosition(this.cameraPos);
 
-    const ec=this.el.components['earth-controls'];
-    const min=ec?ec.minScale:1.0;
-    const max=ec?ec.maxScale:3.0;
-    const t = Math.max(0, Math.min(1, (s - min) / (max - min)));
+    var t=(s-1)/(3-1);
+    var markerScale=this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier-1);
 
-    const a=this.data.maxMarkerMultiplier, b=this.data.minMarkerMultiplier;
-    const markerScale = a - t * (a - b);
-
-    // ★ 退役（余剰）マーカーは対象外：0.._activeMarkers-1 のみ
-    for(let i=0;i<this._activeMarkers;i++){
-      const marker=this.currentMarkers[i];
-      if(!marker) continue;
-
+    for(var i=0;i<this.currentMarkers.length;i++){
+      var marker=this.currentMarkers[i];
       marker.object3D.scale.set(markerScale,markerScale,markerScale);
-
       marker.object3D.getWorldPosition(this.markerPos);
-      const normal=this.markerPos.clone().sub(this.earthPos).normalize();
-      const camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
-      const visible=(normal.dot(camDir)<0); // 前面=表示
-
+      var normal=this.markerPos.clone().sub(this.earthPos).normalize();
+      var camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
+      var visible=(normal.dot(camDir)<0);
       marker.object3D.visible=visible;
       if(marker.textEl) marker.textEl.object3D.visible=visible;
     }
   },
 
   latLonTo3D:function(lat,lon,R){
-    const phi=(90-lat)*(Math.PI/180), theta=(lon+180)*(Math.PI/180);
+    var phi=(90-lat)*(Math.PI/180), theta=(lon+180)*(Math.PI/180);
     return new THREE.Vector3(
       -(R*Math.sin(phi)*Math.cos(theta)),
       R*Math.cos(phi),
@@ -838,40 +689,39 @@ AFRAME.registerComponent('marker-placer',{
 <a-scene
   renderer="highRefreshRate: true"
   vr-mode-ui="enabled: true"
-  webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers">
+  webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
 
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
 
-  <!-- 地球 -->
+  <!-- 地球（位置/サイズはここで調整） -->
   <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
             src="eartn_model/world.topo.200409.3x10800x5400.jpg"
             segments-height="64" segments-width="128"
-            earth-controls
-            marker-placer="max-marker-multiplier:20; min-marker-multiplier:3">
-  </a-sphere>
+            earth-controls marker-placer></a-sphere>
 
+  <!-- リグ/カメラ -->
   <a-entity id="rig">
     <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 1.6 0" look-controls="enabled: false">
       <a-entity id="mouseCursor"
                 cursor="rayOrigin: mouse; fuse: false"
-                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; enabled: false"></a-entity>
+                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50"></a-entity>
     </a-entity>
 
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
 
     <a-entity id="right-hand"
               laser-controls="hand: right"
-              raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 0; showLine: true"
-              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend">
+              raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50; showLine: true"
+              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend" visible="false">
     </a-entity>
   </a-entity>
-  
+
   <!-- 画面内の地球操作UI（カメラ近傍） -->
   <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
     <a-entity geometry="primitive: plane; width: 0.5; height: 0.7"
               material="color: #333; opacity: 0.7"></a-entity>
-              
+
     <a-entity id="btn-rot-up" class="ui collidable"
               geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
               position="0.01 0.25 0.01">
@@ -906,44 +756,221 @@ AFRAME.registerComponent('marker-placer',{
   </a-entity>
 
   <a-sky color="#ECECEC"></a-sky>
-</a-scene>
 
-<!-- ▼ 非VRでは右手レーザーを無効化。VR入室時のみ有効化
-     ▼ マウスRaycasterは初期OFF。最初のユーザー操作でON -->
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  const scene  = document.querySelector('a-scene');
-  const right  = document.querySelector('#right-hand');
-  const mouseC = document.querySelector('#mouseCursor');
-
-  function setRightHand(enabled) {
-    if (!right) return;
-    right.setAttribute('raycaster', 'enabled', enabled);
-    right.setAttribute('cursor',    'enabled', enabled);
-  }
-
-  // 非VRで右手レーザーOFF
-  scene.addEventListener('loaded', () => {
-    if (!AFRAME.utils.device.checkHeadsetConnected()) {
-      setRightHand(false);
+AFRAME.registerComponent('vr-ray-toggle',{
+  init: function(){
+    var scene = this.el.sceneEl || this.el;
+    var right = document.getElementById('right-hand');
+    var mouse = document.getElementById('mouseCursor');
+    function setAttr(el, comp, prop, val){
+      if(!el) return;
+      try{ el.setAttribute(comp, prop, val); }catch(e){}
     }
-  });
-  scene.addEventListener('enter-vr', () => setRightHand(true));
-  scene.addEventListener('exit-vr',  () => setRightHand(false));
-
-  // 起動直後の誤ヒットを避けるため、マウスRaycasterは初期OFF→最初の実入力でON
-  function enableMouseRayOnce(){
-    if (mouseC && mouseC.components && mouseC.components.raycaster) {
-      mouseC.setAttribute('raycaster','enabled',true);
-      refreshAllRaycasters();
+    function enableVRRay(){
+      if(right){
+        right.setAttribute('visible', true);
+        setAttr(right,'raycaster','enabled',true);
+        setAttr(right,'cursor','enabled',true);
+      }
+      if(mouse){
+        setAttr(mouse,'raycaster','enabled',false);
+        setAttr(mouse,'cursor','enabled',false);
+      }
     }
-    window.removeEventListener('mousemove', enableMouseRayOnce);
-    window.removeEventListener('mousedown', enableMouseRayOnce);
+    function disableVRRay(){
+      if(right){
+        right.setAttribute('visible', false);
+        setAttr(right,'raycaster','enabled',false);
+        setAttr(right,'cursor','enabled',false);
+      }
+      if(mouse){
+        setAttr(mouse,'raycaster','enabled',true);
+        setAttr(mouse,'cursor','enabled',true);
+      }
+    }
+    // 初期はデスクトップ想定
+    disableVRRay();
+    scene.addEventListener('enter-vr', enableVRRay);
+    scene.addEventListener('exit-vr', disableVRRay);
   }
-  window.addEventListener('mousemove', enableMouseRayOnce);
-  window.addEventListener('mousedown', enableMouseRayOnce);
 });
 </script>
-<!-- ▲ 非VRレーザーOFF／マウスRay初期OFF -->
+
+</a-scene>
+
+<!-- === Panel exact-like (v8.9: sanitize + conservative fallback) === -->
+<script>
+(function(){
+  'use strict';
+  const PANEL = { BOARD_W:1.10, CONTENT_LEFT:-0.45, TEXT_MAX_W:0.84, PAD_X:0.02, PAD_Y:0.020, GAP:0.020,
+                  CONTENT_TOP:0.48, CONTENT_BOTTOM:-0.45, SCROLL_MARGIN_R:0.035, SCROLL_TRACK_W:0.012, SCROLL_TRACK_H:0.78 };
+  const HOVER_BG = '#23324A', ZEBRA_A='#262b31', ZEBRA_B='#21262c', EDGE_COL='#596273';
+  const BTN_R=0.045, BTN_FS=0.06, TRACK_COL='#1f2a38', THUMB_COL='#7fa7ff';
+  const PANEL_FONT_URL = (typeof FONT_URL!=='undefined')?FONT_URL:(window.FONT_URL||'static/NotoSansJP-Regular.ttf');
+  const FONT_SIZE=0.035, LINE_HEIGHT=1.35, EXTRA=Math.max(0.006, FONT_SIZE*0.38);
+  const FUDGE_FIXED=FONT_SIZE*0.10;              // 固定の余白
+  const FUDGE_PERLINE=FONT_SIZE*0.10;            // 行数に応じた余白
+  const EST_COLS=19;                              // 推定の1行あたり列数（やや厳しめ）
+  const EST_SCALE=1.08;                           // 推定高さの最低倍率
+
+  function setCardFrame(row,w,h){
+    const bw=0.003, edge=EDGE_COL;
+    let bg=row.querySelector('.list-bg'); if(!bg){bg=document.createElement('a-entity'); bg.classList.add('ui','list-bg','collidable'); row.appendChild(bg);}
+    bg.setAttribute('geometry',`primitive:plane;width:${w};height:${h}`);
+    bg.setAttribute('material',`shader:flat;color:${row.dataset.baseColor};opacity:0.95;transparent:true;side:double`);
+    bg.setAttribute('position',`${w/2} ${-h/2} 0`);
+    const ensure=cls=>{let e=row.querySelector('.'+cls); if(!e){e=document.createElement('a-entity'); e.classList.add('ui',cls); row.appendChild(e);} e.setAttribute('material',`shader:flat;color:${edge};transparent:true;opacity:1;side:double`); return e;};
+    const top=ensure('list-border-top'),bottom=ensure('list-border-bottom'),left=ensure('list-border-left'),right=ensure('list-border-right');
+    top.setAttribute('geometry',`primitive:plane;width:${w};height:${bw}`); bottom.setAttribute('geometry',`primitive:plane;width:${w};height:${bw}`);
+    left.setAttribute('geometry',`primitive:plane;width:${bw};height:${h}`); right.setAttribute('geometry',`primitive:plane;width:${bw};height:${h}`);
+    top.setAttribute('position',`${w/2} ${-bw/2} 0.001`); bottom.setAttribute('position',`${w/2} ${-(h-bw/2)} 0.001`);
+    left.setAttribute('position',`${bw/2} ${-h/2} 0.001`); right.setAttribute('position',`${w-bw/2} ${-h/2} 0.001`);
+  }
+  function setRowBgColor(row,color){const bg=row.querySelector('.list-bg'); if(bg){const mat=bg.getAttribute('material')||{},opa=(typeof mat.opacity==='number')?mat.opacity:0.95; bg.setAttribute('material',`shader:flat;color:${color};opacity:${opa};transparent:true;side:double`);}}
+
+  function readBlockBoundsFrom(txtEl){
+    const mesh = txtEl.getObject3D('text') || txtEl.getObject3D('mesh') || null;
+    const info = mesh && (mesh.textRenderInfo || mesh._textRenderInfo) || (txtEl.components && txtEl.components['troika-text'] && txtEl.components['troika-text'].textRenderInfo);
+    return (info && info.blockBounds) ? info.blockBounds : null;
+  }
+  function pollHeight(txtEl, tries, cb){
+    (function loop(n){
+      const b=readBlockBoundsFrom(txtEl);
+      if(b){ return cb(b[3]-b[1]); }
+      if(n<=0) return cb(null);
+      requestAnimationFrame(()=>loop(n-1));
+    })(tries);
+  }
+  function sanitizeTitle(s){
+    return String(s||'')
+      .replace(/\\r\\n?/g,'\\n')      // CRLF→LF
+      .replace(/^\\s+|\\s+$/g,'')    // trim
+      .replace(/\\n{2,}/g,'\\n');    // 連続改行を1つに圧縮
+  }
+  function countLinesByCols(title, cols){
+    const parts=String(title||'').split('\\n'); let lines=0;
+    for(const p of parts){
+      let c=0; for(const ch of p){ const w=/[ -~]/.test(ch)?0.5:1; if(c+w>cols){lines++; c=w;} else c+=w; }
+      lines++;
+    }
+    return lines;
+  }
+
+  function openPanel(locations){
+    closePanel();
+    const scene=document.querySelector('a-scene');
+    const panel=document.createElement('a-entity'); panel.id='vrPanel'; panel.classList.add('ui','collidable');
+    panel.setAttribute('position','0 0 -0.5'); panel.setAttribute('rotation','0 0 0'); panel.setAttribute('scale','0.5 0.5 0.5');
+    if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','baseDist:0.5; baseScale:0.5; margin:0.03; minDist:0.08; worldYaw:0; yOffset:0.00');
+    scene.appendChild(panel);
+
+    const rightX=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
+    const track=document.createElement('a-entity'); track.classList.add('ui','scroll-track');
+    track.setAttribute('geometry',`primitive:plane;width:${PANEL.SCROLL_TRACK_W};height:${PANEL.SCROLL_TRACK_H}`);
+    track.setAttribute('material',`shader:flat;color:#1f2a38;opacity:0.9;transparent:true;side:double`);
+    track.setAttribute('position',`${rightX} 0 0.05`); panel.appendChild(track);
+    const thumb=document.createElement('a-entity'); thumb.classList.add('ui','scroll-thumb','collidable');
+    thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:0.10`);
+    thumb.setAttribute('material','shader:flat;color:#7fa7ff;opacity:0.85;transparent:true;side:double');
+    thumb.setAttribute('position',`${rightX} 0 0.051`); panel.appendChild(thumb);
+    const mkBtn=(y,ch)=>{const b=document.createElement('a-entity'); b.classList.add('ui','collidable'); b.setAttribute('geometry',`primitive:circle;radius:${BTN_R};segments:48`);
+      b.setAttribute('material','shader:flat;color:#243246;opacity:0.95;transparent:true;side:double'); b.setAttribute('position',`${rightX} ${y} 0.05`);
+      const t=document.createElement('a-entity'); t.setAttribute('troika-text',{value:ch,fontSize:BTN_FS,color:'#cfe3ff',anchor:'center',baseline:'middle',font:PANEL_FONT_URL}); t.setAttribute('position','0 0 0.001'); b.appendChild(t); return b; };
+    const btnUp=mkBtn(0.50,'▲'), btnDn=mkBtn(-0.50,'▼'); panel.appendChild(btnUp); panel.appendChild(btnDn);
+
+    
+// Close (×) button directly above the ▲ button
+const closeY = 0.50 + (BTN_R*2 + 0.015); // keep a small gap above ▲
+const btnClose = mkBtn(closeY, '×');
+panel.appendChild(btnClose);
+btnClose.addEventListener('click', ()=>{ try{ closePanel(); }catch(e){ if (typeof window.closePanel==='function') window.closePanel(); } });
+const listGroup=document.createElement('a-entity'); listGroup.classList.add('list-group'); listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP} 0.02`); panel.appendChild(listGroup);
+
+    const maxWidth=PANEL.TEXT_MAX_W-0.002;
+    const rows=[], estHeights=[], realH=[], estLinesList=[];
+    (locations||[]).forEach((loc,i)=>{
+      const row=document.createElement('a-entity'); row.classList.add('ui','list-entry','collapsible','collidable');
+      const title = sanitizeTitle(loc.title);
+      row.dataset.title=title; row.dataset.url=String(loc.url??''); row.dataset.baseColor=(i%2===0)?ZEBRA_A:ZEBRA_B;
+      const txt=document.createElement('a-entity'); txt.classList.add('ui','list-text');
+      txt.setAttribute('troika-text',{ value:row.dataset.title, fontSize:FONT_SIZE, lineHeight:LINE_HEIGHT, maxWidth,
+        anchor:'left', baseline:'top', color:'#fff', outlineWidth:0.004, outlineColor:'#000',
+        overflowWrap:'break-word', whiteSpace:'pre-wrap', clipRect:`0 -9999 ${maxWidth} 9999`, font:PANEL_FONT_URL });
+      txt.setAttribute('position',`${PANEL.PAD_X} ${-PANEL.PAD_Y} 0.002`);
+      row.appendChild(txt);
+      row.addEventListener('click',()=>{const u=row.dataset.url; if(u) try{window.open(u,'_blank');}catch(_){}});
+      row.addEventListener('mouseenter',()=>setRowBgColor(row,HOVER_BG));
+      row.addEventListener('mouseleave',()=>setRowBgColor(row,row.dataset.baseColor));
+      listGroup.appendChild(row); rows.push(row);
+
+      const estLines = countLinesByCols(title, EST_COLS);
+      estLinesList.push(estLines);
+      const estH = Math.max( estLines * FONT_SIZE * LINE_HEIGHT, FONT_SIZE*LINE_HEIGHT) * EST_SCALE;
+      estHeights.push(estH);
+      realH.push(null);
+    });
+
+    const viewportH=(PANEL.CONTENT_TOP-PANEL.CONTENT_BOTTOM);
+    let totalHeight=0, maxOffset=0, currentOffset=0, targetOffset=0, rafId=null;
+
+    function reflow(){
+      let y=0;
+      rows.forEach((row,i)=>{
+        const lines = estLinesList[i];
+        const baseH = (realH[i] ?? estHeights[i]);
+        const th = baseH + FUDGE_FIXED + FUDGE_PERLINE * Math.max(1, lines);
+        const boxH = th + 2*PANEL.PAD_Y + EXTRA;
+        const boxW = PANEL.TEXT_MAX_W + 2*PANEL.PAD_X;
+        row._boxH = boxH;
+        row.setAttribute('position',`${PANEL.CONTENT_LEFT} ${-y} 0.03`);
+        setCardFrame(row, boxW, boxH);
+        y += boxH + PANEL.GAP;
+      });
+      totalHeight=Math.max(0,y-PANEL.GAP); maxOffset=Math.max(0,totalHeight-viewportH);
+      setOffset(currentOffset,true); updateScrollbar();
+    }
+
+    // Measure each row; reflow as soon as anything arrives
+    rows.forEach((row,i)=>{
+      const txt=row.querySelector('.list-text');
+      pollHeight(txt, 140, (h)=>{ if(h!=null){ realH[i]=h; reflow(); } });
+    });
+    // Additional scheduled reflows just in case
+    setTimeout(reflow, 400);
+    setTimeout(reflow, 1000);
+    setTimeout(reflow, 2000);
+    setTimeout(reflow, 3000);
+
+    function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP + currentOffset} 0.02`); }
+    function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){currentOffset=targetOffset; applyOffset(); updateScrollbar(); return;} if(!rafId) animate(); }
+    function animate(){ rafId=requestAnimationFrame(animate); const d=targetOffset-currentOffset; if(Math.abs(d)<0.0005){ currentOffset=targetOffset; cancelAnimationFrame(rafId); rafId=null; } else { currentOffset+=d*0.18; } applyOffset(); updateScrollbar(); }
+    function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1;
+      const thumbH=Math.max(0.06,H*frac); const denom=Math.max(1e-6,maxOffset); const t=denom>0?(currentOffset/denom):0; const top=H/2-thumbH/2; const y=top - t*(H-thumbH);
+      thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:${thumbH}`); thumb.setAttribute('position',`${rightX} ${y} 0.051`);
+    }
+    const onWheel=(e)=>{const k=0.0018*viewportH; setOffset(currentOffset+e.deltaY*k);};
+    window.addEventListener('wheel', onWheel, {passive:true});
+    btnDn.addEventListener('click',()=>setOffset(currentOffset+viewportH*0.85));
+    btnUp.addEventListener('click',()=>setOffset(currentOffset-viewportH*0.85));
+    track.addEventListener('click',(e)=>{const p=e.detail&&e.detail.intersection?e.detail.intersection.point:null; if(!p) return;
+      const local=track.object3D.worldToLocal(p.clone()); if(local.y>0) setOffset(currentOffset-viewportH*0.85); else setOffset(currentOffset+viewportH*0.85); });
+
+    window.__panelOpen=true;
+    if(typeof setRaycasterTargets==='function') setRaycasterTargets(true);
+    if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
+    panel.sceneEl && panel.sceneEl.emit('panel-opened');
+  }
+
+  function closePanel(){ const p=document.getElementById('vrPanel'); if(p&&p.parentNode) p.parentNode.removeChild(p);
+    window.__panelOpen=false; if(AFRAME.scenes&&AFRAME.scenes[0]) AFRAME.scenes[0].emit('panel-closed');
+    if(typeof setRaycasterTargets==='function') setRaycasterTargets(false); if(typeof refreshAllRaycasters==='function') refreshAllRaycasters(); }
+
+  window.openPanel=openPanel; window.closePanel=closePanel;
+  console.log('panel override (exact-like) ready v89');
+})();
+</script>
+<!-- === /Panel exact-like v8.9 === -->
+
 </body>
 </html>
