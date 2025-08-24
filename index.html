@@ -823,9 +823,9 @@ AFRAME.registerComponent('vr-ray-toggle',{
   const EST_COLS=19;
   const EST_SCALE=1.08;
 
-  // ▼▼▼【変更】リスナー関数を保持するための変数を整理 ▼▼▼
   let currentOnWheelListener = null;
-  let currentAxisMoveListener = null;
+  // ▼▼▼【変更】VRスクロール用のループIDを保持する変数に戻す ▼▼▼
+  let vrScrollAnimationId = null;
 
   function setCardFrame(row,w,h){
     const bw=0.003, edge=EDGE_COL;
@@ -959,23 +959,29 @@ AFRAME.registerComponent('vr-ray-toggle',{
     track.addEventListener('click',(e)=>{const p=e.detail&&e.detail.intersection?e.detail.intersection.point:null; if(!p) return;
       const local=track.object3D.worldToLocal(p.clone()); if(local.y>0) setOffset(currentOffset-viewportH*0.85); else setOffset(currentOffset+viewportH*0.85); });
 
-    // ▼▼▼【ここから修正】VRジョイスティック用のイベントリスナー方式 ▼▼▼
-    const onAxisMove = (e) => {
-      // 右スティックのY軸の動きだけを取得 (通常は2番目の軸)
-      const stickY = e.detail.axis[3] || e.detail.axis[1] || 0;
-      const deadzone = 0.15;
+    // ▼▼▼【ここから修正】VRスクロール処理を「earth-controls」から値をもらう方式に変更 ▼▼▼
+    const earthControls = document.querySelector('#earth').components['earth-controls'];
 
+    function vrScrollTick() {
+      vrScrollAnimationId = requestAnimationFrame(vrScrollTick); // ループを継続
+
+      const sceneEl = document.querySelector('a-scene');
+      if (!sceneEl || !sceneEl.is('vr-mode') || !earthControls) {
+        return;
+      }
+      
+      // earth-controlsが保持しているスティックの傾き情報を読み取る
+      const stickY = earthControls.stickInput.right.y;
+      
+      const deadzone = 0.15;
       if (Math.abs(stickY) > deadzone) {
         const scrollSpeed = 0.008;
         const delta = -stickY * scrollSpeed * viewportH;
         setOffset(currentOffset + delta);
       }
-    };
-    currentAxisMoveListener = onAxisMove; // 後で削除するために保存
-    const rightHand = document.querySelector('#right-hand');
-    if (rightHand) {
-      rightHand.addEventListener('axismove', currentAxisMoveListener);
     }
+    // スクロール処理を開始
+    vrScrollTick();
     // ▲▲▲【修正ここまで】▲▲▲
 
     window.__panelOpen=true;
@@ -993,13 +999,10 @@ AFRAME.registerComponent('vr-ray-toggle',{
       currentOnWheelListener = null;
     }
 
-    // ▼▼▼【修正】axismoveリスナーを削除する処理を追加 ▼▼▼
-    if (currentAxisMoveListener) {
-      const rightHand = document.querySelector('#right-hand');
-      if (rightHand) {
-        rightHand.removeEventListener('axismove', currentAxisMoveListener);
-      }
-      currentAxisMoveListener = null;
+    // ▼▼▼【修正】VRスクロールのループを停止する ▼▼▼
+    if (vrScrollAnimationId) {
+      cancelAnimationFrame(vrScrollAnimationId);
+      vrScrollAnimationId = null;
     }
     // ▲▲▲【修正ここまで】▲▲▲
 
@@ -1008,7 +1011,7 @@ AFRAME.registerComponent('vr-ray-toggle',{
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel override (exact-like) ready v89 with VR joystick scroll (event-based)');
+  console.log('panel override (exact-like) ready v89 with VR joystick scroll (final fix)');
 })();
 </script>
 </body>
