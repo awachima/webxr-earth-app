@@ -2,12 +2,14 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (stable)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — poll v92)</title>
 
+  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.min.js"></script>
+  <!-- Troika text -->
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
   <style>
@@ -16,15 +18,15 @@
       src:url("static/NotoSansJP-Regular.ttf") format("truetype");
       font-weight:400; font-style:normal; font-display:swap;
     }
-    html,body{ height:100%; margin:0; overflow:hidden; background:#eee; }
+    html,body{ height:100%; margin:0; overflow:hidden; background:#eceff1; }
   </style>
 </head>
 <body>
 
 <script>
-/* ===== 共通ユーティリティ ===== */
+// ===== 共通ユーティリティ =====
 const FONT_URL = 'static/NotoSansJP-Regular.ttf';
-window.__panelOpen = false;
+window.__panelOpen = false; // パネル開閉のグローバル状態
 
 function refreshAllRaycasters(){
   ['#mouseCursor', '#right-hand'].forEach(function(sel){
@@ -41,7 +43,7 @@ function setRaycasterTargets(uiOnly){
   });
 }
 
-/* ----- テキストを前面化（Troika同期で戻されても耐性） ----- */
+// ----- テキストを前面化（Troikaがマテリアル再生成しても数フレ耐える） -----
 AFRAME.registerComponent('force-front',{
   schema:{ order:{type:'number',default:100010}, frames:{type:'int',default:12} },
   init:function(){ this._applied=0; },
@@ -61,16 +63,9 @@ AFRAME.registerComponent('force-front',{
   }
 });
 
-/* ----- パネルを“表示時の位置”でワールド固定（水平垂直） ----- */
+// ----- パネルを“表示時の位置”でワールド固定 -----
 AFRAME.registerComponent('panel-world-lock',{
-  schema:{
-    baseDist:{type:'number',default:0.5},
-    baseScale:{type:'number',default:0.5},
-    margin:{type:'number',default:0.03},
-    minDist:{type:'number',default:0.08},
-    worldYaw:{type:'number',default:0},
-    yOffset:{type:'number',default:0.00}
-  },
+  schema:{ baseDist:{type:'number',default:0.5}, baseScale:{type:'number',default:0.5}, margin:{type:'number',default:0.03}, minDist:{type:'number',default:0.08}, worldYaw:{type:'number',default:0}, yOffset:{type:'number',default:0.00} },
   init:function(){
     this.cam = document.querySelector('#camera');
     this.earth = document.querySelector('#earth');
@@ -82,9 +77,7 @@ AFRAME.registerComponent('panel-world-lock',{
   },
   tick:function(){ if(!this._placed) this.placeOnce(); },
   placeOnce:function(){
-    if(this._placed || !this.cam) return;
-    this._placed = true;
-
+    if(this._placed || !this.cam) return; this._placed = true;
     this.cam.object3D.getWorldPosition(this._camPos);
     this._fwd.set(0,0,-1).applyQuaternion(this.cam.object3D.quaternion).normalize();
 
@@ -103,9 +96,7 @@ AFRAME.registerComponent('panel-world-lock',{
 
     const side = new THREE.Vector3().crossVectors(this._fwd, this._up).normalize();
     const up   = new THREE.Vector3().crossVectors(side, this._fwd).normalize();
-    const worldPos = this._camPos.clone()
-      .add(this._fwd.clone().multiplyScalar(dist))
-      .add(up.multiplyScalar(this.data.yOffset));
+    const worldPos = this._camPos.clone().add(this._fwd.clone().multiplyScalar(dist)).add(up.multiplyScalar(this.data.yOffset));
     this.el.object3D.position.copy(worldPos);
 
     const scl = this.data.baseScale * (dist / this.data.baseDist);
@@ -116,65 +107,54 @@ AFRAME.registerComponent('panel-world-lock',{
   }
 });
 
-/* ===== Earth Controls（VR安定・非VR互換） ===== */
+// ===== Earth Controls =====
 AFRAME.registerComponent('earth-controls',{
-  schema:{
-    rotationSpeed:{type:'number',default:2.0},
-    joystickRotationSpeed:{type:'number',default:1.0},
-    scaleSpeed:{type:'number',default:0.01},
-    mouseRotationSpeed:{type:'number',default:0.2},
-    wheelScaleSpeed:{type:'number',default:0.0005}
-  },
+  schema:{ rotationSpeed:{type:'number',default:2.0}, joystickRotationSpeed:{type:'number',default:1.0}, scaleSpeed:{type:'number',default:0.01}, mouseRotationSpeed:{type:'number',default:0.2}, wheelScaleSpeed:{type:'number',default:0.0005} },
   init:function(){
     this.minScale=1.0; this.maxScale=3.0;
-    this.currentXRotation=0;
-    this.keys={};
+    this.currentXRotation=0; this.keys={};
     this.stickInput={ left:{x:0,y:0}, right:{x:0,y:0} };
-    this.isDragging=false;
-    this.previousMousePosition={x:0,y:0};
+    this.isDragging=false; this.previousMousePosition={x:0,y:0};
     this.cameraEl=document.querySelector('#camera');
 
-    this.uiState = { rotUp: false, rotDown: false, rotLeft: false, rotRight: false, zoomIn: false, zoomOut: false };
+    this.uiState = { rotUp:false, rotDown:false, rotLeft:false, rotRight:false, zoomIn:false, zoomOut:false };
 
     var self=this;
-    window.addEventListener('keydown',function(e){ self.keys[e.key]=true; });
-    window.addEventListener('keyup',function(e){ self.keys[e.key]=false; });
+    window.addEventListener('keydown',e=>self.keys[e.key]=true);
+    window.addEventListener('keyup',e=>self.keys[e.key]=false);
 
     this.el.sceneEl.addEventListener('loaded', function(){
       var cvs=self.el.sceneEl.canvas;
       setTimeout(()=>{
-        cvs.addEventListener('mousedown',function(e){ self.onMouseDown(e); });
-        window.addEventListener('mousemove',function(e){ self.onMouseMove(e); });
+        cvs.addEventListener('mousedown',e=>self.onMouseDown(e));
+        window.addEventListener('mousemove',e=>self.onMouseMove(e));
       }, 150);
-      window.addEventListener('mouseup',function(){ self.onMouseUp(); });
-      if (!AFRAME.utils.device.checkHeadsetConnected()) {
-        cvs.addEventListener('wheel',function(e){ self.onWheelCanvas(e); },{passive:true});
+      window.addEventListener('mouseup',()=>self.onMouseUp());
+      if (!AFRAME.utils.device.checkHeadsetConnected()){
+        cvs.addEventListener('wheel',e=>self.onWheelCanvas(e),{passive:true});
       }
       self.setupUIListeners();
     });
 
+    // コントローラ接続後にthumbstick/axismoveを束ねる（地球回転・ズーム用）
     this._bindThumbsticks = function(){
       var L=document.querySelector('#left-hand');
       var R=document.querySelector('#right-hand');
       if(L && !L._thumbBound){
-        L.addEventListener('thumbstickmoved', function(e){ self.stickInput.left={x:e.detail.x,y:e.detail.y}; });
-        L.addEventListener('axismove', function(e){
-          var a=(e.detail && e.detail.axis) ? e.detail.axis : [];
-          if (self.stickInput.left.x === 0 && self.stickInput.left.y === 0) {
-            self.stickInput.left={x:a[0]||0, y:a[1]||0};
-          }
+        L.addEventListener('thumbstickmoved', e=>{ self.stickInput.left={x:e.detail.x,y:e.detail.y}; });
+        L.addEventListener('axismove', e=>{
+          var a=(e.detail && e.detail.axis)? e.detail.axis : [];
+          if (self.stickInput.left.x===0 && self.stickInput.left.y===0){ self.stickInput.left={x:a[0]||0,y:a[1]||0}; }
         });
         L._thumbBound=true;
       }
       if(R && !R._thumbBound){
-        R.addEventListener('thumbstickmoved', function(e){ self.stickInput.right={x:e.detail.x,y:e.detail.y}; });
-        R.addEventListener('axismove', function(e){
-          var a=(e.detail && e.detail.axis) ? e.detail.axis : [];
-          if (self.stickInput.right.x === 0 && self.stickInput.right.y === 0) {
-            var rx = (typeof a[2] === 'number') ? a[2] : (a[0]||0);
-            var ry = (typeof a[3] === 'number') ? a[3] : (a[1]||0);
-            self.stickInput.right={x:rx, y:ry};
-          }
+        R.addEventListener('thumbstickmoved', e=>{ self.stickInput.right={x:e.detail.x,y:e.detail.y}; });
+        R.addEventListener('axismove', e=>{
+          var a=(e.detail && e.detail.axis)? e.detail.axis : [];
+          var rx=(typeof a[2]==='number')? a[2] : (a[0]||0);
+          var ry=(typeof a[3]==='number')? a[3] : (a[1]||0);
+          if (self.stickInput.right.x===0 && self.stickInput.right.y===0){ self.stickInput.right={x:rx,y:ry}; }
         });
         R._thumbBound=true;
       }
@@ -186,22 +166,21 @@ AFRAME.registerComponent('earth-controls',{
     if(rightHand) rightHand.addEventListener('controllerconnected', this._bindThumbsticks.bind(this));
   },
 
-  setupUIListeners: function() {
-    var self = this;
-    var states = [
-      { id: '#btn-rot-up',    state: 'rotUp' },
-      { id: '#btn-rot-down',  state: 'rotDown' },
-      { id: '#btn-rot-left',  state: 'rotLeft' },
-      { id: '#btn-rot-right', state: 'rotRight' },
-      { id: '#btn-zoom-in',   state: 'zoomIn' },
-      { id: '#btn-zoom-out',  state: 'zoomOut' }
-    ];
-    states.forEach(function(item) {
-      var btn = document.querySelector(item.id);
-      if (btn) {
-        btn.addEventListener('mousedown', function() { self.uiState[item.state] = true; });
-        btn.addEventListener('mouseup', function()   { self.uiState[item.state] = false; });
-        btn.addEventListener('mouseleave', function(){ self.uiState[item.state] = false; });
+  setupUIListeners:function(){
+    var self=this;
+    [
+      { id:'#btn-rot-up',    state:'rotUp' },
+      { id:'#btn-rot-down',  state:'rotDown' },
+      { id:'#btn-rot-left',  state:'rotLeft' },
+      { id:'#btn-rot-right', state:'rotRight' },
+      { id:'#btn-zoom-in',   state:'zoomIn' },
+      { id:'#btn-zoom-out',  state:'zoomOut' }
+    ].forEach(item=>{
+      var btn=document.querySelector(item.id);
+      if(btn){
+        btn.addEventListener('mousedown', ()=> self.uiState[item.state]=true);
+        btn.addEventListener('mouseup',   ()=> self.uiState[item.state]=false);
+        btn.addEventListener('mouseleave',()=> self.uiState[item.state]=false);
       }
     });
   },
@@ -209,8 +188,7 @@ AFRAME.registerComponent('earth-controls',{
   onMouseDown:function(evt){
     if (evt.target.classList.contains('ui')) return;
     if(window.__panelOpen) return;
-    this.isDragging=true;
-    this.previousMousePosition={x:evt.clientX,y:evt.clientY};
+    this.isDragging=true; this.previousMousePosition={x:evt.clientX,y:evt.clientY};
     if(this.cameraEl) this.cameraEl.setAttribute('look-controls','enabled',false);
   },
   onMouseMove:function(evt){
@@ -224,64 +202,47 @@ AFRAME.registerComponent('earth-controls',{
   onMouseUp:function(){ this.isDragging=false; },
   onWheelCanvas:function(evt){
     if(window.__panelOpen) return;
-    var s=this.el.object3D.scale.x;
-    s += evt.deltaY*-1*this.data.wheelScaleSpeed;
-    s=Math.max(this.minScale,Math.min(this.maxScale,s));
+    var s=this.el.object3D.scale.x; s += evt.deltaY*-1*this.data.wheelScaleSpeed; s=Math.max(this.minScale,Math.min(this.maxScale,s));
     this.el.object3D.scale.set(s,s,s);
   },
   getNonVrSticks:function(){
     var pads = (navigator.getGamepads && navigator.getGamepads()) ? navigator.getGamepads() : [];
-    var p = null;
-    for (var i=0;i<pads.length;i++){ if(pads[i] && pads[i].connected){ p=pads[i]; break; } }
-    if(!p) return null;
-    var ax = p.axes || [];
-    return { left:{x:ax[0]||0, y:ax[1]||0}, right:{x:ax[2]||0, y:ax[3]||0} };
+    var p = null; for (var i=0;i<pads.length;i++){ if(pads[i] && pads[i].connected){ p=pads[i]; break; } }
+    if(!p) return null; var ax=p.axes||[]; return { left:{x:ax[0]||0,y:ax[1]||0}, right:{x:ax[2]||0,y:ax[3]||0} };
   },
-  tick: function() {
-    if (window.__panelOpen) return;
+  tick:function(){
+    if (window.__panelOpen) return; // パネル開いている間は地球回転/ズーム停止
 
-    var rotY_k = (this.keys['ArrowLeft'] ? -1 : 0) + (this.keys['ArrowRight'] ? 1 : 0);
-    var rotX_k = (this.keys['ArrowUp'] ? -1 : 0) + (this.keys['ArrowDown'] ? 1 : 0);
-    var scale_k = (this.keys['w'] || this.keys['W'] ? 1 : 0) + (this.keys['s'] || this.keys['S'] ? -1 : 0);
+    var rotY_k = (this.keys['ArrowLeft']?-1:0) + (this.keys['ArrowRight']?1:0);
+    var rotX_k = (this.keys['ArrowUp']?-1:0) + (this.keys['ArrowDown']?1:0);
+    var scale_k = (this.keys['w']||this.keys['W']?1:0) + (this.keys['s']||this.keys['S']?-1:0);
 
-    var rotY_ui = (this.uiState.rotRight ? 1 : 0) + (this.uiState.rotLeft ? -1 : 0);
-    var rotX_ui = (this.uiState.rotDown ? 1 : 0) + (this.uiState.rotUp ? -1 : 0);
-    var scale_ui = (this.uiState.zoomIn ? 1 : 0) + (this.uiState.zoomOut ? -1 : 0);
+    var rotY_ui = (this.uiState.rotRight?1:0) + (this.uiState.rotLeft?-1:0);
+    var rotX_ui = (this.uiState.rotDown?1:0) + (this.uiState.rotUp?-1:0);
+    var scale_ui = (this.uiState.zoomIn?1:0) + (this.uiState.zoomOut?-1:0);
 
-    var stickRotX = this.stickInput.right.y;
-    var stickRotY = this.stickInput.right.x;
-    var stickScale = this.stickInput.left.y;
-
-    if (stickRotX === 0 && stickRotY === 0 && stickScale === 0) {
-      var gp = this.getNonVrSticks();
-      if (gp) {
-        stickRotX = gp.right.y; stickRotY = gp.right.x; stickScale = gp.left.y;
-      }
+    var stickRotX=this.stickInput.right.y, stickRotY=this.stickInput.right.x, stickScale=this.stickInput.left.y;
+    if (stickRotX===0 && stickRotY===0 && stickScale===0){
+      var gp=this.getNonVrSticks(); if(gp){ stickRotX=gp.right.y; stickRotY=gp.right.x; stickScale=gp.left.y; }
     }
 
-    var s = this.el.object3D.scale.x;
-    var t = (s - 1.0) / (3.0 - 1.0);
-    var mul = 1 - (t * (7 / 8));
+    var s=this.el.object3D.scale.x; var t=(s-1.0)/(3.0-1.0); var mul=1-(t*(7/8));
+    var finalRotY=(stickRotY!==0? stickRotY*this.data.joystickRotationSpeed : (rotY_ui!==0? rotY_ui*this.data.rotationSpeed : rotY_k*this.data.rotationSpeed))*mul;
+    var finalRotX=(stickRotX!==0? stickRotX*this.data.joystickRotationSpeed : (rotX_ui!==0? rotX_ui*this.data.rotationSpeed : rotX_k*this.data.rotationSpeed))*mul;
+    var finalScale=(stickScale!==0? -stickScale : (scale_ui!==0? scale_ui : scale_k))*this.data.scaleSpeed;
 
-    var finalRotY = (stickRotY !== 0 ? stickRotY * this.data.joystickRotationSpeed : (rotY_ui !== 0 ? rotY_ui * this.data.rotationSpeed : rotY_k * this.data.rotationSpeed)) * mul;
-    var finalRotX = (stickRotX !== 0 ? stickRotX * this.data.joystickRotationSpeed : (rotX_ui !== 0 ? rotX_ui * this.data.rotationSpeed : rotX_k * this.data.rotationSpeed)) * mul;
-    var finalScale = (stickScale !== 0 ? -stickScale : (scale_ui !== 0 ? scale_ui : scale_k)) * this.data.scaleSpeed;
-
-    this.el.object3D.rotation.y += finalRotY * (Math.PI / 180);
+    this.el.object3D.rotation.y += finalRotY*(Math.PI/180);
     this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation + finalRotX));
-    this.el.object3D.rotation.x = this.currentXRotation * (Math.PI / 180);
+    this.el.object3D.rotation.x = this.currentXRotation*(Math.PI/180);
 
-    var ns = s + finalScale;
-    ns = Math.max(this.minScale, Math.min(this.maxScale, ns));
-    this.el.object3D.scale.set(ns, ns, ns);
+    var ns=s+finalScale; ns=Math.max(this.minScale,Math.min(this.maxScale,ns));
+    this.el.object3D.scale.set(ns,ns,ns);
   }
 });
 
-/* ============ hex-marker ============ */
+// ============ hex-marker ============
 AFRAME.registerComponent('hex-marker',{
-  schema:{ count:{type:'number',default:1}, color:{type:'color',default:'yellow'},
-           baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001},
-           fontUrl:{type:'string',default:FONT_URL} },
+  schema:{ count:{type:'number',default:1}, color:{type:'color',default:'yellow'}, baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001}, fontUrl:{type:'string',default:FONT_URL} },
   init:function(){
     var d=this.data;
     this.height=0.01+(d.count*d.heightUnit);
@@ -293,55 +254,38 @@ AFRAME.registerComponent('hex-marker',{
       var baseFontSize=d.baseRadius*0.7;
       var text=document.createElement('a-entity');
       text.setAttribute('troika-text',{
-        value:String(d.count),
-        font:d.fontUrl,
-        fontSize:baseFontSize,
-        color:'#111',
-        outlineColor:'#fff',
-        outlineWidth:0.0006,
-        outlineBlur:0.00001,
-        anchor:'center'
+        value:String(d.count), font:d.fontUrl, fontSize:baseFontSize, color:'#111',
+        outlineColor:'#fff', outlineWidth:0.0006, outlineBlur:0.00001, anchor:'center'
       });
       text.setAttribute('rotation','-90 0 0');
       text.setAttribute('position',{x:0,y:this.height/2+0.00012,z:0});
-      this.el.appendChild(text);
-      this.el.textEl=text;
-    }catch(err){
-      console.warn('Troika text disabled:', err);
-    }
+      this.el.appendChild(text); this.el.textEl=text;
+    }catch(err){ console.warn('Troika text disabled:', err); }
   }
 });
 
-/* ============ marker-placer（クラスタ距離: 0.2→0.008） ============ */
+// ============ marker-placer（クラスタ距離スケール連動） ============
 AFRAME.registerComponent('marker-placer',{
   schema:{ maxMarkerMultiplier:{type:'number',default:20} },
-
   init:async function(){
     this.allLocations=[]; this.currentMarkers=[];
     this.cameraEl=document.querySelector('#camera');
-    this.cameraPos=new THREE.Vector3();
-    this.markerPos=new THREE.Vector3();
-    this.earthPos =new THREE.Vector3();
-    this.previousEarthScale=0;
+    this.cameraPos=new THREE.Vector3(); this.markerPos=new THREE.Vector3(); this.earthPos=new THREE.Vector3();
+    this.previousEarthScale=this.el.object3D.scale.x;
 
     // パネルが閉じたらハイライト解除
     this.el.sceneEl.addEventListener('panel-closed', () => {
-      this.currentMarkers.forEach(marker => {
-        var mesh = marker.getObject3D('mesh');
-        if (mesh) mesh.material.color.set('yellow');
-      });
+      this.currentMarkers.forEach(marker => { var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
     });
 
     var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
     try{
       var res=await fetch(sheetUrl,{cache:'no-store'});
       if(res.ok){
-        var text=await res.text();
-        this.allLocations=this.parseCsv(text);
+        var text=await res.text(); this.allLocations=this.parseCsv(text);
       }else{ console.error('CSV fetch failed:', res.status); }
     }catch(e){ console.error("データ取得エラー:",e); }
     this.updateClusters();
-    this.previousEarthScale=this.el.object3D.scale.x;
   },
   parseCsv:function(csvText){
     var locations=[]; var lines=csvText.trim().split('\n');
@@ -349,62 +293,35 @@ AFRAME.registerComponent('marker-placer',{
     for(var i=startIndex;i<lines.length;i++){
       var parts=lines[i].trim().split(',');
       if(parts.length>=4){
-        let lat = parseFloat(parts[1]);
-        let lon = parseFloat(parts[2]);
-
-        // 緯度経度が無効な場合は南極に設定
-        if (isNaN(lat) || isNaN(lon)) {
-          lat = -90; // 南極
-          lon = 0;
-        }
-
-        locations.push({
-          title: parts[0].replace(/"/g,''),
-          lat: lat,
-          lon: lon,
-          url: parts[3].replace(/"/g,'')
-        });
+        let lat=parseFloat(parts[1]); let lon=parseFloat(parts[2]);
+        if(isNaN(lat)||isNaN(lon)){ lat=-90; lon=0; } // ★ 緯度経度欠落時は南極
+        locations.push({ title: parts[0].replace(/"/g,''), lat: lat, lon: lon, url: parts[3].replace(/"/g,'') });
       }
     }
     return locations;
   },
-
   computeThreshold:function(){
-    var s = this.el.object3D.scale.x;
-    var t = (s - 1.0) / (3.0 - 1.0);
-    return 0.2 - t * (0.2 - 0.008);
+    var s=this.el.object3D.scale.x; var t=(s-1)/(3-1); return 0.2 - t*(0.2-0.008);
   },
-
   updateClusters:function(){
-    this.currentMarkers.forEach(m=>{ if(m && m.parentNode) m.parentNode.removeChild(m); });
-    this.currentMarkers=[];
-
-    var th=this.computeThreshold();
-    var unclustered=this.allLocations.slice();
-    var clusters=[];
+    this.currentMarkers.forEach(m=>{ if(m && m.parentNode) m.parentNode.removeChild(m); }); this.currentMarkers=[];
+    var th=this.computeThreshold(); var unclustered=this.allLocations.slice(); var clusters=[];
     while(unclustered.length>0){
-      var p=unclustered.shift();
-      var cluster=[p];
-      var rest=[];
+      var p=unclustered.shift(); var cluster=[p]; var rest=[];
       for(var i2=0;i2<unclustered.length;i2++){
-        var q=unclustered[i2];
-        var dist=this.haversineDistance(p,q);
+        var q=unclustered[i2]; var dist=this.haversineDistance(p,q);
         if(dist<th) cluster.push(q); else rest.push(q);
       }
       unclustered=rest; clusters.push(cluster);
     }
     this.placeMarkersFromClusters(clusters);
   },
-
   placeMarkersFromClusters:function(clusters){
-    var R=this.el.getAttribute('geometry').radius;
-    var self=this;
+    var R=this.el.getAttribute('geometry').radius; var self=this;
     clusters.forEach(function(cluster){
-      var lat=0,lon=0; cluster.forEach(function(p){lat+=p.lat;lon+=p.lon;}); lat/=cluster.length; lon/=cluster.length;
-
+      var lat=0,lon=0; cluster.forEach(p=>{lat+=p.lat;lon+=p.lon;}); lat/=cluster.length; lon/=cluster.length;
       var pos=self.latLonTo3D(lat,lon,R);
       var marker=document.createElement('a-entity'); marker.setAttribute('position',pos);
-
       var yAxis=pos.clone().normalize(), worldUp=new THREE.Vector3(0,1,0);
       var xAxis=new THREE.Vector3().crossVectors(worldUp,yAxis).normalize(); if(xAxis.length()===0) xAxis.set(1,0,0);
       var zAxis=new THREE.Vector3().crossVectors(xAxis,yAxis);
@@ -414,65 +331,37 @@ AFRAME.registerComponent('marker-placer',{
       marker.setAttribute('hex-marker',{count:cluster.length});
       marker.classList.add('collidable');
       marker.dataset.locations=JSON.stringify(cluster);
+      marker.addEventListener('mouseenter',()=>{ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('green'); });
+      marker.addEventListener('mouseleave',()=>{ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
+      marker.addEventListener('click', e=>{ if(window.__panelOpen) return; openPanel(JSON.parse(e.currentTarget.dataset.locations)); });
 
-      marker.addEventListener('mouseenter',function(){ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('green'); });
-      marker.addEventListener('mouseleave',function(){ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
-      marker.addEventListener('click', function(e){ if(window.__panelOpen) return; openPanel(JSON.parse(e.currentTarget.dataset.locations)); });
-
-      self.el.appendChild(marker);
-      self.currentMarkers.push(marker);
+      self.el.appendChild(marker); self.currentMarkers.push(marker);
     });
     refreshAllRaycasters();
   },
-
-  haversineDistance:function(a,b){
-    function toRad(x){ return x*Math.PI/180; }
+  haversineDistance:function(a,b){ function toRad(x){ return x*Math.PI/180; }
     var dLat=toRad(b.lat-a.lat), dLon=toRad(b.lon-a.lon);
     var lat1=toRad(a.lat), lat2=toRad(b.lat);
-    var h=Math.sin(dLat/2)*Math.sin(dLat/2) + Math.sin(dLon/2)*Math.sin(dLon/2)*Math.cos(lat1)*Math.cos(lat2);
-    return 2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
-  },
-
+    var h=Math.sin(dLat/2)**2 + Math.sin(dLon/2)**2 * Math.cos(lat1)*Math.cos(lat2);
+    return 2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)); },
   tick:function(){
     if(this.currentMarkers.length===0 || !this.cameraEl) return;
-
-    var s=this.el.object3D.scale.x;
-    if(Math.abs(s-this.previousEarthScale)>0.1){ this.updateClusters(); this.previousEarthScale=s; }
-
-    this.el.object3D.getWorldPosition(this.earthPos);
-    this.cameraEl.object3D.getWorldPosition(this.cameraPos);
-
-    var t=(s-1)/(3-1);
-    var markerScale=this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier-1);
-
+    var s=this.el.object3D.scale.x; if(Math.abs(s-this.previousEarthScale)>0.1){ this.updateClusters(); this.previousEarthScale=s; }
+    this.el.object3D.getWorldPosition(this.earthPos); this.cameraEl.object3D.getWorldPosition(this.cameraPos);
+    var t=(s-1)/(3-1); var markerScale=this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier-1);
     for(var i=0;i<this.currentMarkers.length;i++){
-      var marker=this.currentMarkers[i];
-      marker.object3D.scale.set(markerScale,markerScale,markerScale);
+      var marker=this.currentMarkers[i]; marker.object3D.scale.set(markerScale,markerScale,markerScale);
       marker.object3D.getWorldPosition(this.markerPos);
-      var normal=this.markerPos.clone().sub(this.earthPos).normalize();
-      var camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
-      var visible=(normal.dot(camDir)<0);
-      marker.object3D.visible=visible;
-      if(marker.textEl) marker.textEl.object3D.visible=visible;
+      var normal=this.markerPos.clone().sub(this.earthPos).normalize(); var camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
+      var visible=(normal.dot(camDir)<0); marker.object3D.visible=visible; if(marker.textEl) marker.textEl.object3D.visible=visible;
     }
   },
-
-  latLonTo3D:function(lat,lon,R){
-    var phi=(90-lat)*(Math.PI/180), theta=(lon+180)*(Math.PI/180);
-    return new THREE.Vector3(
-      -(R*Math.sin(phi)*Math.cos(theta)),
-      R*Math.cos(phi),
-      R*Math.sin(phi)*Math.sin(theta)
-    );
-  }
+  latLonTo3D:function(lat,lon,R){ var phi=(90-lat)*(Math.PI/180), theta=(lon+180)*(Math.PI/180);
+    return new THREE.Vector3( -(R*Math.sin(phi)*Math.cos(theta)), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta)); }
 });
 </script>
 
-<a-scene
-  renderer="highRefreshRate: true"
-  vr-mode-ui="enabled: true"
-  webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
-
+<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
 
@@ -483,9 +372,7 @@ AFRAME.registerComponent('marker-placer',{
 
   <a-entity id="rig">
     <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 1.6 0" look-controls="enabled: false">
-      <a-entity id="mouseCursor"
-                cursor="rayOrigin: mouse; fuse: false"
-                raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50"></a-entity>
+      <a-entity id="mouseCursor" cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50"></a-entity>
     </a-entity>
 
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
@@ -494,92 +381,53 @@ AFRAME.registerComponent('marker-placer',{
               laser-controls="hand: right"
               oculus-touch-controls="hand: right"
               raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50; showLine: true"
-              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend" visible="false">
+              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"
+              visible="false">
     </a-entity>
   </a-entity>
 
-  <!-- 画面右側のコントロール群（既存） -->
+  <!-- 画面右側のコントロール群 -->
   <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
-    <a-entity geometry="primitive: plane; width: 0.5; height: 0.7"
-              material="color: #333; opacity: 0.7"></a-entity>
+    <a-entity geometry="primitive: plane; width: 0.5; height: 0.7" material="color: #333; opacity: 0.7"></a-entity>
 
-    <a-entity id="btn-rot-up" class="ui collidable"
-              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
-              position="0.01 0.25 0.01">
+    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.25 0.01">
       <a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
-    <a-entity id="btn-rot-down" class="ui collidable"
-              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
-              position="0.01 -0.25 0.01">
+    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.25 0.01">
       <a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
-    <a-entity id="btn-rot-left" class="ui collidable"
-              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
-              position="-0.14 0 0.01">
+    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.14 0 0.01">
       <a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
-    <a-entity id="btn-rot-right" class="ui collidable"
-              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
-              position="0.165 0 0.01">
+    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.165 0 0.01">
       <a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
 
-    <a-entity id="btn-zoom-in" class="ui collidable"
-              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
-              position="0.01 0.07 0.01">
+    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.07 0.01">
       <a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
-    <a-entity id="btn-zoom-out" class="ui collidable"
-              geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0"
-              position="0.01 -0.07 0.01">
+    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.07 0.01">
       <a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
     </a-entity>
   </a-entity>
 
   <a-sky color="#ECECEC"></a-sky>
 
-<script>
-AFRAME.registerComponent('vr-ray-toggle',{
-  init: function(){
-    var scene = this.el.sceneEl || this.el;
-    var right = document.getElementById('right-hand');
-    var mouse = document.getElementById('mouseCursor');
-    function setAttr(el, comp, prop, val){
-      if(!el) return;
-      try{ el.setAttribute(comp, prop, val); }catch(e){}
+  <script>
+  // VR入り/抜け時のレイ有効切替
+  AFRAME.registerComponent('vr-ray-toggle',{
+    init:function(){
+      var scene=this.el.sceneEl||this.el; var right=document.getElementById('right-hand'); var mouse=document.getElementById('mouseCursor');
+      function setAttr(el, comp, prop, val){ if(!el) return; try{ el.setAttribute(comp, prop, val); }catch(e){} }
+      function enableVRRay(){ if(right){ right.setAttribute('visible',true); setAttr(right,'raycaster','enabled',true); setAttr(right,'cursor','enabled',true);} if(mouse){ setAttr(mouse,'raycaster','enabled',false); setAttr(mouse,'cursor','enabled',false);} }
+      function disableVRRay(){ if(right){ right.setAttribute('visible',false); setAttr(right,'raycaster','enabled',false); setAttr(right,'cursor','enabled',false);} if(mouse){ setAttr(mouse,'raycaster','enabled',true); setAttr(mouse,'cursor','enabled',true);} }
+      disableVRRay(); scene.addEventListener('enter-vr', enableVRRay); scene.addEventListener('exit-vr', disableVRRay);
     }
-    function enableVRRay(){
-      if(right){
-        right.setAttribute('visible', true);
-        setAttr(right,'raycaster','enabled',true);
-        setAttr(right,'cursor','enabled',true);
-      }
-      if(mouse){
-        setAttr(mouse,'raycaster','enabled',false);
-        setAttr(mouse,'cursor','enabled',false);
-      }
-    }
-    function disableVRRay(){
-      if(right){
-        right.setAttribute('visible', false);
-        setAttr(right,'raycaster','enabled',false);
-        setAttr(right,'cursor','enabled',false);
-      }
-      if(mouse){
-        setAttr(mouse,'raycaster','enabled',true);
-        setAttr(mouse,'cursor','enabled',true);
-      }
-    }
-    disableVRRay();
-    scene.addEventListener('enter-vr', enableVRRay);
-    scene.addEventListener('exit-vr', disableVRRay);
-  }
-});
-</script>
-
+  });
+  </script>
 </a-scene>
 
-<!-- ▼▼▼ パネルUI：ジョイスティック + ▲/▼ 長押し対応（全面版） ▼▼▼ -->
+<!-- ▼▼▼ パネルUI（VRジョイスティック：WebXR/Gamepad ポーリング方式） ▼▼▼ -->
 <script>
 (function(){
   'use strict';
@@ -589,63 +437,35 @@ AFRAME.registerComponent('vr-ray-toggle',{
   const BTN_R=0.045, BTN_FS=0.06;
   const PANEL_FONT_URL = (typeof FONT_URL!=='undefined')?FONT_URL:(window.FONT_URL||'static/NotoSansJP-Regular.ttf');
   const FONT_SIZE=0.035, LINE_HEIGHT=1.35, EXTRA=Math.max(0.006, FONT_SIZE*0.38);
-  const FUDGE_FIXED=FONT_SIZE*0.10;
-  const FUDGE_PERLINE=FONT_SIZE*0.10;
-  const EST_COLS=19;
-  const EST_SCALE=1.08;
+  const FUDGE_FIXED=FONT_SIZE*0.10, FUDGE_PERLINE=FONT_SIZE*0.10, EST_COLS=19, EST_SCALE=1.08;
 
-  // 既存：動的リスナー参照
-  let currentOnWheelListener = null;
-  let currentAxisMoveListener = null;
+  // ★FIX2: ジョイスティック・ポーリング用パラメータ
+  const JOY_DEADZONE = 0.15;   // 無効域
+  const JOY_SPEED    = 0.010;  // スクロール係数（大きいほど速い）
 
-  // ★FIX: 追加 — ジョイスティック（thumbstickmoved）持続スクロール制御
-  let currentThumbstickListener = null;           // 右スティック専用
-  let joyY = 0;                                   // 現在のスティックY
-  let joyLoopId = null;                           // RAF ループID
-
-  // ★FIX: 追加 — ▲/▼ 長押しの連続実行ハンドル
-  let holdTimerUp = null;
-  let holdTimerDn = null;
+  // 状態ハンドル
+  let currentOnWheelListener=null;
+  let holdTimerUp=null, holdTimerDn=null;
+  let joyPollId=null; // requestAnimationFrame のID（パネル開時のみ稼働）
 
   function setCardFrame(row,w,h){
     const bw=0.003, edge=EDGE_COL;
-    let bg=row.querySelector('.list-bg'); if(!bg){bg=document.createElement('a-entity'); bg.classList.add('ui','list-bg','collidable'); row.appendChild(bg);}
+    let bg=row.querySelector('.list-bg'); if(!bg){ bg=document.createElement('a-entity'); bg.classList.add('ui','list-bg','collidable'); row.appendChild(bg); }
     bg.setAttribute('geometry',`primitive:plane;width:${w};height:${h}`);
     bg.setAttribute('material',`shader:flat;color:${row.dataset.baseColor};opacity:0.95;transparent:true;side:double`);
     bg.setAttribute('position',`${w/2} ${-h/2} 0`);
-    const ensure=cls=>{let e=row.querySelector('.'+cls); if(!e){e=document.createElement('a-entity'); e.classList.add('ui',cls); row.appendChild(e);} e.setAttribute('material',`shader:flat;color:${edge};transparent:true;opacity:1;side:double`); return e;};
-    const top=ensure('list-border-top'),bottom=ensure('list-border-bottom'),left=ensure('list-border-left'),right=ensure('list-border-right');
+    const ensure=cls=>{ let e=row.querySelector('.'+cls); if(!e){ e=document.createElement('a-entity'); e.classList.add('ui',cls); row.appendChild(e);} e.setAttribute('material',`shader:flat;color:${edge};transparent:true;opacity:1;side:double`); return e; };
+    const top=ensure('list-border-top'), bottom=ensure('list-border-bottom'), left=ensure('list-border-left'), right=ensure('list-border-right');
     top.setAttribute('geometry',`primitive:plane;width:${w};height:${bw}`); bottom.setAttribute('geometry',`primitive:plane;width:${w};height:${bw}`);
     left.setAttribute('geometry',`primitive:plane;width:${bw};height:${h}`); right.setAttribute('geometry',`primitive:plane;width:${bw};height:${h}`);
     top.setAttribute('position',`${w/2} ${-bw/2} 0.001`); bottom.setAttribute('position',`${w/2} ${-(h-bw/2)} 0.001`);
     left.setAttribute('position',`${bw/2} ${-h/2} 0.001`); right.setAttribute('position',`${w-bw/2} ${-h/2} 0.001`);
   }
-  function setRowBgColor(row,color){const bg=row.querySelector('.list-bg'); if(bg){const mat=bg.getAttribute('material')||{},opa=(typeof mat.opacity==='number')?mat.opacity:0.95; bg.setAttribute('material',`shader:flat;color:${color};opacity:${opa};transparent:true;side:double`);} }
-
-  function readBlockBoundsFrom(txtEl){
-    const mesh = txtEl.getObject3D('text') || txtEl.getObject3D('mesh') || null;
-    const info = mesh && (mesh.textRenderInfo || mesh._textRenderInfo) || (txtEl.components && txtEl.components['troika-text'] && txtEl.components['troika-text'].textRenderInfo);
-    return (info && info.blockBounds) ? info.blockBounds : null;
-  }
-  function pollHeight(txtEl, tries, cb){
-    (function loop(n){
-      const b=readBlockBoundsFrom(txtEl);
-      if(b){ return cb(b[3]-b[1]); }
-      if(n<=0) return cb(null);
-      requestAnimationFrame(()=>loop(n-1));
-    })(tries);
-  }
-  function sanitizeTitle(s){
-    return String(s||'').replace(/\r\n?/g,'\n').replace(/^\s+|\s+$/g,'').replace(/\n{2,}/g,'\n');
-  }
-  function countLinesByCols(title, cols){
-    const parts=String(title||'').split('\n'); let lines=0;
-    for(const p of parts){
-      let c=0; for(const ch of p){ const w=/[ -~]/.test(ch)?0.5:1; if(c+w>cols){lines++; c=w;} else c+=w; }
-      lines++;
-    }
-    return lines;
-  }
+  function setRowBgColor(row,color){ const bg=row.querySelector('.list-bg'); if(bg){ const mat=bg.getAttribute('material')||{}, opa=(typeof mat.opacity==='number')?mat.opacity:0.95; bg.setAttribute('material',`shader:flat;color:${color};opacity:${opa};transparent:true;side:double`);} }
+  function readBlockBoundsFrom(txtEl){ const mesh=txtEl.getObject3D('text')||txtEl.getObject3D('mesh')||null; const info=mesh&&(mesh.textRenderInfo||mesh._textRenderInfo)||(txtEl.components&&txtEl.components['troika-text']&&txtEl.components['troika-text'].textRenderInfo); return (info&&info.blockBounds)? info.blockBounds : null; }
+  function pollHeight(txtEl, tries, cb){ (function loop(n){ const b=readBlockBoundsFrom(txtEl); if(b){ return cb(b[3]-b[1]); } if(n<=0) return cb(null); requestAnimationFrame(()=>loop(n-1)); })(tries); }
+  function sanitizeTitle(s){ return String(s||'').replace(/\r\n?/g,'\n').replace(/^\s+|\s+$/g,'').replace(/\n{2,}/g,'\n'); }
+  function countLinesByCols(title, cols){ const parts=String(title||'').split('\n'); let lines=0; for(const p of parts){ let c=0; for(const ch of p){ const w=/[ -~]/.test(ch)?0.5:1; if(c+w>cols){lines++; c=w;} else c+=w; } lines++; } return lines; }
 
   function openPanel(locations){
     closePanel();
@@ -660,43 +480,39 @@ AFRAME.registerComponent('vr-ray-toggle',{
     track.setAttribute('geometry',`primitive:plane;width:${PANEL.SCROLL_TRACK_W};height:${PANEL.SCROLL_TRACK_H}`);
     track.setAttribute('material',`shader:flat;color:#1f2a38;opacity:0.9;transparent:true;side:double`);
     track.setAttribute('position',`${rightX} 0 0.05`); panel.appendChild(track);
+
     const thumb=document.createElement('a-entity'); thumb.classList.add('ui','scroll-thumb','collidable');
     thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:0.10`);
     thumb.setAttribute('material','shader:flat;color:#7fa7ff;opacity:0.85;transparent:true;side:double');
     thumb.setAttribute('position',`${rightX} 0 0.051`); panel.appendChild(thumb);
-    const mkBtn=(y,ch)=>{const b=document.createElement('a-entity'); b.classList.add('ui','collidable'); b.setAttribute('geometry',`primitive:circle;radius:${BTN_R};segments:48`);
+
+    const mkBtn=(y,ch)=>{ const b=document.createElement('a-entity'); b.classList.add('ui','collidable'); b.setAttribute('geometry',`primitive:circle;radius:${BTN_R};segments:48`);
       b.setAttribute('material','shader:flat;color:#243246;opacity:0.95;transparent:true;side:double'); b.setAttribute('position',`${rightX} ${y} 0.05`);
       const t=document.createElement('a-entity'); t.setAttribute('troika-text',{value:ch,fontSize:BTN_FS,color:'#cfe3ff',anchor:'center',baseline:'middle',font:PANEL_FONT_URL}); t.setAttribute('position','0 0 0.001'); b.appendChild(t); return b; };
     const btnUp=mkBtn(0.50,'▲'), btnDn=mkBtn(-0.50,'▼'); panel.appendChild(btnUp); panel.appendChild(btnDn);
 
     const closeY = 0.50 + (BTN_R*2 + 0.015);
-    const btnClose = mkBtn(closeY, '×');
-    panel.appendChild(btnClose);
-    btnClose.addEventListener('mousedown', ()=>{ try{ closePanel(); }catch(e){ if (typeof window.closePanel==='function') window.closePanel(); } }); // ★FIX: click→mousedown
+    const btnClose = mkBtn(closeY, '×'); panel.appendChild(btnClose);
+    btnClose.addEventListener('mousedown', ()=>{ try{ closePanel(); }catch(e){ if (typeof window.closePanel==='function') window.closePanel(); } }); // mousedownで確実に
 
     const listGroup=document.createElement('a-entity'); listGroup.classList.add('list-group'); listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP} 0.02`); panel.appendChild(listGroup);
 
-    const maxWidth=PANEL.TEXT_MAX_W-0.002;
-    const rows=[], estHeights=[], realH=[], estLinesList=[];
+    const maxWidth=PANEL.TEXT_MAX_W-0.002; const rows=[], estHeights=[], realH=[], estLinesList=[];
     (locations||[]).forEach((loc,i)=>{
       const row=document.createElement('a-entity'); row.classList.add('ui','list-entry','collapsible','collidable');
-      const title = sanitizeTitle(loc.title);
-      row.dataset.title=title; row.dataset.url=String(loc.url??''); row.dataset.baseColor=(i%2===0)?ZEBRA_A:ZEBRA_B;
+      const title=sanitizeTitle(loc.title); row.dataset.title=title; row.dataset.url=String(loc.url??''); row.dataset.baseColor=(i%2===0)?ZEBRA_A:ZEBRA_B;
       const txt=document.createElement('a-entity'); txt.classList.add('ui','list-text');
       txt.setAttribute('troika-text',{ value:row.dataset.title, fontSize:FONT_SIZE, lineHeight:LINE_HEIGHT, maxWidth,
-        anchor:'left', baseline:'top', color:'#fff', outlineWidth:0.004, outlineColor:'#000',
-        overflowWrap:'break-word', whiteSpace:'pre-wrap', clipRect:`0 -9999 ${maxWidth} 9999`, font:PANEL_FONT_URL });
+        anchor:'left', baseline:'top', color:'#fff', outlineWidth:0.004, outlineColor:'#000', overflowWrap:'break-word', whiteSpace:'pre-wrap', clipRect:`0 -9999 ${maxWidth} 9999`, font:PANEL_FONT_URL });
       txt.setAttribute('position',`${PANEL.PAD_X} ${-PANEL.PAD_Y} 0.002`);
       row.appendChild(txt);
-      row.addEventListener('mousedown',()=>{const u=row.dataset.url; if(u) try{window.open(u,'_blank');}catch(_){}}); // ★FIX: click→mousedown（VRレイ移動対策）
+      row.addEventListener('mousedown',()=>{ const u=row.dataset.url; if(u) try{ window.open(u,'_blank'); }catch(_){ } });
       row.addEventListener('mouseenter',()=>setRowBgColor(row,HOVER_BG));
       row.addEventListener('mouseleave',()=>setRowBgColor(row,row.dataset.baseColor));
       listGroup.appendChild(row); rows.push(row);
 
-      const estLines = countLinesByCols(title, EST_COLS);
-      estLinesList.push(estLines);
-      const estH = Math.max( estLines * FONT_SIZE * LINE_HEIGHT, FONT_SIZE*LINE_HEIGHT) * EST_SCALE;
-      estHeights.push(estH);
+      const estLines = countLinesByCols(title, EST_COLS); estLinesList.push(estLines);
+      const estH = Math.max( estLines * FONT_SIZE * LINE_HEIGHT, FONT_SIZE*LINE_HEIGHT) * EST_SCALE; estHeights.push(estH);
       realH.push(null);
     });
 
@@ -704,117 +520,94 @@ AFRAME.registerComponent('vr-ray-toggle',{
     let totalHeight=0, maxOffset=0, currentOffset=0, targetOffset=0, rafId=null;
 
     function reflow(){
-      let y=0;
-      rows.forEach((row,i)=>{
-        const lines = estLinesList[i];
-        const baseH = (realH[i] ?? estHeights[i]);
-        const th = baseH + FUDGE_FIXED + FUDGE_PERLINE * Math.max(1, lines);
-        const boxH = th + 2*PANEL.PAD_Y + EXTRA;
-        const boxW = PANEL.TEXT_MAX_W + 2*PANEL.PAD_X;
-        row._boxH = boxH;
-        row.setAttribute('position',`${PANEL.CONTENT_LEFT} ${-y} 0.03`);
-        setCardFrame(row, boxW, boxH);
+      let y=0; rows.forEach((row,i)=>{
+        const lines=estLinesList[i]; const baseH=(realH[i]??estHeights[i]);
+        const th=baseH + FUDGE_FIXED + FUDGE_PERLINE * Math.max(1, lines);
+        const boxH = th + 2*PANEL.PAD_Y + EXTRA; const boxW = PANEL.TEXT_MAX_W + 2*PANEL.PAD_X;
+        row._boxH=boxH; row.setAttribute('position',`${PANEL.CONTENT_LEFT} ${-y} 0.03`); setCardFrame(row, boxW, boxH);
         y += boxH + PANEL.GAP;
       });
       totalHeight=Math.max(0,y-PANEL.GAP); maxOffset=Math.max(0,totalHeight-viewportH);
       setOffset(currentOffset,true); updateScrollbar();
     }
 
-    rows.forEach((row,i)=>{ const txt=row.querySelector('.list-text'); pollHeight(txt, 140, (h)=>{ if(h!=null){ realH[i]=h; reflow(); } }); });
+    rows.forEach((row,i)=>{ const txt=row.querySelector('.list-text'); pollHeight(txt, 140, h=>{ if(h!=null){ realH[i]=h; reflow(); } }); });
     setTimeout(reflow, 400); setTimeout(reflow, 1000); setTimeout(reflow, 2000); setTimeout(reflow, 3000);
 
     function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP + currentOffset} 0.02`); }
-    function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){currentOffset=targetOffset; applyOffset(); updateScrollbar(); return;} if(!rafId) animate(); }
+    function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){ currentOffset=targetOffset; applyOffset(); updateScrollbar(); return; } if(!rafId) animate(); }
     function animate(){ rafId=requestAnimationFrame(animate); const d=targetOffset-currentOffset; if(Math.abs(d)<0.0005){ currentOffset=targetOffset; cancelAnimationFrame(rafId); rafId=null; } else { currentOffset+=d*0.18; } applyOffset(); updateScrollbar(); }
-    function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1;
-      const thumbH=Math.max(0.06,H*frac); const denom=Math.max(1e-6,maxOffset); const t=denom>0?(currentOffset/denom):0; const top=H/2-thumbH/2; const y=top - t*(H-thumbH);
-      thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:${thumbH}`); thumb.setAttribute('position',`${rightX} ${y} 0.051`);
-    }
+    function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1; const thumbH=Math.max(0.06,H*frac);
+      const denom=Math.max(1e-6,maxOffset); const t=denom>0?(currentOffset/denom):0; const top=H/2-thumbH/2; const y=top - t*(H-thumbH);
+      thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:${thumbH}`); thumb.setAttribute('position',`${rightX} ${y} 0.051`); }
 
-    // マウスホイール
-    const onWheel=(e)=>{const k=0.0018*viewportH; setOffset(currentOffset+e.deltaY*k);};
-    currentOnWheelListener = onWheel;
+    // マウスホイール（非VR）
+    currentOnWheelListener = (e)=>{ const k=0.0018*viewportH; setOffset(currentOffset+e.deltaY*k); };
     window.addEventListener('wheel', currentOnWheelListener, {passive:true});
 
-    // ▲/▼：単押し & 長押し（mousedownで即時発火、mouseup/leaveで停止） ★FIX
-    const step = () => viewportH*0.85;
-    const startHold = (dir)=> {
-      const delta = (dir>0)? step(): -step();
-      setOffset(currentOffset + delta, false);
-      return setInterval(()=> setOffset(currentOffset + delta, false), 120);
-    };
-    btnDn.addEventListener('mousedown',()=>{ if(holdTimerDn) clearInterval(holdTimerDn); holdTimerDn = startHold(+1); });
-    btnUp.addEventListener('mousedown',()=>{ if(holdTimerUp) clearInterval(holdTimerUp); holdTimerUp = startHold(-1); });
+    // ▲/▼：単押し & 長押し
+    const step = ()=> viewportH*0.85;
+    const startHold = (dir)=>{ const delta=(dir>0)? step(): -step(); setOffset(currentOffset+delta,false); return setInterval(()=>setOffset(currentOffset+delta,false), 120); };
     const stopHolds = ()=>{ if(holdTimerUp){clearInterval(holdTimerUp);holdTimerUp=null;} if(holdTimerDn){clearInterval(holdTimerDn);holdTimerDn=null;} };
-    btnDn.addEventListener('mouseup', stopHolds);
-    btnUp.addEventListener('mouseup', stopHolds);
-    btnDn.addEventListener('mouseleave', stopHolds);
-    btnUp.addEventListener('mouseleave', stopHolds);
+    btnDn.addEventListener('mousedown',()=>{ if(holdTimerDn) clearInterval(holdTimerDn); holdTimerDn=startHold(+1); });
+    btnUp.addEventListener('mousedown', ()=>{ if(holdTimerUp) clearInterval(holdTimerUp); holdTimerUp=startHold(-1); });
+    btnDn.addEventListener('mouseup', stopHolds); btnUp.addEventListener('mouseup', stopHolds);
+    btnDn.addEventListener('mouseleave', stopHolds); btnUp.addEventListener('mouseleave', stopHolds);
 
-    // トラッククリック
-    track.addEventListener('mousedown',(e)=>{const p=e.detail&&e.detail.intersection?e.detail.intersection.point:null; if(!p) return;
-      const local=track.object3D.worldToLocal(p.clone()); if(local.y>0) setOffset(currentOffset-step()); else setOffset(currentOffset+step()); });
+    // スクロールトラック押下でページング
+    track.addEventListener('mousedown',(e)=>{
+      const p=e.detail&&e.detail.intersection? e.detail.intersection.point : null; if(!p) return;
+      const local=track.object3D.worldToLocal(p.clone()); if(local.y>0) setOffset(currentOffset-step()); else setOffset(currentOffset+step());
+    });
 
-    // ★FIX: VRジョイスティック（thumbstickmoved + axismove の両対応） + 継続スクロール
-    const rightHand = document.querySelector('#right-hand');
-    const deadzone = 0.15;
-    const joySpeed = 0.008; // 調整可：スティック感度
+    // ★FIX2: VRジョイスティック（右スティックY）を WebXR / Gamepad から毎フレーム取得
+    function getRightThumbY(){
+      // 1) WebXR inputSources から
+      try{
+        const scene = AFRAME.scenes && AFRAME.scenes[0];
+        const session = scene && scene.renderer && scene.renderer.xr && scene.renderer.xr.getSession && scene.renderer.xr.getSession();
+        if(session && session.inputSources){
+          for(const src of session.inputSources){
+            if(src && src.handedness==='right' && src.gamepad && src.gamepad.axes){
+              const ax = src.gamepad.axes;
+              // 4軸 (0,1:left; 2,3:right) or 2軸 (0,1:right)
+              let y = (typeof ax[3]==='number')? ax[3] : (typeof ax[1]==='number'? ax[1] : 0);
+              if (isFinite(y)) return y;
+            }
+          }
+        }
+      }catch(_){ /* ignore */ }
+      // 2) navigator.getGamepads() から（互換）
+      try{
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        for(const p of pads){ if(!p || !p.connected) continue; const ax=p.axes||[]; if(ax.length>=4){ if (Math.abs(ax[3])>Math.abs(ax[1]||0)) return ax[3]; return ax[1]||0; } if(ax.length>=2){ return ax[1]||0; } }
+      }catch(_){ /* ignore */ }
+      return 0;
+    }
 
-    function applyJoy(){
-      if(!window.__panelOpen){ joyY = 0; joyLoopId && cancelAnimationFrame(joyLoopId); joyLoopId=null; return; }
-      if (Math.abs(joyY) > deadzone){
-        const delta = -joyY * joySpeed * viewportH;
+    function joyLoop(){
+      if(!window.__panelOpen){ joyPollId=null; return; }
+      const y = getRightThumbY();
+      if (Math.abs(y) > JOY_DEADZONE){
+        const delta = -y * JOY_SPEED * viewportH; // 上で正方向に
         setOffset(currentOffset + delta, false);
       }
-      joyLoopId = requestAnimationFrame(applyJoy);
+      joyPollId = requestAnimationFrame(joyLoop);
     }
 
-    currentThumbstickListener = (e)=>{
-      if (typeof e.detail?.y === 'number'){
-        joyY = e.detail.y;
-        if(!joyLoopId) applyJoy();
-      }
-    };
-    currentAxisMoveListener = (e)=>{
-      const a = (e.detail && e.detail.axis) ? e.detail.axis : [];
-      const y = (typeof a[3] === 'number') ? a[3] : (typeof a[1] === 'number' ? a[1] : 0);
-      joyY = y;
-      if(!joyLoopId) applyJoy();
-    };
-    if (rightHand) {
-      rightHand.addEventListener('thumbstickmoved', currentThumbstickListener); // 推奨
-      rightHand.addEventListener('axismove', currentAxisMoveListener);          // 互換
-    }
-
-    window.__panelOpen=true;
-    if(typeof setRaycasterTargets==='function') setRaycasterTargets(true);
-    if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
+    window.__panelOpen=true; if(typeof setRaycasterTargets==='function') setRaycasterTargets(true); if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
     panel.sceneEl && panel.sceneEl.emit('panel-opened');
+
+    // ループ開始
+    if(!joyPollId) joyLoop();
   }
 
   function closePanel(){
-    const p=document.getElementById('vrPanel');
-    if(p&&p.parentNode) p.parentNode.removeChild(p);
+    const p=document.getElementById('vrPanel'); if(p&&p.parentNode) p.parentNode.removeChild(p);
 
-    if (currentOnWheelListener) {
-      window.removeEventListener('wheel', currentOnWheelListener);
-      currentOnWheelListener = null;
-    }
-
-    // ★FIX: ▲/▼ 長押し停止
-    if (typeof clearInterval === 'function'){
-      if(holdTimerUp){ clearInterval(holdTimerUp); holdTimerUp=null; }
-      if(holdTimerDn){ clearInterval(holdTimerDn); holdTimerDn=null; }
-    }
-
-    // ★FIX: ジョイスティックループ＆リスナー停止
-    if (joyLoopId){ cancelAnimationFrame(joyLoopId); joyLoopId=null; }
-    joyY = 0;
-    const rightHand = document.querySelector('#right-hand');
-    if (rightHand){
-      if (currentThumbstickListener){ rightHand.removeEventListener('thumbstickmoved', currentThumbstickListener); currentThumbstickListener=null; }
-      if (currentAxisMoveListener){ rightHand.removeEventListener('axismove', currentAxisMoveListener); currentAxisMoveListener=null; }
-    }
+    if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
+    if(holdTimerUp){ clearInterval(holdTimerUp); holdTimerUp=null; } if(holdTimerDn){ clearInterval(holdTimerDn); holdTimerDn=null; }
+    if(joyPollId){ cancelAnimationFrame(joyPollId); joyPollId=null; }
 
     window.__panelOpen=false; if(AFRAME.scenes&&AFRAME.scenes[0]) AFRAME.scenes[0].emit('panel-closed');
     if(typeof setRaycasterTargets==='function') setRaycasterTargets(false); if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
@@ -822,7 +615,7 @@ AFRAME.registerComponent('vr-ray-toggle',{
 
   // グローバル公開
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready v90 (VR joystick + mousedown + hold-scroll)');
+  console.log('panel ready v92 (VR joystick scroll via XR/Gamepad poll)');
 })();
 </script>
 <!-- ▲▲▲ パネルUIここまで ▲▲▲ -->
