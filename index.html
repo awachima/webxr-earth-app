@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — debug mode v95)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — close button fix v97)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -25,7 +25,7 @@
 // ===== 共通ユーティリティ =====
 const FONT_URL = 'static/NotoSansJP-Regular.ttf';
 window.__panelOpen = false;
-window.__rightStick = { y: 0, axes: [] }; // ★FIX: ジョイスティックの状態をオブジェクトで保持
+window.__rightStick = { y: 0, axes: [] };
 
 function refreshAllRaycasters(){
   ['#mouseCursor', '#right-hand'].forEach(function(sel){
@@ -334,19 +334,25 @@ AFRAME.registerComponent('marker-placer',{
     return new THREE.Vector3( -(R*Math.sin(phi)*Math.cos(theta)), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta)); }
 });
 
-// ★FIX: パネルスクロール用のジョイスティックハンドラ
+// Gamepad APIを直接使用するジョイスティックハンドラ
 AFRAME.registerComponent('panel-joy-handler', {
   tick: function () {
     if (!window.__panelOpen) {
-      window.__rightStick.y = 0;
+      if (window.__rightStick.y !== 0) window.__rightStick.y = 0;
       return;
     }
-    const controller = this.el.components['tracked-controls-webxr']?.controller;
-    if (controller && controller.gamepad && controller.gamepad.axes) {
-      const axes = controller.gamepad.axes;
-      // ★FIX: 全ての軸データを保存し、暫定的に4番目(index:3)をY軸として採用
+    let foundGamepad = null;
+    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const gp of gamepads) {
+      if (gp && gp.mapping === 'xr-standard' && gp.hand === 'right') {
+        foundGamepad = gp;
+        break;
+      }
+    }
+    if (foundGamepad) {
+      const axes = foundGamepad.axes;
       window.__rightStick.y = axes[3] || 0;
-      window.__rightStick.axes = Array.from(axes); // デバッグ用に全軸をコピー
+      window.__rightStick.axes = Array.from(axes);
     } else {
       window.__rightStick.y = 0;
       window.__rightStick.axes = [];
@@ -433,6 +439,8 @@ AFRAME.registerComponent('panel-joy-handler', {
   let currentOnWheelListener = null;
   let isHoldingUp = false;
   let isHoldingDown = false;
+  // ★FIX: イベントリスナーを管理するための変数を定義
+  let modeDisplayListeners = {};
 
   function setCardFrame(row,w,h){
     const bw=0.003, edge=EDGE_COL;
@@ -450,7 +458,7 @@ AFRAME.registerComponent('panel-joy-handler', {
   function setRowBgColor(row,color){ const bg=row.querySelector('.list-bg'); if(bg){ const mat=bg.getAttribute('material')||{}, opa=(typeof mat.opacity==='number')?mat.opacity:0.95; bg.setAttribute('material',`shader:flat;color:${color};opacity:${opa};transparent:true;side:double`);} }
   function readBlockBoundsFrom(txtEl){ const mesh=txtEl.getObject3D('text')||txtEl.getObject3D('mesh')||null; const info=mesh&&(mesh.textRenderInfo||mesh._textRenderInfo)||(txtEl.components&&txtEl.components['troika-text']&&txtEl.components['troika-text'].textRenderInfo); return (info&&info.blockBounds)? info.blockBounds : null; }
   function pollHeight(txtEl, tries, cb){ (function loop(n){ const b=readBlockBoundsFrom(txtEl); if(b){ return cb(b[3]-b[1]); } if(n<=0) return cb(null); requestAnimationFrame(()=>loop(n-1)); })(tries); }
-  function sanitizeTitle(s){ return String(s||'').replace(/\r\n?/g,'\n').replace(/^\s+|\s+$/g,'').replace(/\n{2,}/g,'n'); }
+  function sanitizeTitle(s){ return String(s||'').replace(/\r\n?/g,'\n').replace(/^\s+|\s+$/g,'').replace(/\n{2,}/g,'\n'); }
   function countLinesByCols(title, cols){ const parts=String(title||'').split('\n'); let lines=0; for(const p of parts){ let c=0; for(const ch of p){ const w=/[ -~]/.test(ch)?0.5:1; if(c+w>cols){lines++; c=w;} else c+=w; } lines++; } return lines; }
 
   function openPanel(locations){
@@ -461,7 +469,6 @@ AFRAME.registerComponent('panel-joy-handler', {
     if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','');
     scene.appendChild(panel);
 
-    // ★FIX: デバッグ表示用のテキストエンティティを2つに増やす
     const modeDbg = document.createElement('a-entity');
     modeDbg.id = 'modeDebugText';
     modeDbg.setAttribute('troika-text', { value: `MODE: ${scene.is('vr-mode') ? 'vr' : 'desktop'}`, fontSize: 0.03, color: '#9ef', anchor: 'left', baseline: 'top', font: PANEL_FONT_URL });
@@ -472,11 +479,12 @@ AFRAME.registerComponent('panel-joy-handler', {
     joyDbg.setAttribute('troika-text', { value: 'JOY: 0.00 axes:[]', fontSize: 0.03, color: '#9ee', anchor: 'left', baseline: 'top', font: PANEL_FONT_URL });
     joyDbg.setAttribute('position', `${PANEL.CONTENT_LEFT} ${PANEL.CONTENT_TOP + 0.06} 0.06`);
     panel.appendChild(joyDbg);
-    const enterVrListener = () => modeDbg.setAttribute('troika-text', 'value', 'MODE: vr');
-    const exitVrListener = () => modeDbg.setAttribute('troika-text', 'value', 'MODE: desktop');
-    scene.addEventListener('enter-vr', enterVrListener);
-    scene.addEventListener('exit-vr', exitVrListener);
-    panel.dataset.listeners = JSON.stringify({ enter: 'enter-vr', exit: 'exit-vr' }); // 閉じる時にイベント解除するため
+    
+    // ★FIX: リスナーをグローバル変数に保存して、後で解除できるようにする
+    modeDisplayListeners.enter = () => modeDbg.setAttribute('troika-text', 'value', 'MODE: vr');
+    modeDisplayListeners.exit = () => modeDbg.setAttribute('troika-text', 'value', 'MODE: desktop');
+    scene.addEventListener('enter-vr', modeDisplayListeners.enter);
+    scene.addEventListener('exit-vr', modeDisplayListeners.exit);
 
     const rightX=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
     const track=document.createElement('a-entity'); track.classList.add('ui','scroll-track');
@@ -566,7 +574,6 @@ AFRAME.registerComponent('panel-joy-handler', {
       applyOffset();
       updateScrollbar();
 
-      // ★FIX: 全軸の値を表示するようにデバッグ表示を更新
       const axesStr = (window.__rightStick.axes || []).map(n => n.toFixed(2)).join(', ');
       joyDbg.setAttribute('troika-text', 'value', `JOY: ${stickY.toFixed(2)} axes:[${axesStr}]`);
     }
@@ -596,23 +603,27 @@ AFRAME.registerComponent('panel-joy-handler', {
   }
 
   function closePanel(){
-    const p=document.getElementById('vrPanel'); 
-    if(p){
-      const scene = p.sceneEl;
-      if (scene && p.dataset.listeners) {
-        // パネルを開いた時に登録したイベントリスナーをここで解除
-        // （無名関数なので直接は解除できないが、このパネルが消えれば問題ない）
-      }
-      if(p.parentNode) p.parentNode.removeChild(p);
+    const scene = AFRAME.scenes[0];
+    if (scene) {
+      // ★FIX: 保存しておいたリスナーを正しく解除
+      if (modeDisplayListeners.enter) scene.removeEventListener('enter-vr', modeDisplayListeners.enter);
+      if (modeDisplayListeners.exit) scene.removeEventListener('exit-vr', modeDisplayListeners.exit);
+      modeDisplayListeners = {}; // クリア
     }
+
+    const p=document.getElementById('vrPanel'); 
+    if(p && p.parentNode) {
+        p.parentNode.removeChild(p);
+    }
+
     if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
     isHoldingUp = false; isHoldingDown = false;
-    window.__panelOpen=false; if(AFRAME.scenes&&AFRAME.scenes[0]) AFRAME.scenes[0].emit('panel-closed');
+    window.__panelOpen=false; if(scene) scene.emit('panel-closed');
     if(typeof setRaycasterTargets==='function') setRaycasterTargets(false); if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready v95 (debug mode)');
+  console.log('panel ready v97 (close button fix)');
 })();
 </script>
 </body>
