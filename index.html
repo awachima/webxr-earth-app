@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — isolated)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — direct input test)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -197,7 +197,6 @@ AFRAME.registerComponent('earth-controls',{
     if(!p) return null; var ax=p.axes||[]; return { left:{x:ax[0]||0,y:ax[1]||0}, right:{x:ax[2]||0,y:ax[3]||0} };
   },
   tick:function(){
-    // ★FIX: パネルが開いている時は、地球儀に関する全ての操作を停止
     if (window.__panelOpen) {
       return;
     }
@@ -352,10 +351,8 @@ AFRAME.registerComponent('panel-scroll-handler', {
   },
   onAxisMove: function (evt) {
     if (window.__panelOpen) {
-      // 右スティックのY軸(上下)は通常 `axis[3]`
       this.stickY = evt.detail.axis.length > 3 ? evt.detail.axis[3] : 0;
     } else {
-      // パネルが閉じていれば、このコンポーネントは値を持たない
       this.stickY = 0;
     }
   },
@@ -363,7 +360,6 @@ AFRAME.registerComponent('panel-scroll-handler', {
     this.el.removeEventListener('axismove', this.onAxisMove);
   }
 });
-
 </script>
 
 <a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
@@ -529,8 +525,18 @@ AFRAME.registerComponent('panel-scroll-handler', {
       
       const stickY = scrollHandler ? scrollHandler.stickY : 0;
 
+      // ★FIX: ジョイスティックの入力信号を直接「つまみ」のテスト移動に使う
+      const thumbEl = document.querySelector('.scroll-thumb');
+      if (thumbEl) {
+        // 元々のY座標は updateScrollbar で決まるが、テスト中はジョイスティックで上書きする
+        const currentThumbPos = thumbEl.getAttribute('position');
+        const baseThumbY = (currentOffset / maxOffset) * -(PANEL.SCROLL_TRACK_H - 0.10) + (PANEL.SCROLL_TRACK_H/2 - 0.05);
+        // ジョイスティックのY値(-1～1)を、適度な移動量(例: -0.2～0.2)に変換して加算
+        const joyOffset = -stickY * 0.2; 
+        thumbEl.setAttribute('position', 'y', baseThumbY + joyOffset);
+      }
+
       if (Math.abs(stickY) > JOY_DEADZONE) {
-        // スティックを下に倒すとstickYは正の値。リストを下にスクロール(リストは上に動く)させたいのでoffsetは増加させる。
         const delta = stickY * JOY_SPEED * viewportH;
         setOffset(currentOffset + delta, false);
       }
@@ -550,8 +556,10 @@ AFRAME.registerComponent('panel-scroll-handler', {
       } else {
         currentOffset += d * 0.18;
       }
-      applyOffset();
-      updateScrollbar();
+      
+      // テスト中はパネル本体の動きは連動させない
+      // applyOffset();
+      // updateScrollbar();
     }
 
     function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1; const thumbH=Math.max(0.06,H*frac);
@@ -596,7 +604,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready (isolated handler)');
+  console.log('panel ready (direct input visualization test)');
 })();
 </script>
 </body>
