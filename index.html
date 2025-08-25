@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — final isolated)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — isolated)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -355,6 +355,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
       // 右スティックのY軸(上下)は通常 `axis[3]`
       this.stickY = evt.detail.axis.length > 3 ? evt.detail.axis[3] : 0;
     } else {
+      // パネルが閉じていれば、このコンポーネントは値を持たない
       this.stickY = 0;
     }
   },
@@ -362,6 +363,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     this.el.removeEventListener('axismove', this.onAxisMove);
   }
 });
+
 </script>
 
 <a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
@@ -428,7 +430,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
   let currentOnWheelListener = null;
   let isHoldingUp = false;
   let isHoldingDown = false;
-  let scrollHandler = null; // ★FIX: panel-scroll-handlerへの参照を保持
+  let scrollHandler = null;
 
   function setCardFrame(row,w,h){
     const bw=0.003, edge=EDGE_COL;
@@ -457,7 +459,6 @@ AFRAME.registerComponent('panel-scroll-handler', {
     if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','');
     scene.appendChild(panel);
 
-    // ★FIX: 新しいコンポーネントへの参照を取得
     const rightHandEl = document.querySelector('#right-hand');
     if (rightHandEl) {
       scrollHandler = rightHandEl.components['panel-scroll-handler'];
@@ -526,7 +527,6 @@ AFRAME.registerComponent('panel-scroll-handler', {
     function animate(){
       rafId = requestAnimationFrame(animate);
       
-      // ★FIX: 独立したハンドラから値を取得
       const stickY = scrollHandler ? scrollHandler.stickY : 0;
 
       if (Math.abs(stickY) > JOY_DEADZONE) {
@@ -588,7 +588,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     }
     if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
     isHoldingUp = false; isHoldingDown = false;
-    scrollHandler = null; // ★FIX: ハンドラへの参照をクリア
+    scrollHandler = null;
     window.__panelOpen=false; 
     const scene = AFRAME.scenes[0];
     if(scene) scene.emit('panel-closed');
@@ -596,7 +596,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready v107 (isolated handler)');
+  console.log('panel ready (isolated handler)');
 })();
 </script>
 </body>
