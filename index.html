@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — status debug v101)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — final)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -24,8 +24,8 @@
 <script>
 // ===== 共通ユーティリティ =====
 const FONT_URL = 'static/NotoSansJP-Regular.ttf';
-window.__panelOpen = false;
-window.__joystickState = { x: 0, y: 0 };
+window.__panelOpen = false; // パネル開閉のグローバル状態
+window.__joystickState = { x: 0, y: 0 }; // ジョイスティックの状態を共有する唯一の変数
 
 function refreshAllRaycasters(){
   ['#mouseCursor', '#right-hand'].forEach(function(sel){
@@ -198,9 +198,11 @@ AFRAME.registerComponent('earth-controls',{
     if(!p) return null; var ax=p.axes||[]; return { left:{x:ax[0]||0,y:ax[1]||0}, right:{x:ax[2]||0,y:ax[3]||0} };
   },
   tick:function(){
+    // 常にジョイスティック情報を読み取り、グローバル変数に保存する
     var stickRotY_raw = this.stickInput.right.x;
     var stickRotX_raw = this.stickInput.right.y;
     var stickScale_raw = this.stickInput.left.y;
+
     if (stickRotX_raw === 0 && stickRotY_raw === 0 && stickScale_raw === 0){
       var gp = this.getNonVrSticks();
       if(gp){
@@ -210,9 +212,13 @@ AFRAME.registerComponent('earth-controls',{
       }
     }
     window.__joystickState = { x: stickRotY_raw, y: stickRotX_raw };
+
+    // パネルが開いている場合は、地球儀の操作は行わずに処理を終了
     if (window.__panelOpen) {
       return;
     }
+
+    // --- 以下、パネルが閉じている場合の地球儀操作 ---
     var rotY_k = (this.keys['ArrowLeft']?-1:0) + (this.keys['ArrowRight']?1:0);
     var rotX_k = (this.keys['ArrowUp']?-1:0) + (this.keys['ArrowDown']?1:0);
     var scale_k = (this.keys['w']||this.keys['W']?1:0) + (this.keys['s']||this.keys['S']?-1:0);
@@ -341,33 +347,6 @@ AFRAME.registerComponent('marker-placer',{
     return new THREE.Vector3( -(R*Math.sin(phi)*Math.cos(theta)), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta)); }
 });
 
-// ★FIX: 状態を常時監視するための独立したデバッガーコンポーネント
-AFRAME.registerComponent('global-debugger', {
-  init: function() {
-    const textEl = document.createElement('a-entity');
-    textEl.setAttribute('troika-text', {
-      value: 'Debugger Initializing...',
-      fontSize: 0.02,
-      color: '#FFF',
-      anchor: 'left',
-      baseline: 'top',
-      align: 'left',
-      font: FONT_URL,
-      outlineColor: '#000',
-      outlineWidth: '2%',
-    });
-    textEl.setAttribute('position', '-0.4 0.2 -0.5');
-    this.el.appendChild(textEl); // カメラリグにアタッチ
-    this.textEl = textEl;
-  },
-  tick: function() {
-    const joy = window.__joystickState;
-    const text = `Ver: 101-debug
-Panel Open: ${window.__panelOpen}
-Global Joy: X:${joy.x.toFixed(2)} Y:${joy.y.toFixed(2)}`;
-    this.textEl.setAttribute('troika-text', 'value', text);
-  }
-});
 </script>
 
 <a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
@@ -379,8 +358,7 @@ Global Joy: X:${joy.x.toFixed(2)} Y:${joy.y.toFixed(2)}`;
             earth-controls marker-placer></a-sphere>
 
   <a-entity id="rig">
-    <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 1.6 0" look-controls="enabled: false"
-              global-debugger>
+    <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 1.6 0" look-controls="enabled: false">
       <a-entity id="mouseCursor" cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50"></a-entity>
     </a-entity>
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
@@ -518,7 +496,7 @@ Global Joy: X:${joy.x.toFixed(2)} Y:${joy.y.toFixed(2)}`;
     rows.forEach((row,i)=>{ const txt=row.querySelector('.list-text'); pollHeight(txt, 140, h=>{ if(h!=null){ realH[i]=h; reflow(); } }); });
     setTimeout(reflow, 400); setTimeout(reflow, 1000); setTimeout(reflow, 2000); setTimeout(reflow, 3000);
 
-    function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP + currentOffset} 0.02`); }
+    function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP - currentOffset} 0.02`); }
     function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){ currentOffset=targetOffset; applyOffset(); updateScrollbar(); return; } if(!rafId) animate(); }
     
     function animate(){
@@ -552,8 +530,10 @@ Global Joy: X:${joy.x.toFixed(2)} Y:${joy.y.toFixed(2)}`;
       const denom=Math.max(1e-6,maxOffset); const t=denom>0?(currentOffset/denom):0; const top=H/2-thumbH/2; const y=top - t*(H-thumbH);
       thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:${thumbH}`); thumb.setAttribute('position',`${rightX} ${y} 0.051`); }
 
-    currentOnWheelListener = (e)=>{ const k=0.0018*viewportH; setOffset(currentOffset+e.deltaY*k); };
+    // PCマウスホイール
+    currentOnWheelListener = (e)=>{ const k=0.0018*viewportH; setOffset(currentOffset + e.deltaY*k); };
     window.addEventListener('wheel', currentOnWheelListener, {passive:true});
+
     const stopHolds = () => { isHoldingUp = false; isHoldingDown = false; };
     btnDn.addEventListener('mousedown', () => { isHoldingDown = true; if (!rafId) animate(); });
     btnUp.addEventListener('mousedown', () => { isHoldingUp = true; if (!rafId) animate(); });
@@ -561,10 +541,14 @@ Global Joy: X:${joy.x.toFixed(2)} Y:${joy.y.toFixed(2)}`;
     btnUp.addEventListener('mouseup', stopHolds);
     btnDn.addEventListener('mouseleave', stopHolds);
     btnUp.addEventListener('mouseleave', stopHolds);
+
+    // スクロールトラック押下
     track.addEventListener('mousedown',(e)=>{
       const p=e.detail&&e.detail.intersection? e.detail.intersection.point : null; if(!p) return;
       const step = viewportH * 0.85;
-      const local=track.object3D.worldToLocal(p.clone()); if(local.y>0) setOffset(currentOffset-step); else setOffset(currentOffset+step);
+      const local=track.object3D.worldToLocal(p.clone());
+      // ★FIX: スクロールバーの方向を修正
+      if(local.y > 0) setOffset(currentOffset-step); else setOffset(currentOffset+step);
     });
 
     window.__panelOpen=true; if(typeof setRaycasterTargets==='function') setRaycasterTargets(true); if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
@@ -586,7 +570,7 @@ Global Joy: X:${joy.x.toFixed(2)} Y:${joy.y.toFixed(2)}`;
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready v101 (status debug)');
+  console.log('panel ready v104 (final)');
 })();
 </script>
 </body>
