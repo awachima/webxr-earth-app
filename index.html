@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — full debug v98)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — final)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -24,9 +24,8 @@
 <script>
 // ===== 共通ユーティリティ =====
 const FONT_URL = 'static/NotoSansJP-Regular.ttf';
-window.__panelOpen = false;
-window.__rightStick = { y: 0, axes: [] };
-window.__gamepadDebugInfo = 'Gamepad Info: none'; // ★FIX: デバッグ情報用のグローバル変数
+window.__panelOpen = false; // パネル開閉のグローバル状態
+window.__joystickState = { x: 0, y: 0 }; // ★FIX: ジョイスティックの状態を共有する唯一の変数
 
 function refreshAllRaycasters(){
   ['#mouseCursor', '#right-hand'].forEach(function(sel){
@@ -80,7 +79,6 @@ AFRAME.registerComponent('panel-world-lock',{
     if(this._placed || !this.cam) return; this._placed = true;
     this.cam.object3D.getWorldPosition(this._camPos);
     this._fwd.set(0,0,-1).applyQuaternion(this.cam.object3D.quaternion).normalize();
-
     let dist = this.data.baseDist;
     if(this.earth){
       this.earth.object3D.getWorldPosition(this._earthPos);
@@ -93,15 +91,12 @@ AFRAME.registerComponent('panel-world-lock',{
       }
     }
     dist = Math.max(this.data.minDist, dist);
-
     const side = new THREE.Vector3().crossVectors(this._fwd, this._up).normalize();
     const up   = new THREE.Vector3().crossVectors(side, this._fwd).normalize();
     const worldPos = this._camPos.clone().add(this._fwd.clone().multiplyScalar(dist)).add(up.multiplyScalar(this.data.yOffset));
     this.el.object3D.position.copy(worldPos);
-
     const scl = this.data.baseScale * (dist / this.data.baseDist);
     this.el.object3D.scale.set(scl, scl, scl);
-
     const yawRad = THREE.MathUtils.degToRad(this.data.worldYaw);
     this.el.object3D.rotation.set(0, yawRad, 0);
   }
@@ -147,8 +142,8 @@ AFRAME.registerComponent('earth-controls',{
         R.addEventListener('thumbstickmoved', e=>{ self.stickInput.right={x:e.detail.x,y:e.detail.y}; });
         R.addEventListener('axismove', e=>{
           var a=(e.detail && e.detail.axis)? e.detail.axis : [];
-          var rx=(typeof a[2]==='number')? a[2] : (a[0]||0);
-          var ry=(typeof a[3]==='number')? a[3] : (a[1]||0);
+          var rx= a.length > 2 ? a[2] : (a.length > 0 ? a[0] : 0);
+          var ry= a.length > 3 ? a[3] : (a.length > 1 ? a[1] : 0);
           if (self.stickInput.right.x===0 && self.stickInput.right.y===0){ self.stickInput.right={x:rx,y:ry}; }
         });
         R._thumbBound=true;
@@ -203,21 +198,38 @@ AFRAME.registerComponent('earth-controls',{
     if(!p) return null; var ax=p.axes||[]; return { left:{x:ax[0]||0,y:ax[1]||0}, right:{x:ax[2]||0,y:ax[3]||0} };
   },
   tick:function(){
-    if (window.__panelOpen) return;
+    // ★FIX: 常にジョイスティック情報を読み取り、グローバル変数に保存する
+    var stickRotY_raw = this.stickInput.right.x;
+    var stickRotX_raw = this.stickInput.right.y;
+    var stickScale_raw = this.stickInput.left.y;
+
+    if (stickRotX_raw === 0 && stickRotY_raw === 0 && stickScale_raw === 0){
+      var gp = this.getNonVrSticks();
+      if(gp){
+        stickRotY_raw = gp.right.x;
+        stickRotX_raw = gp.right.y;
+        stickScale_raw = gp.left.y;
+      }
+    }
+    window.__joystickState = { x: stickRotY_raw, y: stickRotX_raw };
+
+    // ★FIX: パネルが開いている場合は、地球儀の操作は行わずに処理を終了
+    if (window.__panelOpen) {
+      return;
+    }
+
+    // --- 以下、パネルが閉じている場合の地球儀操作 ---
     var rotY_k = (this.keys['ArrowLeft']?-1:0) + (this.keys['ArrowRight']?1:0);
     var rotX_k = (this.keys['ArrowUp']?-1:0) + (this.keys['ArrowDown']?1:0);
     var scale_k = (this.keys['w']||this.keys['W']?1:0) + (this.keys['s']||this.keys['S']?-1:0);
     var rotY_ui = (this.uiState.rotRight?1:0) + (this.uiState.rotLeft?-1:0);
     var rotX_ui = (this.uiState.rotDown?1:0) + (this.uiState.rotUp?-1:0);
     var scale_ui = (this.uiState.zoomIn?1:0) + (this.uiState.zoomOut?-1:0);
-    var stickRotX=this.stickInput.right.y, stickRotY=this.stickInput.right.x, stickScale=this.stickInput.left.y;
-    if (stickRotX===0 && stickRotY===0 && stickScale===0){
-      var gp=this.getNonVrSticks(); if(gp){ stickRotX=gp.right.y; stickRotY=gp.right.x; stickScale=gp.left.y; }
-    }
+    
     var s=this.el.object3D.scale.x; var t=(s-1.0)/(3.0-1.0); var mul=1-(t*(7/8));
-    var finalRotY=(stickRotY!==0? stickRotY*this.data.joystickRotationSpeed : (rotY_ui!==0? rotY_ui*this.data.rotationSpeed : rotY_k*this.data.rotationSpeed))*mul;
-    var finalRotX=(stickRotX!==0? stickRotX*this.data.joystickRotationSpeed : (rotX_ui!==0? rotX_ui*this.data.rotationSpeed : rotX_k*this.data.rotationSpeed))*mul;
-    var finalScale=(stickScale!==0? -stickScale : (scale_ui!==0? scale_ui : scale_k))*this.data.scaleSpeed;
+    var finalRotY=(stickRotY_raw!==0? stickRotY_raw*this.data.joystickRotationSpeed : (rotY_ui!==0? rotY_ui*this.data.rotationSpeed : rotY_k*this.data.rotationSpeed))*mul;
+    var finalRotX=(stickRotX_raw!==0? stickRotX_raw*this.data.joystickRotationSpeed : (rotX_ui!==0? rotX_ui*this.data.rotationSpeed : rotX_k*this.data.rotationSpeed))*mul;
+    var finalScale=(stickScale_raw!==0? -stickScale_raw : (scale_ui!==0? scale_ui : scale_k))*this.data.scaleSpeed;
     this.el.object3D.rotation.y += finalRotY*(Math.PI/180);
     this.currentXRotation = Math.max(-80, Math.min(80, this.currentXRotation + finalRotX));
     this.el.object3D.rotation.x = this.currentXRotation*(Math.PI/180);
@@ -335,47 +347,11 @@ AFRAME.registerComponent('marker-placer',{
     return new THREE.Vector3( -(R*Math.sin(phi)*Math.cos(theta)), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta)); }
 });
 
-// ★FIX: 全てのGamepad情報を表示するデバッグ用ジョイスティックハンドラ
-AFRAME.registerComponent('panel-joy-handler', {
-  tick: function () {
-    if (!window.__panelOpen) {
-      if (window.__rightStick.y !== 0) window.__rightStick.y = 0;
-      return;
-    }
-
-    let debugString = 'Gamepads Found:\n';
-    let foundRightController = false;
-    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-
-    for (let i = 0; i < gamepads.length; i++) {
-      const gp = gamepads[i];
-      if (gp) {
-        const axesStr = Array.from(gp.axes).map(a => a.toFixed(2)).join(',');
-        debugString += `[${i}] ID:${gp.id.substring(0, 25)}\n  Hand:${gp.hand}, Map:${gp.mapping}\n  Axes:[${axesStr}]\n`;
-
-        if (gp.mapping === 'xr-standard' && gp.hand === 'right') {
-          foundRightController = true;
-          window.__rightStick.y = gp.axes[3] || 0;
-          window.__rightStick.axes = Array.from(gp.axes);
-        }
-      }
-    }
-    
-    if (!foundRightController) {
-      window.__rightStick.y = 0;
-      window.__rightStick.axes = [];
-    }
-    
-    window.__gamepadDebugInfo = debugString;
-  }
-});
-
 </script>
 
 <a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
-
   <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
             src="eartn_model/world.topo.200409.3x10800x5400.jpg"
             segments-height="64" segments-width="128"
@@ -391,31 +367,18 @@ AFRAME.registerComponent('panel-joy-handler', {
               oculus-touch-controls="hand: right"
               raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50; showLine: true"
               cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"
-              visible="false"
-              panel-joy-handler>
+              visible="false">
     </a-entity>
   </a-entity>
 
   <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
     <a-entity geometry="primitive: plane; width: 0.5; height: 0.7" material="color: #333; opacity: 0.7"></a-entity>
-    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.25 0.01">
-      <a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
-    </a-entity>
-    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.25 0.01">
-      <a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
-    </a-entity>
-    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.14 0 0.01">
-      <a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
-    </a-entity>
-    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.165 0 0.01">
-      <a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
-    </a-entity>
-    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.07 0.01">
-      <a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
-    </a-entity>
-    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.07 0.01">
-      <a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity>
-    </a-entity>
+    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.25 0.01"><a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.14 0 0.01"><a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.165 0 0.01"><a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.07 0.01"><a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.07 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
   </a-entity>
 
   <a-sky color="#ECECEC"></a-sky>
@@ -449,7 +412,6 @@ AFRAME.registerComponent('panel-joy-handler', {
   let currentOnWheelListener = null;
   let isHoldingUp = false;
   let isHoldingDown = false;
-  let modeDisplayListeners = {};
 
   function setCardFrame(row,w,h){
     const bw=0.003, edge=EDGE_COL;
@@ -477,37 +439,6 @@ AFRAME.registerComponent('panel-joy-handler', {
     panel.setAttribute('position','0 0 -0.5'); panel.setAttribute('rotation','0 0 0'); panel.setAttribute('scale','0.5 0.5 0.5');
     if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','');
     scene.appendChild(panel);
-
-    // ★FIX: デバッグ表示エリアを拡張
-    const verDbg = document.createElement('a-entity');
-    verDbg.id = 'verDebugText';
-    verDbg.setAttribute('troika-text', { value: 'Ver: 98-debug', fontSize: 0.03, color: '#fff', anchor: 'left', baseline: 'top', font: PANEL_FONT_URL });
-    verDbg.setAttribute('position', `${PANEL.CONTENT_LEFT} ${PANEL.CONTENT_TOP + 0.14} 0.06`);
-    panel.appendChild(verDbg);
-
-    const modeDbg = document.createElement('a-entity');
-    modeDbg.id = 'modeDebugText';
-    modeDbg.setAttribute('troika-text', { value: `MODE: ${scene.is('vr-mode') ? 'vr' : 'desktop'}`, fontSize: 0.03, color: '#9ef', anchor: 'left', baseline: 'top', font: PANEL_FONT_URL });
-    modeDbg.setAttribute('position', `${PANEL.CONTENT_LEFT} ${PANEL.CONTENT_TOP + 0.10} 0.06`);
-    panel.appendChild(modeDbg);
-
-    const joyDbg = document.createElement('a-entity');
-    joyDbg.id = 'joyDebugText';
-    joyDbg.setAttribute('troika-text', { value: 'JOY: 0.00 axes:[]', fontSize: 0.03, color: '#9ee', anchor: 'left', baseline: 'top', font: PANEL_FONT_URL });
-    joyDbg.setAttribute('position', `${PANEL.CONTENT_LEFT} ${PANEL.CONTENT_TOP + 0.06} 0.06`);
-    panel.appendChild(joyDbg);
-    
-    // ★FIX: 全ゲームパッド情報を表示するためのエンティティ
-    const gamepadInfoDbg = document.createElement('a-entity');
-    gamepadInfoDbg.id = 'gamepadInfoDebugText';
-    gamepadInfoDbg.setAttribute('troika-text', { value: 'Gamepad Info: none', fontSize: 0.02, color: '#ffc438', anchor: 'left', baseline: 'top', whiteSpace: 'pre', font: PANEL_FONT_URL });
-    gamepadInfoDbg.setAttribute('position', `${PANEL.CONTENT_LEFT} ${PANEL.CONTENT_TOP - 0.98} 0.06`);
-    panel.appendChild(gamepadInfoDbg);
-    
-    modeDisplayListeners.enter = () => modeDbg.setAttribute('troika-text', 'value', 'MODE: vr');
-    modeDisplayListeners.exit = () => modeDbg.setAttribute('troika-text', 'value', 'MODE: desktop');
-    scene.addEventListener('enter-vr', modeDisplayListeners.enter);
-    scene.addEventListener('exit-vr', modeDisplayListeners.exit);
 
     const rightX=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
     const track=document.createElement('a-entity'); track.classList.add('ui','scroll-track');
@@ -571,7 +502,9 @@ AFRAME.registerComponent('panel-joy-handler', {
     
     function animate(){
       rafId = requestAnimationFrame(animate);
-      const stickY = window.__rightStick.y || 0;
+      
+      // ★FIX: 統合されたグローバル変数からジョイスティックのY軸の値を取得
+      const stickY = window.__joystickState.y || 0;
 
       if (Math.abs(stickY) > JOY_DEADZONE) {
         const delta = -stickY * JOY_SPEED * viewportH;
@@ -596,13 +529,6 @@ AFRAME.registerComponent('panel-joy-handler', {
       }
       applyOffset();
       updateScrollbar();
-
-      const axesStr = (window.__rightStick.axes || []).map(n => n.toFixed(2)).join(', ');
-      joyDbg.setAttribute('troika-text', 'value', `JOY: ${stickY.toFixed(2)} axes:[${axesStr}]`);
-
-      // ★FIX: 全ゲームパッド情報を更新
-      const infoEl = document.getElementById('gamepadInfoDebugText');
-      if (infoEl) infoEl.setAttribute('troika-text', 'value', window.__gamepadDebugInfo);
     }
 
     function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1; const thumbH=Math.max(0.06,H*frac);
@@ -630,24 +556,20 @@ AFRAME.registerComponent('panel-joy-handler', {
   }
 
   function closePanel(){
-    const scene = AFRAME.scenes[0];
-    if (scene) {
-      if (modeDisplayListeners.enter) scene.removeEventListener('enter-vr', modeDisplayListeners.enter);
-      if (modeDisplayListeners.exit) scene.removeEventListener('exit-vr', modeDisplayListeners.exit);
-      modeDisplayListeners = {};
-    }
     const p=document.getElementById('vrPanel'); 
     if(p && p.parentNode) {
         p.parentNode.removeChild(p);
     }
     if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
     isHoldingUp = false; isHoldingDown = false;
-    window.__panelOpen=false; if(scene) scene.emit('panel-closed');
+    window.__panelOpen=false; 
+    const scene = AFRAME.scenes[0];
+    if(scene) scene.emit('panel-closed');
     if(typeof setRaycasterTargets==='function') setRaycasterTargets(false); if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready v98 (full debug mode)');
+  console.log('panel ready v100 (final)');
 })();
 </script>
 </body>
