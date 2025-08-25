@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — close button fix v97)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — full debug v98)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -26,6 +26,7 @@
 const FONT_URL = 'static/NotoSansJP-Regular.ttf';
 window.__panelOpen = false;
 window.__rightStick = { y: 0, axes: [] };
+window.__gamepadDebugInfo = 'Gamepad Info: none'; // ★FIX: デバッグ情報用のグローバル変数
 
 function refreshAllRaycasters(){
   ['#mouseCursor', '#right-hand'].forEach(function(sel){
@@ -334,29 +335,38 @@ AFRAME.registerComponent('marker-placer',{
     return new THREE.Vector3( -(R*Math.sin(phi)*Math.cos(theta)), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta)); }
 });
 
-// Gamepad APIを直接使用するジョイスティックハンドラ
+// ★FIX: 全てのGamepad情報を表示するデバッグ用ジョイスティックハンドラ
 AFRAME.registerComponent('panel-joy-handler', {
   tick: function () {
     if (!window.__panelOpen) {
       if (window.__rightStick.y !== 0) window.__rightStick.y = 0;
       return;
     }
-    let foundGamepad = null;
+
+    let debugString = 'Gamepads Found:\n';
+    let foundRightController = false;
     const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-    for (const gp of gamepads) {
-      if (gp && gp.mapping === 'xr-standard' && gp.hand === 'right') {
-        foundGamepad = gp;
-        break;
+
+    for (let i = 0; i < gamepads.length; i++) {
+      const gp = gamepads[i];
+      if (gp) {
+        const axesStr = Array.from(gp.axes).map(a => a.toFixed(2)).join(',');
+        debugString += `[${i}] ID:${gp.id.substring(0, 25)}\n  Hand:${gp.hand}, Map:${gp.mapping}\n  Axes:[${axesStr}]\n`;
+
+        if (gp.mapping === 'xr-standard' && gp.hand === 'right') {
+          foundRightController = true;
+          window.__rightStick.y = gp.axes[3] || 0;
+          window.__rightStick.axes = Array.from(gp.axes);
+        }
       }
     }
-    if (foundGamepad) {
-      const axes = foundGamepad.axes;
-      window.__rightStick.y = axes[3] || 0;
-      window.__rightStick.axes = Array.from(axes);
-    } else {
+    
+    if (!foundRightController) {
       window.__rightStick.y = 0;
       window.__rightStick.axes = [];
     }
+    
+    window.__gamepadDebugInfo = debugString;
   }
 });
 
@@ -439,7 +449,6 @@ AFRAME.registerComponent('panel-joy-handler', {
   let currentOnWheelListener = null;
   let isHoldingUp = false;
   let isHoldingDown = false;
-  // ★FIX: イベントリスナーを管理するための変数を定義
   let modeDisplayListeners = {};
 
   function setCardFrame(row,w,h){
@@ -469,18 +478,32 @@ AFRAME.registerComponent('panel-joy-handler', {
     if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','');
     scene.appendChild(panel);
 
+    // ★FIX: デバッグ表示エリアを拡張
+    const verDbg = document.createElement('a-entity');
+    verDbg.id = 'verDebugText';
+    verDbg.setAttribute('troika-text', { value: 'Ver: 98-debug', fontSize: 0.03, color: '#fff', anchor: 'left', baseline: 'top', font: PANEL_FONT_URL });
+    verDbg.setAttribute('position', `${PANEL.CONTENT_LEFT} ${PANEL.CONTENT_TOP + 0.14} 0.06`);
+    panel.appendChild(verDbg);
+
     const modeDbg = document.createElement('a-entity');
     modeDbg.id = 'modeDebugText';
     modeDbg.setAttribute('troika-text', { value: `MODE: ${scene.is('vr-mode') ? 'vr' : 'desktop'}`, fontSize: 0.03, color: '#9ef', anchor: 'left', baseline: 'top', font: PANEL_FONT_URL });
     modeDbg.setAttribute('position', `${PANEL.CONTENT_LEFT} ${PANEL.CONTENT_TOP + 0.10} 0.06`);
     panel.appendChild(modeDbg);
+
     const joyDbg = document.createElement('a-entity');
     joyDbg.id = 'joyDebugText';
     joyDbg.setAttribute('troika-text', { value: 'JOY: 0.00 axes:[]', fontSize: 0.03, color: '#9ee', anchor: 'left', baseline: 'top', font: PANEL_FONT_URL });
     joyDbg.setAttribute('position', `${PANEL.CONTENT_LEFT} ${PANEL.CONTENT_TOP + 0.06} 0.06`);
     panel.appendChild(joyDbg);
     
-    // ★FIX: リスナーをグローバル変数に保存して、後で解除できるようにする
+    // ★FIX: 全ゲームパッド情報を表示するためのエンティティ
+    const gamepadInfoDbg = document.createElement('a-entity');
+    gamepadInfoDbg.id = 'gamepadInfoDebugText';
+    gamepadInfoDbg.setAttribute('troika-text', { value: 'Gamepad Info: none', fontSize: 0.02, color: '#ffc438', anchor: 'left', baseline: 'top', whiteSpace: 'pre', font: PANEL_FONT_URL });
+    gamepadInfoDbg.setAttribute('position', `${PANEL.CONTENT_LEFT} ${PANEL.CONTENT_TOP - 0.98} 0.06`);
+    panel.appendChild(gamepadInfoDbg);
+    
     modeDisplayListeners.enter = () => modeDbg.setAttribute('troika-text', 'value', 'MODE: vr');
     modeDisplayListeners.exit = () => modeDbg.setAttribute('troika-text', 'value', 'MODE: desktop');
     scene.addEventListener('enter-vr', modeDisplayListeners.enter);
@@ -576,6 +599,10 @@ AFRAME.registerComponent('panel-joy-handler', {
 
       const axesStr = (window.__rightStick.axes || []).map(n => n.toFixed(2)).join(', ');
       joyDbg.setAttribute('troika-text', 'value', `JOY: ${stickY.toFixed(2)} axes:[${axesStr}]`);
+
+      // ★FIX: 全ゲームパッド情報を更新
+      const infoEl = document.getElementById('gamepadInfoDebugText');
+      if (infoEl) infoEl.setAttribute('troika-text', 'value', window.__gamepadDebugInfo);
     }
 
     function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1; const thumbH=Math.max(0.06,H*frac);
@@ -605,17 +632,14 @@ AFRAME.registerComponent('panel-joy-handler', {
   function closePanel(){
     const scene = AFRAME.scenes[0];
     if (scene) {
-      // ★FIX: 保存しておいたリスナーを正しく解除
       if (modeDisplayListeners.enter) scene.removeEventListener('enter-vr', modeDisplayListeners.enter);
       if (modeDisplayListeners.exit) scene.removeEventListener('exit-vr', modeDisplayListeners.exit);
-      modeDisplayListeners = {}; // クリア
+      modeDisplayListeners = {};
     }
-
     const p=document.getElementById('vrPanel'); 
     if(p && p.parentNode) {
         p.parentNode.removeChild(p);
     }
-
     if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
     isHoldingUp = false; isHoldingDown = false;
     window.__panelOpen=false; if(scene) scene.emit('panel-closed');
@@ -623,7 +647,7 @@ AFRAME.registerComponent('panel-joy-handler', {
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready v97 (close button fix)');
+  console.log('panel ready v98 (full debug mode)');
 })();
 </script>
 </body>
