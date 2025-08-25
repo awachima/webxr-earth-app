@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — fixed v93)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — tick handler fix v94)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -25,6 +25,7 @@
 // ===== 共通ユーティリティ =====
 const FONT_URL = 'static/NotoSansJP-Regular.ttf';
 window.__panelOpen = false; // パネル開閉のグローバル状態
+window.__rightStickY = 0; // ★FIX: ジョイスティックの状態を保持するグローバル変数
 
 function refreshAllRaycasters(){
   ['#mouseCursor', '#right-hand'].forEach(function(sel){
@@ -357,6 +358,26 @@ AFRAME.registerComponent('marker-placer',{
   latLonTo3D:function(lat,lon,R){ var phi=(90-lat)*(Math.PI/180), theta=(lon+180)*(Math.PI/180);
     return new THREE.Vector3( -(R*Math.sin(phi)*Math.cos(theta)), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta)); }
 });
+
+// ★FIX: パネルスクロール用のジョイスティックハンドラコンポーネント
+AFRAME.registerComponent('panel-joy-handler', {
+  tick: function () {
+    // パネルが開いていない時は何もしない
+    if (!window.__panelOpen) {
+      if (window.__rightStickY !== 0) window.__rightStickY = 0;
+      return;
+    }
+    // A-Frame内部のコントローラーオブジェクトにアクセス
+    const controller = this.el.components['tracked-controls-webxr']?.controller;
+    if (controller && controller.gamepad && controller.gamepad.axes) {
+      // Meta Quest/Oculus Touchコントローラーでは、axes[3] が右スティックのY軸
+      window.__rightStickY = controller.gamepad.axes[3] || 0;
+    } else {
+      window.__rightStickY = 0;
+    }
+  }
+});
+
 </script>
 
 <a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
@@ -380,7 +401,8 @@ AFRAME.registerComponent('marker-placer',{
               oculus-touch-controls="hand: right"
               raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50; showLine: true"
               cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"
-              visible="false">
+              visible="false"
+              panel-joy-handler>
     </a-entity>
   </a-entity>
 
@@ -435,17 +457,14 @@ AFRAME.registerComponent('marker-placer',{
   const FONT_SIZE=0.035, LINE_HEIGHT=1.35, EXTRA=Math.max(0.006, FONT_SIZE*0.38);
   const FUDGE_FIXED=FONT_SIZE*0.10, FUDGE_PERLINE=FONT_SIZE*0.10, EST_COLS=19, EST_SCALE=1.08;
 
-  // ★FIX: ジョイスティック・長押しボタン用パラメータ
-  const JOY_DEADZONE = 0.10;   // ジョイスティックの無効域
-  const JOY_SPEED    = 0.030;  // ジョイスティックのスクロール係数
-  const HOLD_SPEED   = 0.04;   // ▲▼ボタン長押し時のスクロール係数
+  const JOY_DEADZONE = 0.10;
+  const JOY_SPEED    = 0.030;
+  const HOLD_SPEED   = 0.04;
 
   // 状態ハンドル
   let currentOnWheelListener = null;
-  let axisMoveHandler = null; // ★FIX: イベントリスナーのハンドル
-  let rightStickY = 0;        // ★FIX: 右スティックY軸の状態
-  let isHoldingUp = false;    // ★FIX: 長押し状態フラグ
-  let isHoldingDown = false;  // ★FIX: 長押し状態フラグ
+  let isHoldingUp = false;
+  let isHoldingDown = false;
 
   function setCardFrame(row,w,h){
     const bw=0.003, edge=EDGE_COL;
@@ -474,7 +493,6 @@ AFRAME.registerComponent('marker-placer',{
     if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','baseDist:0.5; baseScale:0.5; margin:0.03; minDist:0.08; worldYaw:0; yOffset:0.00');
     scene.appendChild(panel);
 
-    // ▼ デバッグ表示：右スティックのY値を可視化
     const dbg = document.createElement('a-entity');
     dbg.id = 'joyDebugText';
     dbg.setAttribute('troika-text', {value: 'JOY: 0.00', fontSize: 0.03, color: '#9ee', anchor: 'left', baseline: 'top', font: PANEL_FONT_URL});
@@ -545,14 +563,13 @@ AFRAME.registerComponent('marker-placer',{
     
     function animate(){
       rafId = requestAnimationFrame(animate);
+      const stickY = window.__rightStickY || 0; // ★FIX: グローバル変数から値を取得
 
-      // ★FIX: ジョイスティック入力処理
-      if (Math.abs(rightStickY) > JOY_DEADZONE) {
-        const delta = -rightStickY * JOY_SPEED * viewportH;
+      if (Math.abs(stickY) > JOY_DEADZONE) {
+        const delta = -stickY * JOY_SPEED * viewportH;
         setOffset(currentOffset + delta, false);
       }
       
-      // ★FIX: ボタン長押し処理
       if (isHoldingUp) {
         setOffset(currentOffset - (viewportH * HOLD_SPEED), false);
       }
@@ -560,12 +577,10 @@ AFRAME.registerComponent('marker-placer',{
         setOffset(currentOffset + (viewportH * HOLD_SPEED), false);
       }
 
-      // スムーズスクロール処理
       const d = targetOffset - currentOffset;
       if (Math.abs(d) < 0.0005) {
         currentOffset = targetOffset;
-        // ★FIX: 長押し中やスティック操作中はアニメーションを止めない
-        if (!isHoldingUp && !isHoldingDown && Math.abs(rightStickY) <= JOY_DEADZONE) {
+        if (!isHoldingUp && !isHoldingDown && Math.abs(stickY) <= JOY_DEADZONE) {
           cancelAnimationFrame(rafId);
           rafId = null;
         }
@@ -576,10 +591,9 @@ AFRAME.registerComponent('marker-placer',{
       applyOffset();
       updateScrollbar();
 
-      // デバッグ表示更新
       const dbgEl = document.getElementById('joyDebugText');
       if (dbgEl) {
-        dbgEl.setAttribute('troika-text', 'value', `JOY: ${rightStickY.toFixed(2)}`);
+        dbgEl.setAttribute('troika-text', 'value', `JOY: ${stickY.toFixed(2)}`);
       }
     }
 
@@ -587,11 +601,9 @@ AFRAME.registerComponent('marker-placer',{
       const denom=Math.max(1e-6,maxOffset); const t=denom>0?(currentOffset/denom):0; const top=H/2-thumbH/2; const y=top - t*(H-thumbH);
       thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:${thumbH}`); thumb.setAttribute('position',`${rightX} ${y} 0.051`); }
 
-    // マウスホイール（非VR）
     currentOnWheelListener = (e)=>{ const k=0.0018*viewportH; setOffset(currentOffset+e.deltaY*k); };
     window.addEventListener('wheel', currentOnWheelListener, {passive:true});
 
-    // ★FIX: ▲/▼ボタンの長押し処理をフラグ方式に変更
     const stopHolds = () => { isHoldingUp = false; isHoldingDown = false; };
     btnDn.addEventListener('mousedown', () => { isHoldingDown = true; if (!rafId) animate(); });
     btnUp.addEventListener('mousedown', () => { isHoldingUp = true; if (!rafId) animate(); });
@@ -600,46 +612,22 @@ AFRAME.registerComponent('marker-placer',{
     btnDn.addEventListener('mouseleave', stopHolds);
     btnUp.addEventListener('mouseleave', stopHolds);
 
-    // スクロールトラック押下でページング
     track.addEventListener('mousedown',(e)=>{
       const p=e.detail&&e.detail.intersection? e.detail.intersection.point : null; if(!p) return;
       const step = viewportH * 0.85;
       const local=track.object3D.worldToLocal(p.clone()); if(local.y>0) setOffset(currentOffset-step); else setOffset(currentOffset+step);
     });
 
-    // ★FIX: VRジョイスティック入力をイベントでリッスン
-    const rightHand = document.querySelector('#right-hand');
-    if (rightHand) {
-        axisMoveHandler = (evt) => {
-            // Meta Quest(Oculus Touch)コントローラーの右スティックY軸は通常 axis[3]
-            if (evt.detail.axis && typeof evt.detail.axis[3] === 'number') {
-                rightStickY = evt.detail.axis[3];
-            } else {
-                rightStickY = 0;
-            }
-        };
-        rightHand.addEventListener('axismove', axisMoveHandler);
-    }
-
     window.__panelOpen=true; if(typeof setRaycasterTargets==='function') setRaycasterTargets(true); if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
     panel.sceneEl && panel.sceneEl.emit('panel-opened');
 
-    // ループ開始
     if (!rafId) animate();
   }
 
   function closePanel(){
     const p=document.getElementById('vrPanel'); if(p&&p.parentNode) p.parentNode.removeChild(p);
-
     if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
     
-    // ★FIX: イベントリスナーをクリーンアップ
-    const rightHand = document.querySelector('#right-hand');
-    if (rightHand && axisMoveHandler) {
-      rightHand.removeEventListener('axismove', axisMoveHandler);
-      axisMoveHandler = null;
-    }
-    rightStickY = 0;
     isHoldingUp = false;
     isHoldingDown = false;
 
@@ -647,9 +635,8 @@ AFRAME.registerComponent('marker-placer',{
     if(typeof setRaycasterTargets==='function') setRaycasterTargets(false); if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
   }
 
-  // グローバル公開
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready v93 (VR joystick scroll via event listener)');
+  console.log('panel ready v94 (VR joystick scroll via tick handler)');
 })();
 </script>
 </body>
