@@ -210,12 +210,18 @@ AFRAME.registerComponent('earth-controls',{
         stickScale_raw = gp.left.y;
       }
     }
-    window.__joystickState = { x: stickRotY_raw, y: stickRotX_raw };
 
+    // ★FIX: パネルの状態に応じてジョイスティックの値をグローバル変数にセットする
     if (window.__panelOpen) {
-      return;
+      // パネルが開いている時は、Y軸（上下）の情報だけを渡す。X軸は0にする。
+      window.__joystickState = { x: 0, y: stickRotX_raw };
+      return; // 地球儀の操作はここで終了
+    } else {
+      // パネルが閉じていれば、X軸とY軸の両方の情報を渡す
+      window.__joystickState = { x: stickRotY_raw, y: stickRotX_raw };
     }
 
+    // --- 以下、パネルが閉じている場合の地球儀操作 ---
     var rotY_k = (this.keys['ArrowLeft']?-1:0) + (this.keys['ArrowRight']?1:0);
     var rotX_k = (this.keys['ArrowUp']?-1:0) + (this.keys['ArrowDown']?1:0);
     var scale_k = (this.keys['w']||this.keys['W']?1:0) + (this.keys['s']||this.keys['S']?-1:0);
@@ -493,7 +499,7 @@ AFRAME.registerComponent('marker-placer',{
     rows.forEach((row,i)=>{ const txt=row.querySelector('.list-text'); pollHeight(txt, 140, h=>{ if(h!=null){ realH[i]=h; reflow(); } }); });
     setTimeout(reflow, 400); setTimeout(reflow, 1000); setTimeout(reflow, 2000); setTimeout(reflow, 3000);
 
-    // ★FIX: パネルの移動方向(Y座標)を currentOffset を使って「上」に動かす
+    // ★FIX: パネルの移動方向。リストを上に動かす(Y座標を大きくする)には、オフセットを加算する
     function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP + currentOffset} 0.02`); }
     function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){ currentOffset=targetOffset; applyOffset(); updateScrollbar(); return; } if(!rafId) animate(); }
     
@@ -501,7 +507,7 @@ AFRAME.registerComponent('marker-placer',{
       rafId = requestAnimationFrame(animate);
       const stickY = window.__joystickState.y || 0;
 
-      // ★FIX: 全ての操作で「下にスクロール = currentOffsetが増加」になるよう統一
+      // ★FIX: 全ての操作で「下にスクロール(リストは上に動く) = currentOffsetが増加」になるよう統一
       if (Math.abs(stickY) > JOY_DEADZONE) {
         // スティックを下に倒すとstickYは正の値。リストを下にスクロールさせたいのでoffsetは増加させる。
         const delta = stickY * JOY_SPEED * viewportH;
@@ -570,7 +576,7 @@ AFRAME.registerComponent('marker-placer',{
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready v105 (final)');
+  console.log('panel ready v106 (final)');
 })();
 </script>
 </body>
