@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — XR gamepad fallback)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — robust & restart)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -22,7 +22,6 @@
 <body>
 
 <script>
-// ===== 共通ユーティリティ =====
 const FONT_URL = 'static/NotoSansJP-Regular.ttf';
 window.__panelOpen = false;
 
@@ -41,27 +40,6 @@ function setRaycasterTargets(uiOnly){
   });
 }
 
-// ----- テキストを前面化 -----
-AFRAME.registerComponent('force-front',{
-  schema:{ order:{type:'number',default:100010}, frames:{type:'int',default:12} },
-  init:function(){ this._applied=0; },
-  tick:function(){
-    if(this._applied >= this.data.frames) return;
-    const mesh = this.el.getObject3D('text') || this.el.getObject3D('mesh');
-    if(!mesh) return;
-    mesh.renderOrder = this.data.order;
-    if(mesh.material){
-      mesh.material.transparent = true;
-      mesh.material.depthWrite  = false;
-      mesh.material.depthTest   = true;
-      mesh.material.depthFunc   = THREE.AlwaysDepth;
-      mesh.material.side        = THREE.DoubleSide;
-    }
-    this._applied++;
-  }
-});
-
-// ----- パネルをワールド固定 -----
 AFRAME.registerComponent('panel-world-lock',{
   schema:{ baseDist:{type:'number',default:0.5}, baseScale:{type:'number',default:0.5}, margin:{type:'number',default:0.03}, minDist:{type:'number',default:0.08}, worldYaw:{type:'number',default:0}, yOffset:{type:'number',default:0.00} },
   init:function(){
@@ -101,7 +79,6 @@ AFRAME.registerComponent('panel-world-lock',{
   }
 });
 
-// ===== Earth Controls =====
 AFRAME.registerComponent('earth-controls',{
   schema:{ rotationSpeed:{type:'number',default:2.0}, joystickRotationSpeed:{type:'number',default:1.0}, scaleSpeed:{type:'number',default:0.01}, mouseRotationSpeed:{type:'number',default:0.2}, wheelScaleSpeed:{type:'number',default:0.0005} },
   init:function(){
@@ -200,7 +177,6 @@ AFRAME.registerComponent('earth-controls',{
     if (window.__panelOpen) {
       return;
     }
-
     var stickRotY_raw = this.stickInput.right.x;
     var stickRotX_raw = this.stickInput.right.y;
     var stickScale_raw = this.stickInput.left.y;
@@ -233,7 +209,6 @@ AFRAME.registerComponent('earth-controls',{
   }
 });
 
-// ============ hex-marker ============
 AFRAME.registerComponent('hex-marker',{
   schema:{ count:{type:'number',default:1}, color:{type:'color',default:'yellow'}, baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001}, fontUrl:{type:'string',default:FONT_URL} },
   init:function(){
@@ -253,7 +228,6 @@ AFRAME.registerComponent('hex-marker',{
   }
 });
 
-// ============ marker-placer ============
 AFRAME.registerComponent('marker-placer',{
   schema:{ maxMarkerMultiplier:{type:'number',default:20} },
   init:async function(){
@@ -342,14 +316,12 @@ AFRAME.registerComponent('marker-placer',{
     return new THREE.Vector3( -(R*Math.sin(phi)*Math.cos(theta)), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta)); }
 });
 
-// ★FIX: パネルスクロール専用ハンドラ。thumbstickmoved に加えて axismove をフォールバックで対応（見た目・他機能は不変）
 AFRAME.registerComponent('panel-scroll-handler', {
   init: function () {
     this.stickY = 0;
     this.onThumbstickMoved = this.onThumbstickMoved.bind(this);
     this.onAxisMove = this.onAxisMove.bind(this);
     this.el.addEventListener('thumbstickmoved', this.onThumbstickMoved);
-    // 一部環境で thumbstickmoved が来ない場合の保険
     this.el.addEventListener('axismove', this.onAxisMove);
   },
   onThumbstickMoved: function (evt) {
@@ -362,9 +334,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
   onAxisMove: function (evt) {
     if (!window.__panelOpen) { this.stickY = 0; return; }
     var a = (evt.detail && evt.detail.axis) ? evt.detail.axis : [];
-    // Quest の右スティック軸は [2]=x, [3]=y が来るケースが多いが、実装差もあるのでフォールバック
     var y = a.length > 3 ? a[3] : (a.length > 1 ? a[1] : 0);
-    // 既に thumbstickmoved で値が入っていれば尊重し、0のときだけ代替
     if (Math.abs(this.stickY) < Math.abs(y)) this.stickY = y;
   },
   remove: function () {
@@ -372,7 +342,6 @@ AFRAME.registerComponent('panel-scroll-handler', {
     this.el.removeEventListener('axismove', this.onAxisMove);
   }
 });
-
 </script>
 
 <a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
@@ -396,16 +365,6 @@ AFRAME.registerComponent('panel-scroll-handler', {
               cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"
               visible="false">
     </a-entity>
-  </a-entity>
-
-  <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
-    <a-entity geometry="primitive: plane; width: 0.5; height: 0.7" material="color: #333; opacity: 0.7"></a-entity>
-    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.25 0.01"><a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.14 0 0.01"><a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.165 0 0.01"><a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.07 0.01"><a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.07 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
   </a-entity>
 
   <a-sky color="#ECECEC"></a-sky>
@@ -440,6 +399,9 @@ AFRAME.registerComponent('panel-scroll-handler', {
   let isHoldingUp = false;
   let isHoldingDown = false;
   let scrollHandler = null;
+  let restartThumbstick = null;
+  let restartAxis = null;
+  let rightHandForRestart = null;
 
   function setCardFrame(row,w,h){
     const bw=0.003, edge=EDGE_COL;
@@ -572,12 +534,10 @@ AFRAME.registerComponent('panel-scroll-handler', {
       
       let stickY = scrollHandler ? (scrollHandler.stickY||0) : 0;
 
-      // 1) 既存イベントで0に近い場合のみ、XR Gamepadをフォールバックとして参照
       if (Math.abs(stickY) <= JOY_DEADZONE) {
         const yXR = readXRRightStickY();
         if (Math.abs(yXR) > Math.abs(stickY)) stickY = yXR;
       }
-      // 2) それでも小さい場合は navigator.getGamepads() 最終フォールバック
       if (Math.abs(stickY) <= JOY_DEADZONE) {
         const yGP = readNavigatorGamepadsY();
         if (Math.abs(yGP) > Math.abs(stickY)) stickY = yGP;
@@ -596,15 +556,22 @@ AFRAME.registerComponent('panel-scroll-handler', {
       const d = targetOffset - currentOffset;
       if (Math.abs(d) < 0.0005) {
         currentOffset = targetOffset;
-        if (!isHoldingUp && !isHoldingDown && Math.abs(stickY) <= JOY_DEADZONE) {
-          cancelAnimationFrame(rafId);
-          rafId = null;
-        }
+        // ★従来はここで停止していたが、パネル表示中は常時ループ継続
       } else {
         currentOffset += d * 0.18;
       }
       applyOffset();
       updateScrollbar();
+    }
+
+    // ★追加：ジョイスティック操作が来たらループ再始動
+    rightHandForRestart = rightHandEl || document.querySelector('#right-hand');
+    const restart = ()=>{ if (window.__panelOpen && !rafId) animate(); };
+    if (rightHandForRestart) {
+      restartThumbstick = restart;
+      restartAxis = restart;
+      rightHandForRestart.addEventListener('thumbstickmoved', restartThumbstick);
+      rightHandForRestart.addEventListener('axismove', restartAxis);
     }
 
     function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1; const thumbH=Math.max(0.06,H*frac);
@@ -629,7 +596,9 @@ AFRAME.registerComponent('panel-scroll-handler', {
       if(local.y > 0) setOffset(currentOffset-step); else setOffset(currentOffset+step);
     });
 
-    window.__panelOpen=true; if(typeof setRaycasterTargets==='function') setRaycasterTargets(true); if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
+    window.__panelOpen=true;
+    setRaycasterTargets && setRaycasterTargets(true);
+    refreshAllRaycasters && refreshAllRaycasters();
     panel.sceneEl && panel.sceneEl.emit('panel-opened');
     if (!rafId) animate();
   }
@@ -642,14 +611,23 @@ AFRAME.registerComponent('panel-scroll-handler', {
     if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
     isHoldingUp = false; isHoldingDown = false;
     scrollHandler = null;
+    // ★追加：再始動リスナをクリーンアップ
+    if (rightHandForRestart) {
+      if (restartThumbstick) rightHandForRestart.removeEventListener('thumbstickmoved', restartThumbstick);
+      if (restartAxis) rightHandForRestart.removeEventListener('axismove', restartAxis);
+      restartThumbstick = null;
+      restartAxis = null;
+      rightHandForRestart = null;
+    }
     window.__panelOpen=false; 
     const scene = AFRAME.scenes[0];
     if(scene) scene.emit('panel-closed');
-    if(typeof setRaycasterTargets==='function') setRaycasterTargets(false); if(typeof refreshAllRaycasters==='function') refreshAllRaycasters();
+    setRaycasterTargets && setRaycasterTargets(false);
+    refreshAllRaycasters && refreshAllRaycasters();
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready (xr gamepad fallback)');
+  console.log('panel ready (restart-capable)');
 })();
 </script>
 </body>
