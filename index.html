@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — thumbstickmoved + axismove fallback)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — XR gamepad fallback)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -533,10 +533,55 @@ AFRAME.registerComponent('panel-scroll-handler', {
     function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP + currentOffset} 0.02`); }
     function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){ currentOffset=targetOffset; applyOffset(); updateScrollbar(); return; } if(!rafId) animate(); }
     
+    function readXRRightStickY(){
+      try {
+        var scene = AFRAME.scenes && AFRAME.scenes[0];
+        var session = scene && scene.renderer && scene.renderer.xr && scene.renderer.xr.getSession ? scene.renderer.xr.getSession() : null;
+        if (!session || !session.inputSources) return 0;
+        var y = 0;
+        session.inputSources.forEach(function(src){
+          try {
+            if (src && src.handedness === 'right' && src.gamepad && src.gamepad.axes && src.gamepad.axes.length){
+              var axes = src.gamepad.axes;
+              var cand = (axes.length > 3 ? axes[3] : (axes.length > 1 ? axes[1] : 0));
+              if (Math.abs(cand) > Math.abs(y)) y = cand;
+            }
+          } catch(_){}
+        });
+        return y;
+      } catch(e){ return 0; }
+    }
+
+    function readNavigatorGamepadsY(){
+      try {
+        var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        var y = 0;
+        for (var i=0;i<pads.length;i++){
+          var p = pads[i];
+          if (!p || !p.connected) continue;
+          var ax = p.axes || [];
+          var cand = (ax.length > 3 ? ax[3] : (ax.length > 1 ? ax[1] : 0));
+          if (Math.abs(cand) > Math.abs(y)) y = cand;
+        }
+        return y;
+      } catch(_){ return 0; }
+    }
+
     function animate(){
       rafId = requestAnimationFrame(animate);
       
-      const stickY = scrollHandler ? scrollHandler.stickY : 0;
+      let stickY = scrollHandler ? (scrollHandler.stickY||0) : 0;
+
+      // 1) 既存イベントで0に近い場合のみ、XR Gamepadをフォールバックとして参照
+      if (Math.abs(stickY) <= JOY_DEADZONE) {
+        const yXR = readXRRightStickY();
+        if (Math.abs(yXR) > Math.abs(stickY)) stickY = yXR;
+      }
+      // 2) それでも小さい場合は navigator.getGamepads() 最終フォールバック
+      if (Math.abs(stickY) <= JOY_DEADZONE) {
+        const yGP = readNavigatorGamepadsY();
+        if (Math.abs(yGP) > Math.abs(stickY)) stickY = yGP;
+      }
 
       if (Math.abs(stickY) > JOY_DEADZONE) {
         const delta = stickY * JOY_SPEED * viewportH;
@@ -604,7 +649,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready (final)');
+  console.log('panel ready (xr gamepad fallback)');
 })();
 </script>
 </body>
