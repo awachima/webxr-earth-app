@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — thumbstickmoved)</title>
+  <title>WebXR Earth Controls (VR joystick scroll — thumbstickmoved + axismove fallback)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -342,23 +342,34 @@ AFRAME.registerComponent('marker-placer',{
     return new THREE.Vector3( -(R*Math.sin(phi)*Math.cos(theta)), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta)); }
 });
 
-// ★FIX: パネルスクロール専用ハンドラ。axismoveの代わりにthumbstickmovedを使用
+// ★FIX: パネルスクロール専用ハンドラ。thumbstickmoved に加えて axismove をフォールバックで対応（見た目・他機能は不変）
 AFRAME.registerComponent('panel-scroll-handler', {
   init: function () {
     this.stickY = 0;
     this.onThumbstickMoved = this.onThumbstickMoved.bind(this);
+    this.onAxisMove = this.onAxisMove.bind(this);
     this.el.addEventListener('thumbstickmoved', this.onThumbstickMoved);
+    // 一部環境で thumbstickmoved が来ない場合の保険
+    this.el.addEventListener('axismove', this.onAxisMove);
   },
   onThumbstickMoved: function (evt) {
     if (window.__panelOpen) {
-      // thumbstickmovedイベントは、evt.detail.y でY軸の値が直接取れる
-      this.stickY = evt.detail.y;
+      this.stickY = evt.detail && typeof evt.detail.y === 'number' ? evt.detail.y : 0;
     } else {
       this.stickY = 0;
     }
   },
+  onAxisMove: function (evt) {
+    if (!window.__panelOpen) { this.stickY = 0; return; }
+    var a = (evt.detail && evt.detail.axis) ? evt.detail.axis : [];
+    // Quest の右スティック軸は [2]=x, [3]=y が来るケースが多いが、実装差もあるのでフォールバック
+    var y = a.length > 3 ? a[3] : (a.length > 1 ? a[1] : 0);
+    // 既に thumbstickmoved で値が入っていれば尊重し、0のときだけ代替
+    if (Math.abs(this.stickY) < Math.abs(y)) this.stickY = y;
+  },
   remove: function () {
     this.el.removeEventListener('thumbstickmoved', this.onThumbstickMoved);
+    this.el.removeEventListener('axismove', this.onAxisMove);
   }
 });
 
@@ -528,7 +539,6 @@ AFRAME.registerComponent('panel-scroll-handler', {
       const stickY = scrollHandler ? scrollHandler.stickY : 0;
 
       if (Math.abs(stickY) > JOY_DEADZONE) {
-        // スティックを下に倒すとstickYは正の値。リストを下にスクロール(リストは上に動く)させたいのでoffsetは増加させる。
         const delta = stickY * JOY_SPEED * viewportH;
         setOffset(currentOffset + delta, false);
       }
