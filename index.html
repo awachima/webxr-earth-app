@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls (VR joystick scroll — robust & restart)</title>
+  <title>WebXR Earth Controls — DEBUG (fix: clusters + logs + panel +0.5m)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
@@ -40,6 +40,7 @@ function setRaycasterTargets(uiOnly){
   });
 }
 
+// ----- パネルをワールド固定 -----
 AFRAME.registerComponent('panel-world-lock',{
   schema:{ baseDist:{type:'number',default:0.5}, baseScale:{type:'number',default:0.5}, margin:{type:'number',default:0.03}, minDist:{type:'number',default:0.08}, worldYaw:{type:'number',default:0}, yOffset:{type:'number',default:0.00} },
   init:function(){
@@ -76,9 +77,11 @@ AFRAME.registerComponent('panel-world-lock',{
     this.el.object3D.scale.set(scl, scl, scl);
     const yawRad = THREE.MathUtils.degToRad(this.data.worldYaw);
     this.el.object3D.rotation.set(0, yawRad, 0);
+    console.log('[panel-world-lock] placed at dist=',dist.toFixed(3),' baseDist=',this.data.baseDist,' pos=',this.el.object3D.position.toArray());
   }
 });
 
+// ===== Earth Controls =====
 AFRAME.registerComponent('earth-controls',{
   schema:{ rotationSpeed:{type:'number',default:2.0}, joystickRotationSpeed:{type:'number',default:1.0}, scaleSpeed:{type:'number',default:0.01}, mouseRotationSpeed:{type:'number',default:0.2}, wheelScaleSpeed:{type:'number',default:0.0005} },
   init:function(){
@@ -107,21 +110,25 @@ AFRAME.registerComponent('earth-controls',{
       var L=document.querySelector('#left-hand');
       var R=document.querySelector('#right-hand');
       if(L && !L._thumbBound){
-        L.addEventListener('thumbstickmoved', e=>{ self.stickInput.left={x:e.detail.x,y:e.detail.y}; });
+        L.addEventListener('thumbstickmoved', e=>{ self.stickInput.left={x:e.detail.x,y:e.detail.y}; console.log('[L thumb] moved', e.detail); });
         L.addEventListener('axismove', e=>{
           var a=(e.detail && e.detail.axis)? e.detail.axis : [];
           if (self.stickInput.left.x===0 && self.stickInput.left.y===0){ self.stickInput.left={x:a[0]||0,y:a[1]||0}; }
+          console.log('[L axis] ', a);
         });
+        L.addEventListener('controllerconnected', ()=>console.log('[left-hand] controllerconnected'));
         L._thumbBound=true;
       }
       if(R && !R._thumbBound){
-        R.addEventListener('thumbstickmoved', e=>{ self.stickInput.right={x:e.detail.x,y:e.detail.y}; });
+        R.addEventListener('thumbstickmoved', e=>{ self.stickInput.right={x:e.detail.x,y:e.detail.y}; console.log('[R thumb] moved', e.detail); });
         R.addEventListener('axismove', e=>{
           var a=(e.detail && e.detail.axis)? e.detail.axis : [];
           var rx= a.length > 2 ? a[2] : (a.length > 0 ? a[0] : 0);
           var ry= a.length > 3 ? a[3] : (a.length > 1 ? a[1] : 0);
           if (self.stickInput.right.x===0 && self.stickInput.right.y===0){ self.stickInput.right={x:rx,y:ry}; }
+          console.log('[R axis] ', a, '=> right(x,y)=', rx, ry);
         });
+        R.addEventListener('controllerconnected', ()=>console.log('[right-hand] controllerconnected'));
         R._thumbBound=true;
       }
     };
@@ -142,9 +149,9 @@ AFRAME.registerComponent('earth-controls',{
     ].forEach(item=>{
       var btn=document.querySelector(item.id);
       if(btn){
-        btn.addEventListener('mousedown', ()=> self.uiState[item.state]=true);
-        btn.addEventListener('mouseup',   ()=> self.uiState[item.state]=false);
-        btn.addEventListener('mouseleave',()=> self.uiState[item.state]=false);
+        btn.addEventListener('mousedown', ()=> { self.uiState[item.state]=true; console.log('[UI] down', item.state); });
+        btn.addEventListener('mouseup',   ()=> { self.uiState[item.state]=false; console.log('[UI] up', item.state); });
+        btn.addEventListener('mouseleave',()=> { self.uiState[item.state]=false; });
       }
     });
   },
@@ -209,6 +216,7 @@ AFRAME.registerComponent('earth-controls',{
   }
 });
 
+// ============ hex-marker ============
 AFRAME.registerComponent('hex-marker',{
   schema:{ count:{type:'number',default:1}, color:{type:'color',default:'yellow'}, baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001}, fontUrl:{type:'string',default:FONT_URL} },
   init:function(){
@@ -228,6 +236,7 @@ AFRAME.registerComponent('hex-marker',{
   }
 });
 
+// ============ marker-placer ============
 AFRAME.registerComponent('marker-placer',{
   schema:{ maxMarkerMultiplier:{type:'number',default:20} },
   init:async function(){
@@ -239,10 +248,12 @@ AFRAME.registerComponent('marker-placer',{
       this.currentMarkers.forEach(marker => { var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
     });
     var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
+    console.log('[marker-placer] fetching CSV:', sheetUrl);
     try{
       var res=await fetch(sheetUrl,{cache:'no-store'});
       if(res.ok){
         var text=await res.text(); this.allLocations=this.parseCsv(text);
+        console.log('[marker-placer] CSV loaded:', this.allLocations.length, 'rows');
       }else{ console.error('CSV fetch failed:', res.status); }
     }catch(e){ console.error("データ取得エラー:",e); }
     this.updateClusters();
@@ -254,7 +265,7 @@ AFRAME.registerComponent('marker-placer',{
       var parts=lines[i].trim().split(',');
       if(parts.length>=4){
         let lat=parseFloat(parts[1]); let lon=parseFloat(parts[2]);
-        if(isNaN(lat)||isNaN(lon)){ lat=-90; lon=0; }
+        if(isNaN(lat)||isNaN(lon)){ continue; }
         locations.push({ title: parts[0].replace(/"/g,''), lat: lat, lon: lon, url: parts[3].replace(/"/g,'') });
       }
     }
@@ -272,11 +283,12 @@ AFRAME.registerComponent('marker-placer',{
       }
       unclustered=rest; clusters.push(cluster);
     }
+    console.log('[marker-placer] clusters formed:', clusters.length);
     this.placeMarkersFromClusters(clusters);
   },
   placeMarkersFromClusters:function(clusters){
     var R=this.el.getAttribute('geometry').radius; var self=this;
-    clusters.forEach(function(cluster){
+    clusters.forEach(function(cluster, idx){
       var lat=0,lon=0; cluster.forEach(p=>{lat+=p.lat;lon+=p.lon;}); lat/=cluster.length; lon/=cluster.length;
       var pos=self.latLonTo3D(lat,lon,R);
       var marker=document.createElement('a-entity'); marker.setAttribute('position',pos);
@@ -290,25 +302,31 @@ AFRAME.registerComponent('marker-placer',{
       marker.dataset.locations=JSON.stringify(cluster);
       marker.addEventListener('mouseenter',()=>{ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('green'); });
       marker.addEventListener('mouseleave',()=>{ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
-      marker.addEventListener('click', e=>{ if(window.__panelOpen) return; openPanel(JSON.parse(e.currentTarget.dataset.locations)); });
+      marker.addEventListener('click', e=>{ if(window.__panelOpen) return; console.log('[marker] click -> openPanel, items=', cluster.length); openPanel(JSON.parse(e.currentTarget.dataset.locations)); });
       self.el.appendChild(marker); self.currentMarkers.push(marker);
     });
+    console.log('[marker-placer] markers placed:', this.currentMarkers.length);
     refreshAllRaycasters();
   },
-  haversineDistance:function(a,b){ function toRad(x){ return x*Math.PI/180; }
+  haversineDistance:function(a,b){
+    function toRad(x){ return x*Math.PI/180; }
     var dLat=toRad(b.lat-a.lat), dLon=toRad(b.lon-a.lon);
     var lat1=toRad(a.lat), lat2=toRad(b.lat);
     var h=Math.sin(dLat/2)**2 + Math.sin(dLon/2)**2 * Math.cos(lat1)*Math.cos(lat2);
-    return 2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)); },
+    // 正しい式（球面距離の中心角ラジアン）
+    return 2*Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
+  },
   tick:function(){
     if(this.currentMarkers.length===0 || !this.cameraEl) return;
     var s=this.el.object3D.scale.x; if(Math.abs(s-this.previousEarthScale)>0.1){ this.updateClusters(); this.previousEarthScale=s; }
     this.el.object3D.getWorldPosition(this.earthPos); this.cameraEl.object3D.getWorldPosition(this.cameraPos);
-    var t=(s-1)/(3-1); var markerScale=this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier-1);
     for(var i=0;i<this.currentMarkers.length;i++){
-      var marker=this.currentMarkers[i]; marker.object3D.scale.set(markerScale,markerScale,markerScale);
+      var marker=this.currentMarkers[i];
+      var markerScale=this.data.maxMarkerMultiplier - ((s-1)/(3-1))*(this.data.maxMarkerMultiplier-1);
+      marker.object3D.scale.set(markerScale,markerScale,markerScale);
       marker.object3D.getWorldPosition(this.markerPos);
-      var normal=this.markerPos.clone().sub(this.earthPos).normalize(); var camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
+      var normal=this.markerPos.clone().sub(this.earthPos).normalize();
+      var camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
       var visible=(normal.dot(camDir)<0); marker.object3D.visible=visible; if(marker.textEl) marker.textEl.object3D.visible=visible;
     }
   },
@@ -316,6 +334,7 @@ AFRAME.registerComponent('marker-placer',{
     return new THREE.Vector3( -(R*Math.sin(phi)*Math.cos(theta)), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta)); }
 });
 
+// スクロール: thumbstickmoved + axismove + XR gamepad + getGamepads, ログ付き
 AFRAME.registerComponent('panel-scroll-handler', {
   init: function () {
     this.stickY = 0;
@@ -323,6 +342,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     this.onAxisMove = this.onAxisMove.bind(this);
     this.el.addEventListener('thumbstickmoved', this.onThumbstickMoved);
     this.el.addEventListener('axismove', this.onAxisMove);
+    console.log('[panel-scroll-handler] init, listeners attached');
   },
   onThumbstickMoved: function (evt) {
     if (window.__panelOpen) {
@@ -330,12 +350,14 @@ AFRAME.registerComponent('panel-scroll-handler', {
     } else {
       this.stickY = 0;
     }
+    console.log('[panel-scroll-handler] thumbstickmoved y=', this.stickY, 'panelOpen=', window.__panelOpen);
   },
   onAxisMove: function (evt) {
-    if (!window.__panelOpen) { this.stickY = 0; return; }
     var a = (evt.detail && evt.detail.axis) ? evt.detail.axis : [];
     var y = a.length > 3 ? a[3] : (a.length > 1 ? a[1] : 0);
+    if (!window.__panelOpen) { this.stickY = 0; console.log('[panel-scroll-handler] axismove ignored (panel closed), axis=', a); return; }
     if (Math.abs(this.stickY) < Math.abs(y)) this.stickY = y;
+    console.log('[panel-scroll-handler] axismove axis=', a, '=> y=', y, 'stickY=', this.stickY);
   },
   remove: function () {
     this.el.removeEventListener('thumbstickmoved', this.onThumbstickMoved);
@@ -367,6 +389,17 @@ AFRAME.registerComponent('panel-scroll-handler', {
     </a-entity>
   </a-entity>
 
+  <!-- ★ 元の静的UI（見た目・機能はそのまま） -->
+  <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
+    <a-entity geometry="primitive: plane; width: 0.5; height: 0.7" material="color: #333; opacity: 0.7"></a-entity>
+    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.25 0.01"><a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.14 0 0.01"><a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.165 0 0.01"><a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.07 0.01"><a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.07 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+  </a-entity>
+
   <a-sky color="#ECECEC"></a-sky>
 
   <script>
@@ -374,8 +407,8 @@ AFRAME.registerComponent('panel-scroll-handler', {
     init:function(){
       var scene=this.el.sceneEl||this.el; var right=document.getElementById('right-hand'); var mouse=document.getElementById('mouseCursor');
       function setAttr(el, comp, prop, val){ if(!el) return; try{ el.setAttribute(comp, prop, val); }catch(e){} }
-      function enableVRRay(){ if(right){ right.setAttribute('visible',true); setAttr(right,'raycaster','enabled',true); setAttr(right,'cursor','enabled',true);} if(mouse){ setAttr(mouse,'raycaster','enabled',false); setAttr(mouse,'cursor','enabled',false);} }
-      function disableVRRay(){ if(right){ right.setAttribute('visible',false); setAttr(right,'raycaster','enabled',false); setAttr(right,'cursor','enabled',false);} if(mouse){ setAttr(mouse,'raycaster','enabled',true); setAttr(mouse,'cursor','enabled',true);} }
+      function enableVRRay(){ if(right){ right.setAttribute('visible',true); setAttr(right,'raycaster','enabled',true); setAttr(right,'cursor','enabled',true);} if(mouse){ setAttr(mouse,'raycaster','enabled',false); setAttr(mouse,'cursor','enabled',false);} console.log('[vr-ray-toggle] enter-vr: enable right-hand ray'); }
+      function disableVRRay(){ if(right){ right.setAttribute('visible',false); setAttr(right,'raycaster','enabled',false); setAttr(right,'cursor','enabled',false);} if(mouse){ setAttr(mouse,'raycaster','enabled',true); setAttr(mouse,'cursor','enabled',true);} console.log('[vr-ray-toggle] exit-vr: disable right-hand ray'); }
       disableVRRay(); scene.addEventListener('enter-vr', enableVRRay); scene.addEventListener('exit-vr', disableVRRay);
     }
   });
@@ -402,6 +435,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
   let restartThumbstick = null;
   let restartAxis = null;
   let rightHandForRestart = null;
+  let lastLog = 0;
 
   function setCardFrame(row,w,h){
     const bw=0.003, edge=EDGE_COL;
@@ -427,12 +461,15 @@ AFRAME.registerComponent('panel-scroll-handler', {
     const scene=document.querySelector('a-scene');
     const panel=document.createElement('a-entity'); panel.id='vrPanel'; panel.classList.add('ui','collidable');
     panel.setAttribute('position','0 0 -0.5'); panel.setAttribute('rotation','0 0 0'); panel.setAttribute('scale','0.5 0.5 0.5');
-    if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','');
+    // +0.5m (baseDist=1.0)
+    if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','baseDist: 1.0;');
     scene.appendChild(panel);
+    console.log('[openPanel] panel created; baseDist=1.0 (+0.5m), items=', (locations||[]).length);
 
     const rightHandEl = document.querySelector('#right-hand');
     if (rightHandEl) {
       scrollHandler = rightHandEl.components['panel-scroll-handler'];
+      console.log('[openPanel] right-hand has panel-scroll-handler?', !!scrollHandler);
     }
 
     const rightX=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
@@ -480,13 +517,14 @@ AFRAME.registerComponent('panel-scroll-handler', {
     function reflow(){
       let y=0; rows.forEach((row,i)=>{
         const lines=estLinesList[i]; const baseH=(realH[i]??estHeights[i]);
-        const th=baseH + FUDGE_FIXED + FUDGE_PERLINE * Math.max(1, lines);
+        const th=baseH + 0.0035 + 0.0035 * Math.max(1, lines);
         const boxH = th + 2*PANEL.PAD_Y + EXTRA; const boxW = PANEL.TEXT_MAX_W + 2*PANEL.PAD_X;
         row._boxH=boxH; row.setAttribute('position',`${PANEL.CONTENT_LEFT} ${-y} 0.03`); setCardFrame(row, boxW, boxH);
         y += boxH + PANEL.GAP;
       });
       totalHeight=Math.max(0,y-PANEL.GAP); maxOffset=Math.max(0,totalHeight-viewportH);
       setOffset(currentOffset,true); updateScrollbar();
+      console.log('[reflow] rows=', rows.length, 'totalH=', totalHeight.toFixed(3), 'viewportH=', viewportH.toFixed(3), 'maxOffset=', maxOffset.toFixed(3));
     }
 
     rows.forEach((row,i)=>{ const txt=row.querySelector('.list-text'); pollHeight(txt, 140, h=>{ if(h!=null){ realH[i]=h; reflow(); } }); });
@@ -503,7 +541,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
         var y = 0;
         session.inputSources.forEach(function(src){
           try {
-            if (src && src.handedness === 'right' && src.gamepad && src.gamepad.axes && src.gamepad.axes.length){
+            if (src && (src.handedness === 'right' || src.handedness === 'unknown') && src.gamepad && src.gamepad.axes && src.gamepad.axes.length){
               var axes = src.gamepad.axes;
               var cand = (axes.length > 3 ? axes[3] : (axes.length > 1 ? axes[1] : 0));
               if (Math.abs(cand) > Math.abs(y)) y = cand;
@@ -531,16 +569,22 @@ AFRAME.registerComponent('panel-scroll-handler', {
 
     function animate(){
       rafId = requestAnimationFrame(animate);
-      
+      let stickY_src = 'panel-scroll-handler';
       let stickY = scrollHandler ? (scrollHandler.stickY||0) : 0;
 
       if (Math.abs(stickY) <= JOY_DEADZONE) {
         const yXR = readXRRightStickY();
-        if (Math.abs(yXR) > Math.abs(stickY)) stickY = yXR;
+        if (Math.abs(yXR) > Math.abs(stickY)) { stickY = yXR; stickY_src = 'xr.gamepad'; }
       }
       if (Math.abs(stickY) <= JOY_DEADZONE) {
         const yGP = readNavigatorGamepadsY();
-        if (Math.abs(yGP) > Math.abs(stickY)) stickY = yGP;
+        if (Math.abs(yGP) > Math.abs(stickY)) { stickY = yGP; stickY_src = 'navigator.getGamepads'; }
+      }
+
+      const now = performance.now();
+      if (now - lastLog > 300) {
+        lastLog = now;
+        console.log('[animate] stickY=', stickY.toFixed(3), 'src=', stickY_src, 'target=', targetOffset.toFixed(3), 'current=', currentOffset.toFixed(3));
       }
 
       if (Math.abs(stickY) > JOY_DEADZONE) {
@@ -556,7 +600,6 @@ AFRAME.registerComponent('panel-scroll-handler', {
       const d = targetOffset - currentOffset;
       if (Math.abs(d) < 0.0005) {
         currentOffset = targetOffset;
-        // ★従来はここで停止していたが、パネル表示中は常時ループ継続
       } else {
         currentOffset += d * 0.18;
       }
@@ -564,9 +607,8 @@ AFRAME.registerComponent('panel-scroll-handler', {
       updateScrollbar();
     }
 
-    // ★追加：ジョイスティック操作が来たらループ再始動
     rightHandForRestart = rightHandEl || document.querySelector('#right-hand');
-    const restart = ()=>{ if (window.__panelOpen && !rafId) animate(); };
+    const restart = (e)=>{ if (window.__panelOpen) { if (!rafId) { console.log('[restart] by', e.type); animate(); } } };
     if (rightHandForRestart) {
       restartThumbstick = restart;
       restartAxis = restart;
@@ -600,18 +642,16 @@ AFRAME.registerComponent('panel-scroll-handler', {
     setRaycasterTargets && setRaycasterTargets(true);
     refreshAllRaycasters && refreshAllRaycasters();
     panel.sceneEl && panel.sceneEl.emit('panel-opened');
-    if (!rafId) animate();
+    console.log('[openPanel] panel-opened, animate start');
+    animate();
   }
 
   function closePanel(){
     const p=document.getElementById('vrPanel'); 
-    if(p && p.parentNode) {
-        p.parentNode.removeChild(p);
-    }
+    if(p && p.parentNode) p.parentNode.removeChild(p);
     if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
     isHoldingUp = false; isHoldingDown = false;
     scrollHandler = null;
-    // ★追加：再始動リスナをクリーンアップ
     if (rightHandForRestart) {
       if (restartThumbstick) rightHandForRestart.removeEventListener('thumbstickmoved', restartThumbstick);
       if (restartAxis) rightHandForRestart.removeEventListener('axismove', restartAxis);
@@ -624,10 +664,11 @@ AFRAME.registerComponent('panel-scroll-handler', {
     if(scene) scene.emit('panel-closed');
     setRaycasterTargets && setRaycasterTargets(false);
     refreshAllRaycasters && refreshAllRaycasters();
+    console.log('[closePanel] panel-closed');
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('panel ready (restart-capable)');
+  console.log('[boot] debug build ready (fix + logs + panel +0.5m)');
 })();
 </script>
 </body>
