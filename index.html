@@ -2,11 +2,9 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls — DEBUG (fix: clusters + logs + panel +0.5m)</title>
+  <title>WebXR Earth Controls — DEBUG (fix2)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/troika-worker-utils@0.47.2/dist/troika-worker-utils.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/troika-three-utils@0.47.2/dist/troika-three-utils.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
@@ -62,9 +60,11 @@ AFRAME.registerComponent('panel-world-lock',{
       this.earth.object3D.getWorldPosition(this._earthPos);
       const s = this.earth.object3D.scale.x || 1;
       const R = (this.earth.getAttribute('geometry')?.radius || 1) * s;
-      const along = this._earthPos.clone().sub(this._camPos).dot(this._fwd);
+      const along = this._earthPos.clone().sub(this._camPos).dot(this._fwd); // +: forward
       const nearAlong = along - R;
-      if (nearAlong <= dist + this.data.margin){
+      // ★ 実際に地球と衝突する場合だけ距離を縮める（地球が前方にあるとき）
+      const willIntersect = (along > 0) && (nearAlong <= dist + this.data.margin);
+      if (willIntersect){
         dist = Math.max(this.data.minDist, nearAlong - this.data.margin);
       }
     }
@@ -313,7 +313,6 @@ AFRAME.registerComponent('marker-placer',{
     var dLat=toRad(b.lat-a.lat), dLon=toRad(b.lon-a.lon);
     var lat1=toRad(a.lat), lat2=toRad(b.lat);
     var h=Math.sin(dLat/2)**2 + Math.sin(dLon/2)**2 * Math.cos(lat1)*Math.cos(lat2);
-    // 正しい式（球面距離の中心角ラジアン）
     return 2*Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
   },
   tick:function(){
@@ -379,8 +378,8 @@ AFRAME.registerComponent('panel-scroll-handler', {
       <a-entity id="mouseCursor" cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50"></a-entity>
     </a-entity>
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
+    <!-- ★ 'laser-controls' を外して二重バインドを回避。右手は oculus-touch-controls のみ -->
     <a-entity id="right-hand"
-              laser-controls="hand: right"
               oculus-touch-controls="hand: right"
               panel-scroll-handler
               raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50; showLine: true"
@@ -389,7 +388,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     </a-entity>
   </a-entity>
 
-  <!-- ★ 元の静的UI（見た目・機能はそのまま） -->
+  <!-- 静的UI（元の見た目を維持） -->
   <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
     <a-entity geometry="primitive: plane; width: 0.5; height: 0.7" material="color: #333; opacity: 0.7"></a-entity>
     <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
@@ -407,8 +406,8 @@ AFRAME.registerComponent('panel-scroll-handler', {
     init:function(){
       var scene=this.el.sceneEl||this.el; var right=document.getElementById('right-hand'); var mouse=document.getElementById('mouseCursor');
       function setAttr(el, comp, prop, val){ if(!el) return; try{ el.setAttribute(comp, prop, val); }catch(e){} }
-      function enableVRRay(){ if(right){ right.setAttribute('visible',true); setAttr(right,'raycaster','enabled',true); setAttr(right,'cursor','enabled',true);} if(mouse){ setAttr(mouse,'raycaster','enabled',false); setAttr(mouse,'cursor','enabled',false);} console.log('[vr-ray-toggle] enter-vr: enable right-hand ray'); }
-      function disableVRRay(){ if(right){ right.setAttribute('visible',false); setAttr(right,'raycaster','enabled',false); setAttr(right,'cursor','enabled',false);} if(mouse){ setAttr(mouse,'raycaster','enabled',true); setAttr(mouse,'cursor','enabled',true);} console.log('[vr-ray-toggle] exit-vr: disable right-hand ray'); }
+      function enableVRRay(){ if(right){ right.setAttribute('visible',true); setAttr(right,'raycaster','enabled',true);} if(mouse){ setAttr(mouse,'raycaster','enabled',false);} console.log('[vr-ray-toggle] enter-vr: enable right-hand ray'); }
+      function disableVRRay(){ if(right){ right.setAttribute('visible',false); setAttr(right,'raycaster','enabled',false);} if(mouse){ setAttr(mouse,'raycaster','enabled',true);} console.log('[vr-ray-toggle] exit-vr: disable right-hand ray'); }
       disableVRRay(); scene.addEventListener('enter-vr', enableVRRay); scene.addEventListener('exit-vr', disableVRRay);
     }
   });
@@ -424,7 +423,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
   const BTN_R=0.045, BTN_FS=0.06;
   const PANEL_FONT_URL = (typeof FONT_URL!=='undefined')?FONT_URL:(window.FONT_URL||'static/NotoSansJP-Regular.ttf');
   const FONT_SIZE=0.035, LINE_HEIGHT=1.35, EXTRA=Math.max(0.006, FONT_SIZE*0.38);
-  const FUDGE_FIXED=FONT_SIZE*0.10, FUDGE_PERLINE=FONT_SIZE*0.10, EST_COLS=19, EST_SCALE=1.08;
+  const FUDGE_FIXED=0.0035, FUDGE_PERLINE=0.0035, EST_COLS=19, EST_SCALE=1.08;
   const JOY_DEADZONE = 0.15;
   const JOY_SPEED    = 0.030;
   const HOLD_SPEED   = 0.04;
@@ -461,8 +460,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     const scene=document.querySelector('a-scene');
     const panel=document.createElement('a-entity'); panel.id='vrPanel'; panel.classList.add('ui','collidable');
     panel.setAttribute('position','0 0 -0.5'); panel.setAttribute('rotation','0 0 0'); panel.setAttribute('scale','0.5 0.5 0.5');
-    // +0.5m (baseDist=1.0)
-    if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','baseDist: 1.0;');
+    if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','baseDist: 1.0;'); // +0.5m
     scene.appendChild(panel);
     console.log('[openPanel] panel created; baseDist=1.0 (+0.5m), items=', (locations||[]).length);
 
@@ -517,7 +515,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     function reflow(){
       let y=0; rows.forEach((row,i)=>{
         const lines=estLinesList[i]; const baseH=(realH[i]??estHeights[i]);
-        const th=baseH + 0.0035 + 0.0035 * Math.max(1, lines);
+        const th=baseH + FUDGE_FIXED + FUDGE_PERLINE * Math.max(1, lines);
         const boxH = th + 2*PANEL.PAD_Y + EXTRA; const boxW = PANEL.TEXT_MAX_W + 2*PANEL.PAD_X;
         row._boxH=boxH; row.setAttribute('position',`${PANEL.CONTENT_LEFT} ${-y} 0.03`); setCardFrame(row, boxW, boxH);
         y += boxH + PANEL.GAP;
@@ -668,7 +666,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('[boot] debug build ready (fix + logs + panel +0.5m)');
+  console.log('[boot] debug build ready (fix2)');
 })();
 </script>
 </body>
