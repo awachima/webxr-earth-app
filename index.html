@@ -335,35 +335,50 @@ AFRAME.registerComponent('marker-placer',{
 
 // スクロール: thumbstickmoved + axismove + XR gamepad + getGamepads, ログ付き
 AFRAME.registerComponent('panel-scroll-handler', {
+  schema: {
+    deadzone: {type: 'number', default: 0.08},
+    gain: {type: 'number', default: 1.0}
+  },
   init: function () {
+    var el = this.el;
     this.stickY = 0;
-    this.onThumbstickMoved = this.onThumbstickMoved.bind(this);
-    this.onAxisMove = this.onAxisMove.bind(this);
-    this.el.addEventListener('thumbstickmoved', this.onThumbstickMoved);
-    this.el.addEventListener('axismove', this.onAxisMove);
-    console.log('[panel-scroll-handler] init, listeners attached');
-  },
-  onThumbstickMoved: function (evt) {
-    if (window.__panelOpen) {
-      this.stickY = evt.detail && typeof evt.detail.y === 'number' ? evt.detail.y : 0;
-    } else {
+    this.panelOpen = false;
+    this._onAxisMove = (e)=>{
+      var a = e && e.detail && (e.detail.axis || e.detail.axes || e.detail) || [0,0,0,0];
+      var y = (a[3]!==undefined) ? a[3] : (typeof a.y==='number'? a.y : 0);
+      var v = (Math.abs(y) > this.data.deadzone) ? y * this.data.gain : 0;
+      this.stickY = v;
+      console.log('[panel-scroll-handler] axismove axis=', a, '=> y=', y, 'stickY=', this.stickY);
+    };
+    this._onThumb = (e)=>{
+      var y = (e && e.detail && typeof e.detail.y==='number') ? e.detail.y : 0;
+      var v = (Math.abs(y) > this.data.deadzone) ? y * this.data.gain : 0;
+      this.stickY = v;
+      console.log('[panel-scroll-handler] thumbstickmoved y=', y, 'panelOpen=', this.panelOpen);
+    };
+    this._onOpened = (e)=>{
+      this.panelOpen = true;
+      console.log('[panel-scroll-handler] opened');
+    };
+    this._onClosed = ()=>{
+      this.panelOpen = false;
       this.stickY = 0;
-    }
-    console.log('[panel-scroll-handler] thumbstickmoved y=', this.stickY, 'panelOpen=', window.__panelOpen);
+      console.log('[panel-scroll-handler] closed');
+    };
+    el.addEventListener('axismove', this._onAxisMove);
+    el.addEventListener('thumbstickmoved', this._onThumb);
+    el.sceneEl.addEventListener('panel-opened', this._onOpened);
+    el.sceneEl.addEventListener('panel-closed', this._onClosed);
+    console.log('[panel-scroll-handler] init, listeners attached (FIX3)');
   },
-  onAxisMove: function (evt) {
-    var a = (evt.detail && evt.detail.axis) ? evt.detail.axis : [];
-    var y = a.length > 3 ? a[3] : (a.length > 1 ? a[1] : 0);
-    if (!window.__panelOpen) { this.stickY = 0; console.log('[panel-scroll-handler] axismove ignored (panel closed), axis=', a); return; }
-    if (Math.abs(this.stickY) < Math.abs(y)) this.stickY = y;
-    console.log('[panel-scroll-handler] axismove axis=', a, '=> y=', y, 'stickY=', this.stickY);
-  },
-  remove: function () {
-    this.el.removeEventListener('thumbstickmoved', this.onThumbstickMoved);
-    this.el.removeEventListener('axismove', this.onAxisMove);
+  remove: function(){
+    var el = this.el;
+    el.removeEventListener('axismove', this._onAxisMove);
+    el.removeEventListener('thumbstickmoved', this._onThumb);
+    el.sceneEl.removeEventListener('panel-opened', this._onOpened);
+    el.sceneEl.removeEventListener('panel-closed', this._onClosed);
   }
-});
-</script>
+});</script>
 
 <a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
   <a-light type="ambient" color="#CCC"></a-light>
@@ -529,7 +544,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     setTimeout(reflow, 400); setTimeout(reflow, 1000); setTimeout(reflow, 2000); setTimeout(reflow, 3000);
 
     function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP + currentOffset} 0.02`); }
-    function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){ currentOffset=targetOffset; applyOffset(); updateScrollbar(); return; } if(!rafId) animate(); }
+    function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){ currentOffset=targetOffset; applyOffset(); updateScrollbar(); console.log('[setOffset] target=',targetOffset.toFixed(3),'current=',currentOffset.toFixed(3),'max=',maxOffset.toFixed(3)); return; } if(!rafId) animate(); }
     
     function readXRRightStickY(){
       try {
@@ -568,7 +583,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     function animate(){
       rafId = requestAnimationFrame(animate);
       let stickY_src = 'panel-scroll-handler';
-      let stickY = scrollHandler ? (scrollHandler.stickY||0) : 0;
+      let stickY = (scrollHandler && typeof scrollHandler.stickY==='number') ? scrollHandler.stickY : 0;
 
       if (Math.abs(stickY) <= JOY_DEADZONE) {
         const yXR = readXRRightStickY();
@@ -666,7 +681,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('[boot] debug build ready (fix2)');
+  console.log('[boot] debug build ready (fix3: bind stickY via component + setOffset logs)');
 })();
 </script>
 </body>
