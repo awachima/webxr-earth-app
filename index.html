@@ -395,7 +395,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
     <!-- ★ 'laser-controls' を外して二重バインドを回避。右手は oculus-touch-controls のみ -->
     <a-entity id="right-hand"
-              oculus-touch-controls="hand: right"
+              oculus-touch-controls="hand: right; model: false"
               panel-scroll-handler
               raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50; showLine: true"
               cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"
