@@ -466,7 +466,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
 });
 </script>
 
-<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle panel-raf-proxy ray-enforce-child>
+<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle panel-raf-proxy ray-enforce-child webxr="optionalFeatures: dom-overlay; overlayElement: #xrOverlay">
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
   <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
@@ -483,7 +483,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
               oculus-touch-controls="hand: right; model: false"
               panel-scroll-handler
               visible="false">
-    <a-entity id="right-ray" raycaster="objects: .collidable, .ui; useWorldCoordinates: false; far: 30; interval: 50; showLine: true" cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend" rotation="-45 0 0"></a-entity>
+    <a-entity id="right-ray" ray-aim-offset="x:-45; y:0; z:0" raycaster="objects: .collidable, .ui; useWorldCoordinates: false; far: 30; interval: 50; showLine: true" cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"></a-entity>
 
     </a-entity>
   </a-entity>
@@ -755,5 +755,93 @@ AFRAME.registerComponent('panel-raf-proxy', {
   console.log('[boot] debug build ready (fix4: tick-driven scroll)');
 })();
 </script>
+
+<style>
+  /* XR overlay panel */
+  #xrOverlay.hidden { display:none; }
+  #xrOverlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.5);
+    display: flex; flex-direction: column;
+  }
+  #xrOverlay .toolbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 12px; background: rgba(20,20,20,0.9); color: #fff;
+  }
+  #xrOverlay .toolbar button {
+    font-size: 18px; line-height: 1; padding: 6px 10px; border-radius: 6px;
+    border: none; background: #444; color: #fff; cursor: pointer;
+  }
+  #xrOverlay .toolbar button:hover { background:#666; }
+  #overlayUrl { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; opacity: .8; }
+  #overlayFrame {
+    flex: 1 1 auto; width: 100%; border: none; background: #fff;
+  }
+</style>
+<div id="xrOverlay" class="hidden" aria-hidden="true">
+  <div class="toolbar">
+    <button id="overlayClose" title="Close (戻る)">×</button>
+    <span id="overlayUrl"></span>
+  </div>
+  <iframe id="overlayFrame"
+    allow="xr-spatial-tracking; autoplay; fullscreen"
+    sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+</div>
+
+
+<script>
+(function(){
+  var scene = document.querySelector('a-scene');
+  var overlay = document.getElementById('xrOverlay');
+  var overlayUrl = document.getElementById('overlayUrl');
+  var frame = document.getElementById('overlayFrame');
+  var closeBtn = document.getElementById('overlayClose');
+
+  function isInVR(){
+    try{ return scene && scene.is && scene.is('vr-mode'); }catch(e){ return false; }
+  }
+  function openInOverlay(url){
+    overlayUrl.textContent = url;
+    frame.src = url;
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden','false');
+  }
+  function closeOverlay(){
+    frame.src = 'about:blank';
+    overlay.classList.add('hidden');
+    overlay.setAttribute('aria-hidden','true');
+  }
+  if(closeBtn){ closeBtn.addEventListener('click', closeOverlay); }
+
+  function isUILink(a){
+    if(!a) return false;
+    var el = a;
+    while(el){
+      if(el.classList && (el.classList.contains('ui') || el.classList.contains('panel') || el.classList.contains('panel-body') || el.classList.contains('title'))) return true;
+      if(el.id === 'infoPanel' || el.id === 'panel-root' || el.id === 'panel' || el.id === 'panelTitle' || el.id === 'panel-body') return true;
+      if(el.hasAttribute && (el.hasAttribute('data-ui') || el.hasAttribute('data-panel'))) return true;
+      el = el.parentElement;
+    }
+    return false;
+  }
+
+  document.addEventListener('click', function(e){
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if(!a) return;
+    if(!isInVR()) return;
+    if(!isUILink(a)) return;
+
+    var href = a.getAttribute('href');
+    if(!href || href[0]==='#') return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    openInOverlay(a.href);
+  }, true);
+
+  scene && scene.addEventListener('exit-vr', function(){ closeOverlay(); });
+})();
+</script>
+
 </body>
 </html>
