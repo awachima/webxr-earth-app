@@ -25,7 +25,7 @@ window.__panelOpen = false;
 window.__panelTick = null; // panel scroll step runner injected at openPanel
 
 function refreshAllRaycasters(){
-  ['#mouseCursor', '#right-hand'].forEach(function(sel){
+  ['#mouseCursor', '#right-hand', '#right-ray'].forEach(function(sel){
     var el=document.querySelector(sel);
     var rc = el && el.components && el.components.raycaster;
     if(rc && rc.refreshObjects) rc.refreshObjects();
@@ -33,7 +33,7 @@ function refreshAllRaycasters(){
 }
 function setRaycasterTargets(uiOnly){
   var objs = uiOnly ? '.ui' : '.collidable, .ui';
-  ['#mouseCursor', '#right-hand'].forEach(function(sel){
+  ['#mouseCursor', '#right-hand', '#right-ray'].forEach(function(sel){
     var el=document.querySelector(sel);
     if(el) el.setAttribute('raycaster','objects',objs);
   });
@@ -438,9 +438,9 @@ AFRAME.registerComponent('panel-raf-proxy', {
     <a-entity id="right-hand"
               oculus-touch-controls="hand: right; model: false"
               panel-scroll-handler
-              raycaster="objects: .collidable, .ui; useWorldCoordinates: false; far: 30; interval: 50; showLine: true"
-              cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"
-              visible="false" ray-aim-offset="x:-45; y:0; z:0">
+              visible="false">
+    <a-entity id="right-ray" ray-aim-offset="x:-45; y:0; z:0" raycaster="objects: .collidable, .ui; useWorldCoordinates: false; far: 30; interval: 50; showLine: true" cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"></a-entity>
+
     </a-entity>
   </a-entity>
 
