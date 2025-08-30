@@ -442,15 +442,15 @@ AFRAME.registerComponent('panel-raf-proxy', {
 (function(){
   'use strict';
   const PANEL = { BOARD_W:1.10, CONTENT_LEFT:-0.45, TEXT_MAX_W:0.84, PAD_X:0.02, PAD_Y:0.020, GAP:0.020,
-                  CONTENT_TOP:0.48, CONTENT_BOTTOM:-0.45, SCROLL_MARGIN_R:0.035, SCROLL_TRACK_W:0.012, SCROLL_TRACK_H:0.78 };
+                  CONTENT_TOP:0.48, CONTENT_BOTTOM:-0.45, SCROLL_MARGIN_R:0.035, SCROLL_TRACK_W:0.048, SCROLL_TRACK_H:0.78 };
   const HOVER_BG = '#23324A', ZEBRA_A='#262b31', ZEBRA_B='#21262c', EDGE_COL='#596273';
   const BTN_R=0.045, BTN_FS=0.06;
   const PANEL_FONT_URL = (typeof FONT_URL!=='undefined')?FONT_URL:(window.FONT_URL||'static/NotoSansJP-Regular.ttf');
   const FONT_SIZE=0.035, LINE_HEIGHT=1.35, EXTRA=Math.max(0.006, FONT_SIZE*0.38);
   const FUDGE_FIXED=0.0035, FUDGE_PERLINE=0.0035, EST_COLS=19, EST_SCALE=1.08;
   const JOY_DEADZONE = 0.15;
-  const JOY_SPEED    = 0.030;
-  const HOLD_SPEED   = 0.04;
+  const JOY_SPEED    = 0.040;
+  const HOLD_SPEED   = 0.080;
   let currentOnWheelListener = null;
   let isHoldingUp = false;
   let isHoldingDown = false;
@@ -482,7 +482,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
     const scene=document.querySelector('a-scene');
     const panel=document.createElement('a-entity'); panel.id='vrPanel'; panel.classList.add('ui','collidable');
     panel.setAttribute('position','0 0 -0.5'); panel.setAttribute('rotation','0 0 0'); panel.setAttribute('scale','0.5 0.5 0.5');
-    if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock','baseDist: 1.0;'); // +0.5m
+    if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock', 'baseDist: 1.5; baseScale: 1.10;'); // +0.5m
     scene.appendChild(panel);
     console.log('[openPanel] panel created; baseDist=1.0 (+0.5m), items=', (locations||[]).length);
 
@@ -499,7 +499,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
     track.setAttribute('position',`${rightX} 0 0.05`); panel.appendChild(track);
 
     const thumb=document.createElement('a-entity'); thumb.classList.add('ui','scroll-thumb','collidable');
-    thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:0.10`);
+    thumb.setAttribute('geometry',`primitive:plane;width:0.088;height:0.10`);
     thumb.setAttribute('material','shader:flat;color:#7fa7ff;opacity:0.85;transparent:true;side:double');
     thumb.setAttribute('position',`${rightX} 0 0.051`); panel.appendChild(thumb);
 
@@ -629,7 +629,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
     const rightX_forScroll=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
     function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1; const thumbH=Math.max(0.06,H*frac);
       const denom=Math.max(1e-6,maxOffset); const t=denom>0?(currentOffset/denom):0; const top=H/2-thumbH/2; const y=top - t*(H-thumbH);
-      thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:${thumbH}`); thumb.setAttribute('position',`${rightX_forScroll} ${y} 0.051`); }
+      thumb.setAttribute('geometry',`primitive:plane;width:0.048;height:${thumbH}`); thumb.setAttribute('position',`${rightX_forScroll} ${y} 0.051`); }
 
     currentOnWheelListener = (e)=>{ const k=0.0018*viewportH; setOffset(currentOffset + e.deltaY*k); };
     window.addEventListener('wheel', currentOnWheelListener, {passive:true});
