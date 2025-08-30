@@ -81,14 +81,18 @@ AFRAME.registerComponent('panel-world-lock',{
   }
 });
 
+
+
+
+// --- Ray Aim Offset (post-multiply each frame) ---
 AFRAME.registerComponent('ray-aim-offset', {
   schema: { x:{type:'number',default:0}, y:{type:'number',default:0}, z:{type:'number',default:0} },
   init() {
     this._qOffset = new THREE.Quaternion();
-    this._euler  = new THREE.Euler();
-    this._apply  = this._apply.bind(this);
-    this.update(); // _qOffset を初期化
-    this.el.object3D.onBeforeRender = this._apply; // ←毎フレーム描画直前に実行
+    this._euler = new THREE.Euler();
+    this._apply = this._apply.bind(this);
+    this.update();
+    this.el.object3D.onBeforeRender = this._apply; // apply after tracked-controls each frame
   },
   update() {
     this._euler.set(
@@ -99,14 +103,15 @@ AFRAME.registerComponent('ray-aim-offset', {
     this._qOffset.setFromEuler(this._euler);
   },
   remove() {
-    // 片付け（不要なら省略可）
-    if (this.el.object3D.onBeforeRender === this._apply) this.el.object3D.onBeforeRender = null;
+    if (this.el.object3D.onBeforeRender === this._apply) {
+      this.el.object3D.onBeforeRender = null;
+    }
   },
   _apply() {
-    // 直前に tracked-controls が上書きしたポーズに対して“後乗せ”回転
     this.el.object3D.quaternion.multiply(this._qOffset);
   }
 });
+
 
 // ===== Earth Controls =====
 AFRAME.registerComponent('earth-controls',{
@@ -435,7 +440,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
               panel-scroll-handler
               raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50; showLine: true"
               cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"
-              visible="false">
+              visible="false" ray-aim-offset="x:-45; y:0; z:0">
     </a-entity>
   </a-entity>
 
