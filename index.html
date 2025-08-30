@@ -81,6 +81,33 @@ AFRAME.registerComponent('panel-world-lock',{
   }
 });
 
+AFRAME.registerComponent('ray-aim-offset', {
+  schema: { x:{type:'number',default:0}, y:{type:'number',default:0}, z:{type:'number',default:0} },
+  init() {
+    this._qOffset = new THREE.Quaternion();
+    this._euler  = new THREE.Euler();
+    this._apply  = this._apply.bind(this);
+    this.update(); // _qOffset を初期化
+    this.el.object3D.onBeforeRender = this._apply; // ←毎フレーム描画直前に実行
+  },
+  update() {
+    this._euler.set(
+      THREE.MathUtils.degToRad(this.data.x),
+      THREE.MathUtils.degToRad(this.data.y),
+      THREE.MathUtils.degToRad(this.data.z)
+    );
+    this._qOffset.setFromEuler(this._euler);
+  },
+  remove() {
+    // 片付け（不要なら省略可）
+    if (this.el.object3D.onBeforeRender === this._apply) this.el.object3D.onBeforeRender = null;
+  },
+  _apply() {
+    // 直前に tracked-controls が上書きしたポーズに対して“後乗せ”回転
+    this.el.object3D.quaternion.multiply(this._qOffset);
+  }
+});
+
 // ===== Earth Controls =====
 AFRAME.registerComponent('earth-controls',{
   schema:{ rotationSpeed:{type:'number',default:2.0}, joystickRotationSpeed:{type:'number',default:1.0}, scaleSpeed:{type:'number',default:0.01}, mouseRotationSpeed:{type:'number',default:0.2}, wheelScaleSpeed:{type:'number',default:0.0005} },
