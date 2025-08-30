@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls — DEBUG (fix4: tick-driven scroll)</title>
+  <title>WebXR Earth Controls — DEBUG (fix5: auto-exit-vr-on-link)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
@@ -466,7 +466,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
 });
 </script>
 
-<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle panel-raf-proxy ray-enforce-child webxr="optionalFeatures: dom-overlay; overlayElement: #xrOverlay">
+<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle panel-raf-proxy ray-enforce-child>
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
   <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
@@ -483,7 +483,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
               oculus-touch-controls="hand: right; model: false"
               panel-scroll-handler
               visible="false">
-    <a-entity id="right-ray" ray-aim-offset="x:-45; y:0; z:0" raycaster="objects: .collidable, .ui; useWorldCoordinates: false; far: 30; interval: 50; showLine: true" cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"></a-entity>
+    <a-entity id="right-ray" raycaster="objects: .collidable, .ui; useWorldCoordinates: false; far: 30; interval: 50; showLine: true" cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend" rotation="-45 0 0"></a-entity>
 
     </a-entity>
   </a-entity>
@@ -533,6 +533,38 @@ AFRAME.registerComponent('panel-raf-proxy', {
   let scrollHandler = null;
   let rightHandForRestart = null;
   let lastLog = 0;
+
+  // --- New: safe navigation that exits VR first, then navigates in same tab ---
+  function safeNavigate(url){
+    if(!url) return;
+    const scene = AFRAME.scenes && AFRAME.scenes[0];
+    const go = ()=>{
+      try{
+        // Use same-tab navigation to avoid popup blockers and to reflect immediately
+        window.location.assign(url);
+      }catch(_){
+        try{ window.location.href = url; }catch(_2){ window.open(url, '_self'); }
+      }
+    };
+    if (scene && scene.is && scene.is('vr-mode')){
+      const onExit = ()=>{
+        scene.removeEventListener('exit-vr', onExit);
+        // Small delay to let the browser switch back to 2D before navigation
+        setTimeout(go, 50);
+      };
+      scene.addEventListener('exit-vr', onExit);
+      try {
+        scene.exitVR();
+      } catch(_) {}
+      // Fallback in case exit-vr never fires
+      setTimeout(()=>{
+        scene && scene.removeEventListener('exit-vr', onExit);
+        go();
+      }, 1200);
+    } else {
+      go();
+    }
+  }
 
   function setCardFrame(row,w,h){
     const bw=0.003, edge=EDGE_COL;
@@ -598,7 +630,13 @@ AFRAME.registerComponent('panel-raf-proxy', {
       txt.setAttribute('troika-text',{ value:row.dataset.title, fontSize:FONT_SIZE, lineHeight:LINE_HEIGHT, maxWidth, anchor:'left', baseline:'top', color:'#fff', outlineWidth:0.004, outlineColor:'#000', overflowWrap:'break-word', whiteSpace:'pre-wrap', clipRect:`0 -9999 ${maxWidth} 9999`, font:PANEL_FONT_URL });
       txt.setAttribute('position',`${PANEL.PAD_X} ${-PANEL.PAD_Y} 0.002`);
       row.appendChild(txt);
-      row.addEventListener('mousedown',()=>{ const u=row.dataset.url; if(u) try{ window.open(u,'_blank'); }catch(_){ } });
+
+      // ★ 修正: VRモードなら先にexitVRしてから同タブ遷移。非VRなら即遷移。
+      row.addEventListener('mousedown',()=>{
+        const u=row.dataset.url;
+        if(u) safeNavigate(u);
+      });
+
       row.addEventListener('mouseenter',()=>setRowBgColor(row,HOVER_BG));
       row.addEventListener('mouseleave',()=>setRowBgColor(row,row.dataset.baseColor));
       listGroup.appendChild(row); rows.push(row);
@@ -752,96 +790,8 @@ AFRAME.registerComponent('panel-raf-proxy', {
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('[boot] debug build ready (fix4: tick-driven scroll)');
+  console.log('[boot] debug build ready (fix5: auto-exit-vr-on-link)');
 })();
 </script>
-
-<style>
-  /* XR overlay panel */
-  #xrOverlay.hidden { display:none; }
-  #xrOverlay {
-    position: fixed; inset: 0; z-index: 9999;
-    background: rgba(0,0,0,0.5);
-    display: flex; flex-direction: column;
-  }
-  #xrOverlay .toolbar {
-    display: flex; align-items: center; gap: 12px;
-    padding: 8px 12px; background: rgba(20,20,20,0.9); color: #fff;
-  }
-  #xrOverlay .toolbar button {
-    font-size: 18px; line-height: 1; padding: 6px 10px; border-radius: 6px;
-    border: none; background: #444; color: #fff; cursor: pointer;
-  }
-  #xrOverlay .toolbar button:hover { background:#666; }
-  #overlayUrl { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; opacity: .8; }
-  #overlayFrame {
-    flex: 1 1 auto; width: 100%; border: none; background: #fff;
-  }
-</style>
-<div id="xrOverlay" class="hidden" aria-hidden="true">
-  <div class="toolbar">
-    <button id="overlayClose" title="Close (戻る)">×</button>
-    <span id="overlayUrl"></span>
-  </div>
-  <iframe id="overlayFrame"
-    allow="xr-spatial-tracking; autoplay; fullscreen"
-    sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
-</div>
-
-
-<script>
-(function(){
-  var scene = document.querySelector('a-scene');
-  var overlay = document.getElementById('xrOverlay');
-  var overlayUrl = document.getElementById('overlayUrl');
-  var frame = document.getElementById('overlayFrame');
-  var closeBtn = document.getElementById('overlayClose');
-
-  function isInVR(){
-    try{ return scene && scene.is && scene.is('vr-mode'); }catch(e){ return false; }
-  }
-  function openInOverlay(url){
-    overlayUrl.textContent = url;
-    frame.src = url;
-    overlay.classList.remove('hidden');
-    overlay.setAttribute('aria-hidden','false');
-  }
-  function closeOverlay(){
-    frame.src = 'about:blank';
-    overlay.classList.add('hidden');
-    overlay.setAttribute('aria-hidden','true');
-  }
-  if(closeBtn){ closeBtn.addEventListener('click', closeOverlay); }
-
-  function isUILink(a){
-    if(!a) return false;
-    var el = a;
-    while(el){
-      if(el.classList && (el.classList.contains('ui') || el.classList.contains('panel') || el.classList.contains('panel-body') || el.classList.contains('title'))) return true;
-      if(el.id === 'infoPanel' || el.id === 'panel-root' || el.id === 'panel' || el.id === 'panelTitle' || el.id === 'panel-body') return true;
-      if(el.hasAttribute && (el.hasAttribute('data-ui') || el.hasAttribute('data-panel'))) return true;
-      el = el.parentElement;
-    }
-    return false;
-  }
-
-  document.addEventListener('click', function(e){
-    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
-    if(!a) return;
-    if(!isInVR()) return;
-    if(!isUILink(a)) return;
-
-    var href = a.getAttribute('href');
-    if(!href || href[0]==='#') return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    openInOverlay(a.href);
-  }, true);
-
-  scene && scene.addEventListener('exit-vr', function(){ closeOverlay(); });
-})();
-</script>
-
 </body>
 </html>
