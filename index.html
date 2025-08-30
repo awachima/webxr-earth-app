@@ -294,7 +294,7 @@ AFRAME.registerComponent('earth-controls',{
 
 // ============ hex-marker ============
 AFRAME.registerComponent('hex-marker',{
-  schema:{ count:{type:'number',default:1}, color:{type:'color',default:'yellow'}, baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001}, fontUrl:{type:'string',default:FONT_URL} },
+  schema:{ count:{type:'number',default:1}, color:{type:'color',default:'#FF7F8A'}, baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001}, fontUrl:{type:'string',default:FONT_URL} },
   init:function(){
     var d=this.data;
     this.height=0.01+(d.count*d.heightUnit);
@@ -321,7 +321,7 @@ AFRAME.registerComponent('marker-placer',{
     this.cameraPos=new THREE.Vector3(); this.markerPos=new THREE.Vector3(); this.earthPos=new THREE.Vector3();
     this.previousEarthScale=this.el.object3D.scale.x;
     this.el.sceneEl.addEventListener('panel-closed', () => {
-      this.currentMarkers.forEach(marker => { var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
+      this.currentMarkers.forEach(marker => { var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('#FF7F8A'); });
     });
     var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
     console.log('[marker-placer] fetching CSV:', sheetUrl);
@@ -341,7 +341,10 @@ AFRAME.registerComponent('marker-placer',{
       var parts=lines[i].trim().split(',');
       if(parts.length>=4){
         let lat=parseFloat(parts[1]); let lon=parseFloat(parts[2]);
-        if(isNaN(lat)||isNaN(lon)){ continue; }
+        if(isNaN(lat)||isNaN(lon)){ 
+          lat = -90;   // 南極
+          lon = 0;     // 経度は任意だが 0 
+        }
         locations.push({ title: parts[0].replace(/"/g,''), lat: lat, lon: lon, url: parts[3].replace(/"/g,'') });
       }
     }
@@ -376,8 +379,8 @@ AFRAME.registerComponent('marker-placer',{
       marker.setAttribute('hex-marker',{count:cluster.length});
       marker.classList.add('collidable');
       marker.dataset.locations=JSON.stringify(cluster);
-      marker.addEventListener('mouseenter',()=>{ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('green'); });
-      marker.addEventListener('mouseleave',()=>{ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
+      marker.addEventListener('mouseenter',()=>{ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
+      marker.addEventListener('mouseleave',()=>{ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('#FF7F8A'); });
       marker.addEventListener('click', e=>{ if(window.__panelOpen) return; console.log('[marker] click -> openPanel, items=', cluster.length); openPanel(JSON.parse(e.currentTarget.dataset.locations)); });
       self.el.appendChild(marker); self.currentMarkers.push(marker);
     });
@@ -499,7 +502,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
     <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.07 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
   </a-entity>
 
-  <a-sky color="#ECECEC"></a-sky>
+  <a-sky src="eartn_model/sky.jpg"></a-sky>
 
   <script>
   AFRAME.registerComponent('vr-ray-toggle',{
