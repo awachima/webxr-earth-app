@@ -438,7 +438,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
     <a-entity id="right-hand"
               oculus-touch-controls="hand: right; model: false"
               panel-scroll-handler
-              raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50; showLine: true"
+              raycaster="objects: .collidable, .ui; useWorldCoordinates: false; far: 30; interval: 50; showLine: true"
               cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend"
               visible="false" ray-aim-offset="x:-45; y:0; z:0">
     </a-entity>
