@@ -25,7 +25,7 @@ window.__panelOpen = false;
 window.__panelTick = null; // panel scroll step runner injected at openPanel
 
 function refreshAllRaycasters(){
-  ['#mouseCursor', '#right-hand', '#right-ray'].forEach(function(sel){
+  ['#mouseCursor', '#right-ray'].forEach(function(sel){
     var el=document.querySelector(sel);
     var rc = el && el.components && el.components.raycaster;
     if(rc && rc.refreshObjects) rc.refreshObjects();
@@ -33,7 +33,7 @@ function refreshAllRaycasters(){
 }
 function setRaycasterTargets(uiOnly){
   var objs = uiOnly ? '.ui' : '.collidable, .ui';
-  ['#mouseCursor', '#right-hand', '#right-ray'].forEach(function(sel){
+  ['#mouseCursor', '#right-ray'].forEach(function(sel){
     var el=document.querySelector(sel);
     if(el) el.setAttribute('raycaster','objects',objs);
   });
@@ -109,6 +109,50 @@ AFRAME.registerComponent('ray-aim-offset', {
   },
   _apply() {
     this.el.object3D.quaternion.multiply(this._qOffset);
+  }
+});
+
+
+
+// --- Enforce child raycaster (#right-ray) as the only VR ray ---
+AFRAME.registerComponent('ray-enforce-child', {
+  init: function(){
+    var scene = this.el.sceneEl || this.el;
+    function setAttr(el, comp, prop, val){ if(!el) return; try{ el.setAttribute(comp, prop, val);}catch(e){} }
+    function enableChild(){
+      var right = document.getElementById('right-hand');
+      var child = document.getElementById('right-ray');
+      var mouse = document.getElementById('mouseCursor');
+      // Disable any raycaster on the parent
+      if(right && right.components && right.components.raycaster){
+        right.removeAttribute('raycaster');
+      }
+      // Disable all raycasters except mouseCursor and right-ray
+      Array.from(document.querySelectorAll('[raycaster]')).forEach(function(e){
+        if(e.id !== 'right-ray' && e.id !== 'mouseCursor'){
+          setAttr(e,'raycaster','enabled',false);
+        }
+      });
+      // Enable child ray and show the line
+      if(child){
+        setAttr(child,'raycaster','useWorldCoordinates',false);
+        setAttr(child,'raycaster','showLine',true);
+        setAttr(child,'raycaster','enabled',true);
+      }
+      if(mouse){ setAttr(mouse,'raycaster','enabled',false); }
+      console.log('[ray-enforce-child] enter-vr: child ray enabled, others disabled');
+    }
+    function disableChild(){
+      var child = document.getElementById('right-ray');
+      var mouse = document.getElementById('mouseCursor');
+      if(child){ setAttr(child,'raycaster','enabled',false); }
+      if(mouse){ setAttr(mouse,'raycaster','enabled',true); }
+      console.log('[ray-enforce-child] exit-vr: child ray disabled, mouse enabled');
+    }
+    // Initial
+    disableChild();
+    scene.addEventListener('enter-vr', enableChild);
+    scene.addEventListener('exit-vr', disableChild);
   }
 });
 
@@ -422,7 +466,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
 });
 </script>
 
-<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle panel-raf-proxy>
+<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle panel-raf-proxy ray-enforce-child>
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
   <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
