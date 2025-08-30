@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls — DEBUG (fix2)</title>
+  <title>WebXR Earth Controls — DEBUG (fix4: tick-driven scroll)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
@@ -22,6 +22,7 @@
 <script>
 const FONT_URL = 'static/NotoSansJP-Regular.ttf';
 window.__panelOpen = false;
+window.__panelTick = null; // panel scroll step runner injected at openPanel
 
 function refreshAllRaycasters(){
   ['#mouseCursor', '#right-hand'].forEach(function(sel){
@@ -62,7 +63,6 @@ AFRAME.registerComponent('panel-world-lock',{
       const R = (this.earth.getAttribute('geometry')?.radius || 1) * s;
       const along = this._earthPos.clone().sub(this._camPos).dot(this._fwd); // +: forward
       const nearAlong = along - R;
-      // ★ 実際に地球と衝突する場合だけ距離を縮める（地球が前方にあるとき）
       const willIntersect = (along > 0) && (nearAlong <= dist + this.data.margin);
       if (willIntersect){
         dist = Math.max(this.data.minDist, nearAlong - this.data.margin);
@@ -369,7 +369,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     el.addEventListener('thumbstickmoved', this._onThumb);
     el.sceneEl.addEventListener('panel-opened', this._onOpened);
     el.sceneEl.addEventListener('panel-closed', this._onClosed);
-    console.log('[panel-scroll-handler] init, listeners attached (FIX3)');
+    console.log('[panel-scroll-handler] init, listeners attached (FIX4)');
   },
   remove: function(){
     var el = this.el;
@@ -378,9 +378,19 @@ AFRAME.registerComponent('panel-scroll-handler', {
     el.sceneEl.removeEventListener('panel-opened', this._onOpened);
     el.sceneEl.removeEventListener('panel-closed', this._onClosed);
   }
-});</script>
+});
 
-<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle>
+// ★ WebXR中でも確実に毎フレーム動作するtickループ
+AFRAME.registerComponent('panel-raf-proxy', {
+  tick: function(){
+    if (window.__panelOpen && typeof window.__panelTick === 'function') {
+      window.__panelTick();
+    }
+  }
+});
+</script>
+
+<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle panel-raf-proxy>
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
   <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
@@ -393,7 +403,6 @@ AFRAME.registerComponent('panel-scroll-handler', {
       <a-entity id="mouseCursor" cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50"></a-entity>
     </a-entity>
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
-    <!-- ★ 'laser-controls' を外して二重バインドを回避。右手は oculus-touch-controls のみ -->
     <a-entity id="right-hand"
               oculus-touch-controls="hand: right; model: false"
               panel-scroll-handler
@@ -446,8 +455,6 @@ AFRAME.registerComponent('panel-scroll-handler', {
   let isHoldingUp = false;
   let isHoldingDown = false;
   let scrollHandler = null;
-  let restartThumbstick = null;
-  let restartAxis = null;
   let rightHandForRestart = null;
   let lastLog = 0;
 
@@ -525,7 +532,9 @@ AFRAME.registerComponent('panel-scroll-handler', {
     });
 
     const viewportH=(PANEL.CONTENT_TOP-PANEL.CONTENT_BOTTOM);
-    let totalHeight=0, maxOffset=0, currentOffset=0, targetOffset=0, rafId=null;
+    let totalHeight=0, maxOffset=0, currentOffset=0, targetOffset=0;
+    function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP + currentOffset} 0.02`); }
+    function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){ currentOffset=targetOffset; applyOffset(); updateScrollbar(); console.log('[setOffset] target=',targetOffset.toFixed(3),' current=',currentOffset.toFixed(3),' max=',maxOffset.toFixed(3)); } }
 
     function reflow(){
       let y=0; rows.forEach((row,i)=>{
@@ -537,15 +546,12 @@ AFRAME.registerComponent('panel-scroll-handler', {
       });
       totalHeight=Math.max(0,y-PANEL.GAP); maxOffset=Math.max(0,totalHeight-viewportH);
       setOffset(currentOffset,true); updateScrollbar();
-      console.log('[reflow] rows=', rows.length, 'totalH=', totalHeight.toFixed(3), 'viewportH=', viewportH.toFixed(3), 'maxOffset=', maxOffset.toFixed(3));
+      console.log('[reflow] rows=', rows.length, ' totalH=', totalHeight.toFixed(3), ' viewportH=', viewportH.toFixed(3), ' maxOffset=', maxOffset.toFixed(3));
     }
 
     rows.forEach((row,i)=>{ const txt=row.querySelector('.list-text'); pollHeight(txt, 140, h=>{ if(h!=null){ realH[i]=h; reflow(); } }); });
     setTimeout(reflow, 400); setTimeout(reflow, 1000); setTimeout(reflow, 2000); setTimeout(reflow, 3000);
 
-    function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP + currentOffset} 0.02`); }
-    function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){ currentOffset=targetOffset; applyOffset(); updateScrollbar(); console.log('[setOffset] target=',targetOffset.toFixed(3),'current=',currentOffset.toFixed(3),'max=',maxOffset.toFixed(3)); return; } if(!rafId) animate(); }
-    
     function readXRRightStickY(){
       try {
         var scene = AFRAME.scenes && AFRAME.scenes[0];
@@ -559,8 +565,8 @@ AFRAME.registerComponent('panel-scroll-handler', {
               var cand = (axes.length > 3 ? axes[3] : (axes.length > 1 ? axes[1] : 0));
               if (Math.abs(cand) > Math.abs(y)) y = cand;
             }
-          } catch(_){}
-        });
+          } catch(_){}}
+        );
         return y;
       } catch(e){ return 0; }
     }
@@ -580,8 +586,8 @@ AFRAME.registerComponent('panel-scroll-handler', {
       } catch(_){ return 0; }
     }
 
-    function animate(){
-      rafId = requestAnimationFrame(animate);
+    // ★ 1フレーム分の処理（panel-raf-proxy の tick から毎フレーム呼ばれる）
+    function animateStep(){
       let stickY_src = 'panel-scroll-handler';
       let stickY = (scrollHandler && typeof scrollHandler.stickY==='number') ? scrollHandler.stickY : 0;
 
@@ -597,7 +603,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
       const now = performance.now();
       if (now - lastLog > 300) {
         lastLog = now;
-        console.log('[animate] stickY=', stickY.toFixed(3), 'src=', stickY_src, 'target=', targetOffset.toFixed(3), 'current=', currentOffset.toFixed(3));
+        console.log('[animate] stickY=', stickY.toFixed(3), ' src=', stickY_src, ' target=', targetOffset.toFixed(3), ' current=', currentOffset.toFixed(3));
       }
 
       if (Math.abs(stickY) > JOY_DEADZONE) {
@@ -620,25 +626,17 @@ AFRAME.registerComponent('panel-scroll-handler', {
       updateScrollbar();
     }
 
-    rightHandForRestart = rightHandEl || document.querySelector('#right-hand');
-    const restart = (e)=>{ if (window.__panelOpen) { if (!rafId) { console.log('[restart] by', e.type); animate(); } } };
-    if (rightHandForRestart) {
-      restartThumbstick = restart;
-      restartAxis = restart;
-      rightHandForRestart.addEventListener('thumbstickmoved', restartThumbstick);
-      rightHandForRestart.addEventListener('axismove', restartAxis);
-    }
-
+    const rightX_forScroll=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
     function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1; const thumbH=Math.max(0.06,H*frac);
       const denom=Math.max(1e-6,maxOffset); const t=denom>0?(currentOffset/denom):0; const top=H/2-thumbH/2; const y=top - t*(H-thumbH);
-      thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:${thumbH}`); thumb.setAttribute('position',`${rightX} ${y} 0.051`); }
+      thumb.setAttribute('geometry',`primitive:plane;width:0.022;height:${thumbH}`); thumb.setAttribute('position',`${rightX_forScroll} ${y} 0.051`); }
 
     currentOnWheelListener = (e)=>{ const k=0.0018*viewportH; setOffset(currentOffset + e.deltaY*k); };
     window.addEventListener('wheel', currentOnWheelListener, {passive:true});
 
     const stopHolds = () => { isHoldingUp = false; isHoldingDown = false; };
-    btnDn.addEventListener('mousedown', () => { isHoldingDown = true; if (!rafId) animate(); });
-    btnUp.addEventListener('mousedown', () => { isHoldingUp = true; if (!rafId) animate(); });
+    btnDn.addEventListener('mousedown', () => { isHoldingDown = true; });
+    btnUp.addEventListener('mousedown', () => { isHoldingUp = true; });
     btnDn.addEventListener('mouseup', stopHolds);
     btnUp.addEventListener('mouseup', stopHolds);
     btnDn.addEventListener('mouseleave', stopHolds);
@@ -655,8 +653,11 @@ AFRAME.registerComponent('panel-scroll-handler', {
     setRaycasterTargets && setRaycasterTargets(true);
     refreshAllRaycasters && refreshAllRaycasters();
     panel.sceneEl && panel.sceneEl.emit('panel-opened');
-    console.log('[openPanel] panel-opened, animate start');
-    animate();
+    console.log('[openPanel] panel-opened, tick-driven scroll start');
+    // ★ tick から呼ばせる
+    window.__panelTick = animateStep;
+    // 1回だけ即時反映
+    animateStep();
   }
 
   function closePanel(){
@@ -665,13 +666,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
     if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
     isHoldingUp = false; isHoldingDown = false;
     scrollHandler = null;
-    if (rightHandForRestart) {
-      if (restartThumbstick) rightHandForRestart.removeEventListener('thumbstickmoved', restartThumbstick);
-      if (restartAxis) rightHandForRestart.removeEventListener('axismove', restartAxis);
-      restartThumbstick = null;
-      restartAxis = null;
-      rightHandForRestart = null;
-    }
+    window.__panelTick = null; // ★ 停止
     window.__panelOpen=false; 
     const scene = AFRAME.scenes[0];
     if(scene) scene.emit('panel-closed');
@@ -681,7 +676,7 @@ AFRAME.registerComponent('panel-scroll-handler', {
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
-  console.log('[boot] debug build ready (fix3: bind stickY via component + setOffset logs)');
+  console.log('[boot] debug build ready (fix4: tick-driven scroll)');
 })();
 </script>
 </body>
