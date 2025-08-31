@@ -148,7 +148,7 @@ function setRaycasterTargets(uiOnly){
 
 // ----- パネルをワールド固定 -----
 AFRAME.registerComponent('panel-world-lock',{
-  schema:{ baseDist:{type:'number',default:0.5}, baseScale:{type:'number',default:0.5}, margin:{type:'number',default:0.03}, minDist:{type:'number',default:0.08}, worldYaw:{type:'number',default:0}, yOffset:{type:'number',default:0.00} },
+  schema:{ baseDist:{type:'number',default:0.5}, baseScale:{type:'number',default:0.5}, margin:{type:'number',default:0.03}, minDist:{type:'number',default:1.02}, worldYaw:{type:'number',default:0}, yOffset:{type:'number',default:0.00} },
   init:function(){
     this.cam = document.querySelector('#camera');
     this.earth = document.querySelector('#earth');
