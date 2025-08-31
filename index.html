@@ -5,6 +5,113 @@
   <title>WebXR Earth Controls — DEBUG (fix5: auto-exit-vr-on-link)</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script>
+AFRAME.registerComponent('rounded-panel', {
+  schema: {
+    width:  {type: 'number', default: 0.6},
+    height: {type: 'number', default: 0.7},
+    radius: {type: 'number', default: 0.05},      // 角丸半径
+    color:  {type: 'color',  default: '#333'},
+    opacity:{type: 'number', default: 0.7},
+    stroke: {type: 'number', default: 0.001},      // 枠線の太さ（面の外周から内側方向）
+    strokeColor:   {type: 'color',  default: '#FFFFFF'},
+    strokeOpacity: {type: 'number', default: 1.0},
+    doubleSided:   {type: 'boolean', default: false} // 両面表示（必要に応じて）
+  },
+
+  init: function () {
+    this._build();
+  },
+
+  update: function () {
+    this._build();
+  },
+
+  remove: function () {
+    this._disposeMesh('rp-fill');
+    this._disposeMesh('rp-stroke');
+  },
+
+  _disposeMesh: function (key) {
+    const obj = this.el.getObject3D(key);
+    if (obj) {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) obj.material.dispose();
+      this.el.removeObject3D(key);
+    }
+  },
+
+  _roundedRectShape: function (w, h, r) {
+    const shape = new THREE.Shape();
+    const hw = w / 2, hh = h / 2;
+    const rr = Math.max(0, Math.min(r, Math.min(hw, hh))); // 過大半径の抑制
+
+    // 開始点（左下角の丸の始点）
+    shape.moveTo(-hw + rr, -hh);
+
+    // 下辺 → 右下角
+    shape.lineTo(hw - rr, -hh);
+    shape.absarc(hw - rr, -hh + rr, rr, -Math.PI / 2, 0, false);
+
+    // 右辺 → 右上角
+    shape.lineTo(hw, hh - rr);
+    shape.absarc(hw - rr, hh - rr, rr, 0, Math.PI / 2, false);
+
+    // 上辺 → 左上角
+    shape.lineTo(-hw + rr, hh);
+    shape.absarc(-hw + rr, hh - rr, rr, Math.PI / 2, Math.PI, false);
+
+    // 左辺 → 左下角
+    shape.lineTo(-hw, -hh + rr);
+    shape.absarc(-hw + rr, -hh + rr, rr, Math.PI, 1.5 * Math.PI, false);
+
+    return shape;
+  },
+
+  _build: function () {
+    const d = this.data;
+    const side = d.doubleSided ? THREE.DoubleSide : THREE.FrontSide;
+
+    // 既存メッシュの破棄
+    this._disposeMesh('rp-fill');
+    this._disposeMesh('rp-stroke');
+
+    // === 本体（塗り） ===
+    const fillShape = this._roundedRectShape(d.width, d.height, d.radius);
+    const fillGeom = new THREE.ShapeGeometry(fillShape, 24);
+    const fillMat  = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(d.color),
+      transparent: true,
+      opacity: d.opacity,
+      side
+    });
+    const fillMesh = new THREE.Mesh(fillGeom, fillMat);
+    this.el.setObject3D('rp-fill', fillMesh);
+
+    // === 枠線（リング形状） ===
+    if (d.stroke > 0) {
+      const innerW = Math.max(0, d.width  - 2 * d.stroke);
+      const innerH = Math.max(0, d.height - 2 * d.stroke);
+      const innerR = Math.max(0, d.radius - d.stroke);
+
+      const outer = this._roundedRectShape(d.width,  d.height,  d.radius);
+      const inner = this._roundedRectShape(innerW,   innerH,    innerR);
+      // 「穴」を開けてリング形状に
+      outer.holes.push(inner);
+
+      const strokeGeom = new THREE.ShapeGeometry(outer, 24);
+      const strokeMat  = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(d.strokeColor),
+        transparent: true,
+        opacity: d.strokeOpacity,
+        side
+      });
+      const strokeMesh = new THREE.Mesh(strokeGeom, strokeMat);
+      this.el.setObject3D('rp-stroke', strokeMesh);
+    }
+  }
+});
+</script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
@@ -294,7 +401,7 @@ AFRAME.registerComponent('earth-controls',{
 
 // ============ hex-marker ============
 AFRAME.registerComponent('hex-marker',{
-  schema:{ count:{type:'number',default:1}, color:{type:'color',default:'#FF7F8A'}, baseRadius:{type:'number',default:0.0075}, heightUnit:{type:'number',default:0.0001}, fontUrl:{type:'string',default:FONT_URL} },
+  schema:{ count:{type:'number',default:1}, color:{type:'color',default:'#FF7F8A'}, baseRadius:{type:'number',default:0.013}, heightUnit:{type:'number',default:0.0001}, fontUrl:{type:'string',default:FONT_URL} },
   init:function(){
     var d=this.data;
     this.height=0.01+(d.count*d.heightUnit);
@@ -314,7 +421,7 @@ AFRAME.registerComponent('hex-marker',{
 
 // ============ marker-placer ============
 AFRAME.registerComponent('marker-placer',{
-  schema:{ maxMarkerMultiplier:{type:'number',default:20} },
+  schema:{ maxMarkerMultiplier:{type:'number',default:20}, minWorldMultiplier:{type:'number',default:3.5} },
   init:async function(){
     this.allLocations=[]; this.currentMarkers=[];
     this.cameraEl=document.querySelector('#camera');
@@ -400,7 +507,10 @@ AFRAME.registerComponent('marker-placer',{
     this.el.object3D.getWorldPosition(this.earthPos); this.cameraEl.object3D.getWorldPosition(this.cameraPos);
     for(var i=0;i<this.currentMarkers.length;i++){
       var marker=this.currentMarkers[i];
-      var markerScale=this.data.maxMarkerMultiplier - ((s-1)/(3-1))*(this.data.maxMarkerMultiplier-1);
+      var t = (s-1)/(3-1);
+var targetWorld = this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier - this.data.minWorldMultiplier);
+var markerScale = targetWorld / s; 
+marker.object3D.scale.set(markerScale, markerScale, markerScale);
       marker.object3D.scale.set(markerScale,markerScale,markerScale);
       marker.object3D.getWorldPosition(this.markerPos);
       var normal=this.markerPos.clone().sub(this.earthPos).normalize();
@@ -475,7 +585,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
   <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
             src="eartn_model/world.topo.200409.3x10800x5400.jpg"
             segments-height="64" segments-width="128"
-            earth-controls marker-placer></a-sphere>
+            earth-controls marker-placer="maxMarkerMultiplier: 14"></a-sphere>
 
   <a-entity id="rig">
     <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 1.6 0" look-controls="enabled: false">
@@ -492,14 +602,16 @@ AFRAME.registerComponent('panel-raf-proxy', {
   </a-entity>
 
   <!-- 静的UI（元の見た目を維持） -->
-  <a-entity id="ui-panel" position="-0.08 1.595 -0.1" rotation="0 0 0" scale="0.05 0.05 0.05">
-    <a-entity geometry="primitive: plane; width: 0.5; height: 0.7" material="color: #333; opacity: 0.7"></a-entity>
-    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.25 0.01"><a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.14 0 0.01"><a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.165 0 0.01"><a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 0.07 0.01"><a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.01 -0.07 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+  <a-entity id="ui-panel" position="-0.025 1.599 -0.033" rotation="0 0 0" scale="0.03 0.03 0.03">
+    <a-entity rounded-panel="width: 0.6; height: 0.7; radius: 0.05; 
+                 color: #228; opacity: 0.6;
+                 stroke: 0.01; strokeColor: #fff; strokeOpacity: 1"></a-entity>
+    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.25 0.01"><a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.20 0 0.01"><a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.23 0 0.01"><a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.08 0.01"><a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.06 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
   </a-entity>
 
   <a-sky src="eartn_model/sky.jpg"></a-sky>
@@ -593,7 +705,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
     const scene=document.querySelector('a-scene');
     const panel=document.createElement('a-entity'); panel.id='vrPanel'; panel.classList.add('ui','collidable');
     panel.setAttribute('position','0 0 -0.5'); panel.setAttribute('rotation','0 0 0'); panel.setAttribute('scale','0.5 0.5 0.5');
-    if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock', 'baseDist: 1.5; baseScale: 1.10;'); // +0.5m
+    if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock', 'baseDist: 1.5; baseScale: 1.40;'); // +0.5m
     scene.appendChild(panel);
     console.log('[openPanel] panel created; baseDist=1.0 (+0.5m), items=', (locations||[]).length);
 
