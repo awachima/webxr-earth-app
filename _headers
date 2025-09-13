@@ -1,0 +1,5 @@
+/*
+  Permissions-Policy: xr-spatial-tracking=(self)
+  Content-Security-Policy: default-src 'self'; img-src 'self' https: data:; script-src 'self' https: 'unsafe-inline'; style-src 'self' https: 'unsafe-inline'; connect-src 'self' https:;
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
