@@ -1,5 +1,16 @@
 /*
   Permissions-Policy: xr-spatial-tracking=(self)
-  Content-Security-Policy: default-src 'self'; img-src 'self' https: data:; script-src 'self' https: 'unsafe-inline'; style-src 'self' https: 'unsafe-inline'; connect-src 'self' https:;
+
+  Content-Security-Policy:
+    default-src 'self';
+    script-src 'self' https: blob: 'unsafe-inline';
+    style-src  'self' https: 'unsafe-inline';
+    img-src    'self' https: data: blob:;
+    font-src   'self' https: data:;
+    connect-src 'self' https:;
+    worker-src 'self' blob:;
+    child-src  blob:;
+    upgrade-insecure-requests;
+
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
