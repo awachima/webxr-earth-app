@@ -264,14 +264,29 @@ AFRAME.registerComponent('ray-enforce-child', {
 });
 
 
-// ===== Earth Controls =====
+// ===================================================================
+// ===== Earth Controls (★★スマホ・タッチ操作対応版★★) =====
+// ===================================================================
 AFRAME.registerComponent('earth-controls',{
-  schema:{ rotationSpeed:{type:'number',default:2.0}, joystickRotationSpeed:{type:'number',default:1.0}, scaleSpeed:{type:'number',default:0.01}, mouseRotationSpeed:{type:'number',default:0.2}, wheelScaleSpeed:{type:'number',default:0.0005} },
+  // schemaにpinchScaleSpeedを追加
+  schema:{ 
+    rotationSpeed:{type:'number',default:2.0}, 
+    joystickRotationSpeed:{type:'number',default:1.0}, 
+    scaleSpeed:{type:'number',default:0.01}, 
+    mouseRotationSpeed:{type:'number',default:0.2}, 
+    wheelScaleSpeed:{type:'number',default:0.0005},
+    pinchScaleSpeed:{type:'number', default:0.001} // ★ スマホのピンチ操作の感度
+  },
   init:function(){
     this.minScale=1.0; this.maxScale=3.0;
     this.currentXRotation=0; this.keys={};
     this.stickInput={ left:{x:0,y:0}, right:{x:0,y:0} };
-    this.isDragging=false; this.previousMousePosition={x:0,y:0};
+    
+    // --- マウス・タッチ操作の状態管理 ---
+    this.isDragging=false; 
+    this.previousPointerPosition={x:0,y:0}; // マウスと1本指タッチの座標
+    this.previousPinchDistance = 0; // 2本指タッチの距離
+
     this.cameraEl=document.querySelector('#camera');
     this.uiState = { rotUp:false, rotDown:false, rotLeft:false, rotRight:false, zoomIn:false, zoomOut:false };
     var self=this;
@@ -280,8 +295,16 @@ AFRAME.registerComponent('earth-controls',{
     this.el.sceneEl.addEventListener('loaded', function(){
       var cvs=self.el.sceneEl.canvas;
       setTimeout(()=>{
+        // PC マウス操作
         cvs.addEventListener('mousedown',e=>self.onMouseDown(e));
         window.addEventListener('mousemove',e=>self.onMouseMove(e));
+
+        // ★★★ スマートフォン タッチ操作 ★★★
+        cvs.addEventListener('touchstart', e => self.onTouchStart(e), {passive: false});
+        cvs.addEventListener('touchmove', e => self.onTouchMove(e), {passive: false});
+        cvs.addEventListener('touchend', e => self.onTouchEnd(e));
+        // ★★★ ここまで ★★★
+
       }, 150);
       window.addEventListener('mouseup',()=>self.onMouseUp());
       if (!AFRAME.utils.device.checkHeadsetConnected()){
@@ -339,18 +362,17 @@ AFRAME.registerComponent('earth-controls',{
     });
   },
   onMouseDown:function(evt){
-    if (evt.target.classList.contains('ui')) return;
-    if(window.__panelOpen) return;
-    this.isDragging=true; this.previousMousePosition={x:evt.clientX,y:evt.clientY};
+    if (evt.target.classList.contains('ui') || window.__panelOpen) return;
+    this.isDragging=true; this.previousPointerPosition={x:evt.clientX,y:evt.clientY};
     if(this.cameraEl) this.cameraEl.setAttribute('look-controls','enabled',false);
   },
   onMouseMove:function(evt){
     if(!this.isDragging || window.__panelOpen) return;
-    var dx=evt.clientX-this.previousMousePosition.x;
-    var dy=evt.clientY-this.previousMousePosition.y;
+    var dx=evt.clientX-this.previousPointerPosition.x;
+    var dy=evt.clientY-this.previousPointerPosition.y;
     this.el.object3D.rotation.y += dx*(Math.PI/180)*this.data.mouseRotationSpeed;
     this.currentXRotation += dy*this.data.mouseRotationSpeed;
-    this.previousMousePosition={x:evt.clientX,y:evt.clientY};
+    this.previousPointerPosition={x:evt.clientX,y:evt.clientY};
   },
   onMouseUp:function(){ this.isDragging=false; },
   onWheelCanvas:function(evt){
@@ -358,6 +380,61 @@ AFRAME.registerComponent('earth-controls',{
     var s=this.el.object3D.scale.x; s += evt.deltaY*-1*this.data.wheelScaleSpeed; s=Math.max(this.minScale,Math.min(this.maxScale,s));
     this.el.object3D.scale.set(s,s,s);
   },
+
+  // ★★★ ここからタッチイベント処理の関数を追加 ★★★
+  getPinchDistance: function(evt) {
+    var dx = evt.touches[0].clientX - evt.touches[1].clientX;
+    var dy = evt.touches[0].clientY - evt.touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  },
+
+  onTouchStart: function(evt) {
+    if (window.__panelOpen) return;
+    // デフォルトの画面スクロールなどを防ぐ
+    evt.preventDefault();
+
+    if (evt.touches.length === 1) { // 1本指での操作（回転）
+      this.isDragging = true;
+      this.previousPointerPosition = { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
+    } else if (evt.touches.length === 2) { // 2本指での操作（拡縮）
+      this.isDragging = false; // 2本指の場合は回転させない
+      this.previousPinchDistance = this.getPinchDistance(evt);
+    }
+  },
+
+  onTouchMove: function(evt) {
+    if (window.__panelOpen) return;
+    evt.preventDefault();
+
+    if (this.isDragging && evt.touches.length === 1) { // 1本指でドラッグ中
+      var dx = evt.touches[0].clientX - this.previousPointerPosition.x;
+      var dy = evt.touches[0].clientY - this.previousPointerPosition.y;
+      this.el.object3D.rotation.y += dx * (Math.PI / 180) * this.data.mouseRotationSpeed;
+      this.currentXRotation += dy * this.data.mouseRotationSpeed;
+      this.previousPointerPosition = { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
+
+    } else if (evt.touches.length === 2) { // 2本指でピンチ中
+      var currentDist = this.getPinchDistance(evt);
+      var delta = currentDist - this.previousPinchDistance;
+      var s = this.el.object3D.scale.x;
+      s += delta * this.data.pinchScaleSpeed; // 新しいプロパティで感度調整
+      s = Math.max(this.minScale, Math.min(this.maxScale, s));
+      this.el.object3D.scale.set(s, s, s);
+      this.previousPinchDistance = currentDist;
+    }
+  },
+
+  onTouchEnd: function(evt) {
+    // 指が離れたらドラッグやピンチの状態をリセット
+    if (evt.touches.length < 2) {
+      this.previousPinchDistance = 0;
+    }
+    if (evt.touches.length < 1) {
+      this.isDragging = false;
+    }
+  },
+  // ★★★ ここまで ★★★
+
   getNonVrSticks:function(){
     var pads = (navigator.getGamepads && navigator.getGamepads()) ? navigator.getGamepads() : [];
     var p = null; for (var i=0;i<pads.length;i++){ if(pads[i] && pads[i].connected){ p=pads[i]; break; } }
@@ -601,7 +678,6 @@ AFRAME.registerComponent('panel-raf-proxy', {
     </a-entity>
   </a-entity>
 
-  <!-- 静的UI（元の見た目を維持） -->
   <a-entity id="ui-panel" position="-0.025 1.599 -0.033" rotation="0 0 0" scale="0.03 0.03 0.03">
     <a-entity rounded-panel="width: 0.6; height: 0.7; radius: 0.05; 
                  color: #228; opacity: 0.6;
