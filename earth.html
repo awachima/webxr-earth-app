@@ -727,35 +727,46 @@ AFRAME.registerComponent('panel-raf-proxy', {
 
   // --- New: safe navigation that exits VR first, then navigates in same tab ---
   function safeNavigate(url){
-    if(!url) return;
-    const scene = AFRAME.scenes && AFRAME.scenes[0];
-    const go = ()=>{
-      try{
-        // Use same-tab navigation to avoid popup blockers and to reflect immediately
-        window.location.assign(url);
-      }catch(_){
-        try{ window.location.href = url; }catch(_2){ window.open(url, '_self'); }
-      }
+  if(!url) return;
+  const topWin = window.top || window.parent || window;
+  const scene  = (AFRAME.scenes && AFRAME.scenes[0]) || null;
+
+  const go = ()=>{
+    try { topWin.location.assign(url); }
+    catch(_) { try { topWin.location.href = url; } catch(_2){} }
+  };
+
+  if (scene && scene.is && scene.is('vr-mode')){
+    const onExit = ()=>{
+      try { scene.removeEventListener('exit-vr', onExit); } catch(_) {}
+      setTimeout(go, 50);
     };
-    if (scene && scene.is && scene.is('vr-mode')){
-      const onExit = ()=>{
-        scene.removeEventListener('exit-vr', onExit);
-        // Small delay to let the browser switch back to 2D before navigation
-        setTimeout(go, 50);
-      };
-      scene.addEventListener('exit-vr', onExit);
-      try {
-        scene.exitVR();
-      } catch(_) {}
-      // Fallback in case exit-vr never fires
-      setTimeout(()=>{
-        scene && scene.removeEventListener('exit-vr', onExit);
-        go();
-      }, 1200);
-    } else {
+    try { scene.addEventListener('exit-vr', onExit); } catch(_) {}
+    try { scene.exitVR(); } catch(_) {}
+    setTimeout(()=>{
+      try { scene && scene.removeEventListener('exit-vr', onExit); } catch(_) {}
       go();
-    }
+    }, 1200);
+  } else {
+    go();
   }
+}
+/* window.open -> parent same-tab navigation */
+(function(){
+  try{
+    const topWin = window.top || window.parent || window;
+    const _open = window.open;
+    window.open = function(url, target, features){
+      if (typeof url === 'string'){
+        try { topWin.location.assign(url); }
+        catch(_) { topWin.location.href = url; }
+        return null;
+      }
+      return _open.apply(window, arguments);
+    };
+  }catch(_){}
+})();
+
 
   function setCardFrame(row,w,h){
     const bw=0.003, edge=EDGE_COL;
@@ -984,5 +995,94 @@ AFRAME.registerComponent('panel-raf-proxy', {
   console.log('[boot] debug build ready (fix5: auto-exit-vr-on-link)');
 })();
 </script>
+
+<script>
+(function(){
+  'use strict';
+  const KEY = 'earthState.v1';
+
+  function clamp(v, min, max){ return Math.min(max, Math.max(min, v)); }
+
+  function readEarthState(){
+    try { return JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch(_) { return null; }
+  }
+  function writeEarthState(state){
+    try { sessionStorage.setItem(KEY, JSON.stringify(state)); } catch(_) {}
+  }
+
+  // === 保存：ページ離脱時（通常遷移・戻る時の直前） ===
+  function saveNow(){
+    const earth = document.getElementById('earth');
+    if (!earth || !earth.object3D) return;
+    const o = earth.object3D;
+    const ec = earth.components['earth-controls'];
+    const rxDeg = ec ? ec.currentXRotation : THREE.MathUtils.radToDeg(o.rotation.x);
+    const ryDeg = THREE.MathUtils.radToDeg(o.rotation.y);
+    const s = o.scale.x;
+    writeEarthState({ rxDeg, ryDeg, s });
+    // console.log('[persist] saved', {rxDeg, ryDeg, s});
+  }
+  // bfcache 対応：pagehide で保存（persisted=true でも発火）
+  window.addEventListener('pagehide', saveNow, {capture:true});
+  // 念のため
+  window.addEventListener('beforeunload', saveNow, {capture:true});
+
+  // === 復元：シーン準備後に適用 ===
+  function restoreIfAny(){
+    const state = readEarthState();
+    if (!state) return;
+
+    const earth = document.getElementById('earth');
+    if (!earth || !earth.object3D) return;
+
+    // 範囲の安全確認（既存の最小最大に合わせる）
+    const minS = 1.0, maxS = 3.0;
+    const s = clamp(Number(state.s)||1, minS, maxS);
+    const rxDeg = clamp(Number(state.rxDeg)||0, -80, 80);
+    const ryDeg = Number(state.ryDeg)||0;
+
+    // 1) 回転・拡縮を適用
+    earth.object3D.scale.set(s, s, s);
+    earth.object3D.rotation.x = THREE.MathUtils.degToRad(rxDeg);
+    earth.object3D.rotation.y = THREE.MathUtils.degToRad(ryDeg);
+
+    // 2) コントロール側の内部状態も同期（重要）
+    const ec = earth.components['earth-controls'];
+    if (ec) {
+      ec.currentXRotation = rxDeg;
+      // スクロールや入力のスナップ用にキー状態は触らない
+    }
+
+    // 3) マーカーの再配置が必要なら即時更新（閾値待ちではなく）
+    const mp = earth.components['marker-placer'];
+    if (mp && typeof mp.updateClusters === 'function') {
+      mp.previousEarthScale = s;   // 差分判定をバイパス
+      try { mp.updateClusters(); } catch(_) {}
+    }
+
+    // console.log('[persist] restored', state);
+  }
+
+  // bfcache で完全復帰した場合はブラウザが状態を保持してくれますが、
+  // 念のため pageshow でも復元を試みます（persisted のときは基本そのまま）
+  window.addEventListener('pageshow', function(e){
+    // bfcache 復元でも UI 崩れは起きない想定だが、二重適用を避けたいなら下行を有効化
+    // if (e.persisted) return;
+    // A-Frame シーン準備後に適用
+    const scene = (AFRAME.scenes && AFRAME.scenes[0]) || document.querySelector('a-scene');
+    if (scene && scene.hasLoaded) {
+      restoreIfAny();
+    } else if (scene) {
+      scene.addEventListener('loaded', restoreIfAny, {once:true});
+    } else {
+      // 念のためのフォールバック
+      window.addEventListener('load', restoreIfAny, {once:true});
+    }
+  }, {capture:true});
+
+})();
+</script>
+
+
 </body>
 </html>
