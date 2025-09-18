@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>待ち合わせロビー</title>
+  <style>
+    body{margin:0;background:#f6f7fb;color:#111;font:16px system-ui}
+    header{background:#111;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+    main{display:grid;place-items:center;padding:24px 16px}
+    .card{width:min(840px,96vw);background:#fff;border:1px solid #ececf0;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.08);padding:20px}
+    h1{font-size:20px;margin:4px 0 8px}
+    .meta{color:#666;font-size:14px;margin-bottom:12px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media(max-width:720px){.grid{grid-template-columns:1fr}}
+    .panel{border:1px solid #eee;border-radius:12px;padding:14px;background:#fff}
+    .label{color:#666;font-size:12px;font-weight:700;text-transform:uppercase}
+    .count{font-variant-numeric:tabular-nums;font-weight:800;font-size:36px;margin:6px 0 4px}
+    .status{font-size:13px;color:#666}
+    .btn{appearance:none;border:1px solid #111;background:#111;color:#fff;padding:10px 16px;border-radius:12px;cursor:pointer;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+    .btn.ghost{background:#fff;color:#111}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+    .qr{padding:8px;border:1px solid #eee;border-radius:12px;background:#fff;width:180px;height:180px;display:grid;place-items:center}
+    .sep{height:1px;background:#eee;margin:16px 0}
+    .pill{display:inline-flex;gap:6px;background:#f3f4f6;color:#444;border:1px solid #e5e7eb;border-radius:9999px;padding:4px 10px;font-size:12px}
+    .foot{color:#888;font-size:12px;text-align:center;padding:18px}
+    .copy{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font:14px system-ui}
+  </style>
+</head>
+<body>
+  <header>
+    <div>待ち合わせロビー</div>
+    <a class="btn ghost" href="./index.html">← 戻る</a>
+  </header>
+  <main>
+    <div class="card">
+      <div>
+        <div class="pill" id="limitPill" style="display:none"></div>
+        <h1 id="title">（タイトル未設定）</h1>
+        <div class="meta" id="meta">開始時刻：—</div>
+      </div>
+      <div class="grid">
+        <div class="panel">
+          <div class="label">カウントダウン</div>
+          <div class="count" id="count">--:--:--</div>
+          <div class="status" id="status">開始までお待ちください。</div>
+          <div class="row">
+            <a id="enter" class="btn" href="#" target="_top" rel="noopener" disabled>入室する（開始後）</a>
+            <button id="startNow" class="btn ghost" type="button">今すぐ開始</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="label">共有リンク &amp; QR</div>
+          <input id="share" class="copy" readonly>
+          <div class="row">
+            <button id="copy" class="btn" type="button">リンクをコピー</button>
+            <a id="openTarget" class="btn ghost" target="_blank" rel="noopener">目的URLを開く</a>
+          </div>
+          <div class="sep"></div>
+          <div class="row" style="align-items:flex-start">
+            <div class="qr"><canvas id="qr" width="160" height="160"></canvas></div>
+            <div style="font-size:13px;color:#666;max-width:360px">URLパラメータ（title/start/limit/target）を利用するフロントエンドのみの簡易ロビーです。</div>
+          </div>
+        </div>
+      </div>
+      <div class="sep"></div>
+      <pre id="debug" style="font:12px ui-monospace,monospace;color:#555;white-space:pre-wrap"></pre>
+    </div>
+  </main>
+  <footer class="foot">© DokodemoDoors</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
+  <script>
+    const $=(s)=>document.querySelector(s);
+    const p=new URLSearchParams(location.search);
+    const title=p.get('title')||'待ち合わせ';
+    const start=p.get('start');
+    const limit=parseInt(p.get('limit')||'10',10);
+    const target=p.get('target')||'';
+
+    $('#title').textContent=title;
+    document.title=title+' | 待ち合わせロビー';
+    if(Number.isFinite(limit)&&limit>0){ const pill=$('#limitPill'); pill.style.display='inline-flex'; pill.textContent=`参加上限 ${limit} 名`; }
+
+    const validTarget=/^https?:\/\//i.test(target);
+    $('#openTarget').href=validTarget?target:'#';
+    if(!validTarget) $('#openTarget').classList.add('ghost');
+    $('#share').value=location.href;
+
+    let startDate=null;
+    if(start){ startDate=new Date(start); $('#meta').textContent='開始時刻：'+startDate.toLocaleString(); }
+
+    const pad=(n)=>String(n).padStart(2,'0');
+    function tick(){
+      if(!startDate){ $('#count').textContent='--:--:--'; $('#status').innerHTML='<span style="color:#b00020">開始時刻未設定</span>'; requestAnimationFrame(tick); return; }
+      const diff=startDate - new Date();
+      if(diff<=0){ $('#count').textContent='00:00:00'; $('#status').textContent='開始時間になりました。入室できます。'; if(validTarget){ const e=$('#enter'); e.removeAttribute('disabled'); e.href=target; } return; }
+      const h=Math.floor(diff/3600000), m=Math.floor(diff/60000)%60, s=Math.floor(diff/1000)%60;
+      $('#count').textContent=`${pad(h)}:${pad(m)}:${pad(s)}`; requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    $('#startNow').onclick=()=>{ startDate=new Date(); requestAnimationFrame(tick); };
+    $('#copy').onclick=async()=>{ try{ await navigator.clipboard.writeText($('#share').value); $('#copy').textContent='コピーしました'; setTimeout(()=>$('#copy').textContent='リンクをコピー',1200);}catch(e){ prompt('手動コピー：', $('#share').value);} };
+
+    (async()=>{ if(window.QRCode){ await QRCode.toCanvas($('#qr'), location.href, {width:160, margin:1}); } })();
+
+    $('#debug').textContent=JSON.stringify({title,start,limit,target,parsedStart:startDate?startDate.toISOString():null},null,2);
+  </script>
+</body>
+</html>
