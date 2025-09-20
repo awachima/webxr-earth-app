@@ -131,6 +131,9 @@
     const writeOwners=(map)=>localStorage.setItem(O,JSON.stringify(map));
     const isOwner   =(roomId)=>Boolean(readOwners()[roomId]);
 
+    // 共有レジストリ API（DO 内 /api/rooms）
+    const REGISTRY_API = '/api/rooms';
+
     // 開始後20分で自動削除
     const NEGATIVE_LIMIT_MS = 20*60*1000;
 
@@ -224,7 +227,9 @@
       card.dataset.start=item.start;
       card.dataset.url=item.target;
       card.dataset.limit=item.limit;
-      grid.prepend(card);
+      // 重複を避けるため prepend（新しいものが先頭）
+      const gridEl = $('#grid');
+      if (card.parentElement !== gridEl) gridEl.prepend(card);
       initCountdown(card);
       attachEnter(card);
       renderTools(card);
@@ -280,7 +285,18 @@
     }
     function closeModal(){ backdrop.style.display='none'; }
 
-    function onSubmit(){
+    async function postRegistry(item){
+      try{
+        const owner = localStorage.getItem('nickname') || null;
+        await fetch(REGISTRY_API, {
+          method: "POST",
+          headers: {"content-type":"application/json"},
+          body: JSON.stringify({ roomId: item.roomId, title: item.title, start: item.start, limit: item.limit, target: item.target, owner })
+        });
+      }catch(e){ console.warn('[registry]', e); }
+    }
+
+    async function onSubmit(){
       const owners=readOwners();
       let roomId=editingRoomId, target=editingTarget;
       const title=(mTitle.value||'待ち合わせ').trim();
@@ -302,6 +318,8 @@
 
       upsertCard(item);
       persist(item);
+      // ★ 共有レジストリへ登録/更新（失敗しても無視）
+      postRegistry(item);
 
       statusMsg.textContent = (mode==='create') ? '作成しました' : '更新しました';
       statusMsg.style.display = 'block';
@@ -324,6 +342,9 @@
       };
       upsertCard(item);
       persist(item);
+      // ★ 複製も共有レジストリへ
+      postRegistry(item);
+
       alert('複製しました（目的URLは元と同じです）');
     }
 
@@ -331,10 +352,12 @@
       if(!editingRoomId) return;
       autoDeleteRoom(editingRoomId);
       closeModal();
+      // ※ 共有レジストリ側は「開始+20分」で自動消滅。即時削除APIは最小差分のため未実装。
     }
 
     // bind
     restore();
+
     // 右上ボタンは削除済みなので安全にガード
     const oc = document.getElementById('openCreate');
     if (oc) oc.onclick = () => openModal('create');
@@ -346,8 +369,22 @@
     $('#duplicate').onclick=onDuplicate;
     $('#delete').onclick=onDelete;
 
+    // ===== 共有レジストリから一覧を取得（起動時に1回） =====
+    async function loadShared(){
+      try{
+        const res = await fetch(REGISTRY_API);
+        const j = await res.json();
+        if (j && j.ok && Array.isArray(j.rooms)) {
+          j.rooms.forEach(upsertCard);
+        }
+      }catch(e){
+        console.warn('[registry GET]', e);
+      }
+    }
+    loadShared();
+
     // ===== 隠し一括初期化 (Ctrl+Alt+X) =====
-    const ADMIN_HASH = "REPLACE_WITH_SHA256_HEX"; // ← あなたのパスフレーズの SHA-256(HEX) を設定
+    const ADMIN_HASH = "REPLACE_WITH_SHA-256_HEX"; // ← あなたのパスフレーズの SHA-256(HEX) を設定
     function toHex(buf){ return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
     async function sha256(s){ const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return toHex(buf); }
     function subtleEqual(a,b){ if(a.length!==b.length) return false; let r=0; for(let i=0;i<a.length;i++) r |= a.charCodeAt(i)^b.charCodeAt(i); return r===0; }
