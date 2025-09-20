@@ -157,7 +157,7 @@
   $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user},null,2);
 
   // ===== チャット（WebSocket + DO）
-  const WS_BASE = (location.protocol === 'https:' ? 'wss' : 'ws') + '://do-chat.<your-account>.workers.dev'; // ← WorkerのURLに置換
+  const WS_BASE = 'wss://do-chat.awachima7.workers.dev';
   const CHAT_URL = `${WS_BASE}/ws/${encodeURIComponent(roomId)}?user=${encodeURIComponent(user)}`;
 
   const chatLog = $('#chatLog');
