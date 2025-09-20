@@ -1,44 +1,53 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>待ち合わせロビー（チャット対応）</title>
-<style>
-  body{margin:0;background:#f6f7fb;color:#111;font:16px system-ui}
-  header{background:#111;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
-  main{display:grid;place-items:center;padding:24px 16px}
-  .card{width:min(1100px,96vw);background:#fff;border:1px solid #ececf0;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.08);padding:20px}
-  h1{font-size:20px;margin:4px 0 8px}
-  .meta{color:#666;font-size:14px;margin-bottom:12px}
-  .grid{display:grid;grid-template-columns:1fr 420px;gap:16px}
-  @media(max-width:980px){.grid{grid-template-columns:1fr}}
-  .panel{border:1px solid #eee;border-radius:12px;padding:14px;background:#fff}
-  .label{color:#666;font-size:12px;font-weight:700;text-transform:uppercase}
-  .count{font-variant-numeric:tabular-nums;font-weight:800;font-size:36px;margin:6px 0 4px}
-  .status{font-size:13px;color:#666}
-  .btn{appearance:none;border:1px solid #111;background:#111;color:#fff;padding:10px 16px;border-radius:12px;cursor:pointer;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
-  .btn.ghost{background:#fff;color:#111}
-  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
-  .qr{padding:8px;border:1px solid #eee;border-radius:12px;background:#fff;width:180px;height:180px;display:grid;place-items:center}
-  .sep{height:1px;background:#eee;margin:16px 0}
-  .copy{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font:14px system-ui}
-  /* chat */
-  .chat{display:flex;flex-direction:column;height:520px}
-  .chat-log{flex:1;border:1px solid #eee;border-radius:12px;padding:10px;overflow:auto;background:#fafafa}
-  .msg{margin:6px 0;padding:8px 10px;border-radius:10px;max-width:85%;word-break:break-word;font-size:14px}
-  .msg.me{background:#e6f3ff;margin-left:auto}
-  .msg.other{background:#fff;border:1px solid #eee}
-  .msg.sys{background:#f3f4f6;border:1px dashed #ddd;color:#555;font-size:12px;text-align:center}
-  .chat-input{display:flex;gap:8px;margin-top:10px}
-  .chat-input input{flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>待ち合わせロビー</title>
+  <style>
+    body{margin:0;background:#f6f7fb;color:#111;font:16px system-ui}
+    header{background:#111;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+    main{display:grid;place-items:center;padding:24px 16px}
+    .card{width:min(1100px,96vw);background:#fff;border:1px solid #ececf0;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.08);padding:20px}
+    h1{font-size:20px;margin:4px 0 8px}
+    .meta{color:#666;font-size:14px;margin-bottom:12px}
+    .grid{display:grid;grid-template-columns:1fr 660px;gap:16px}
+    @media(max-width:980px){.grid{grid-template-columns:1fr}}
+    .panel{border:1px solid #eee;border-radius:12px;padding:14px;background:#fff}
+    .label{color:#666;font-size:12px;font-weight:700;text-transform:uppercase}
+    .count{font-variant-numeric:tabular-nums;font-weight:800;font-size:36px;margin:6px 0 4px}
+    .status{font-size:13px;color:#666}
+    .btn{appearance:none;border:1px solid #111;background:#111;color:#fff;padding:10px 16px;border-radius:12px;cursor:pointer;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+    .btn.ghost{background:#fff;color:#111}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+    .sep{height:1px;background:#eee;margin:16px 0}
+    .copy{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font:14px system-ui}
+
+    /* chat */
+    .chat{display:flex;flex-direction:column;height:520px}
+    .chat-log{flex:1;border:1px solid #eee;border-radius:12px;padding:10px;overflow:auto;background:#fafafa}
+    .msg{margin:6px 0;padding:8px 10px;border-radius:10px;max-width:85%;word-break:break-word;font-size:14px}
+    .msg.me{background:#e6f3ff;margin-left:auto}
+    .msg.other{background:#fff;border:1px solid #eee}
+    .msg.sys{background:#f3f4f6;border:1px dashed #ddd;color:#555;font-size:12px;text-align:center}
+    .chat-input{display:flex;gap:8px;margin-top:10px}
+    .chat-input input{flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px}
+
+    /* members */
+    .members{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto;margin-top:8px}
+    .member{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid #eee;border-radius:9999px;background:#fafafa;font-size:14px}
+    .badge{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:9999px;background:#111;color:#fff;font-size:12px;font-weight:700}
+  </style>
 </head>
 <body>
   <header>
     <div>待ち合わせロビー</div>
-    <a class="btn ghost" href="./index.html">← 戻る</a>
+    <div style="display:flex; gap:8px; align-items:center">
+      <button id="setName" class="btn ghost" type="button">ニックネーム</button>
+      <a class="btn ghost" href="./index.html">← 戻る</a>
+    </div>
   </header>
+
   <main>
     <div class="card">
       <div>
@@ -48,31 +57,29 @@
       </div>
 
       <div class="grid">
-        <!-- 左：カウントダウン＆共有 -->
+        <!-- 左：カウントダウン & 操作 -->
         <div class="panel">
           <div class="label">カウントダウン</div>
           <div class="count" id="count">--:--:--</div>
           <div class="status" id="status">開始までお待ちください。</div>
+
           <div class="row">
-            <a id="enter" class="btn" href="#" target="_top" rel="noopener" disabled>入室する（開始後）</a>
-            <button id="startNow" class="btn ghost" type="button">今すぐ開始</button>
+            <a id="enter" class="btn" target="_top" rel="noopener">ツアーに行く</a>
           </div>
+
           <div class="sep"></div>
-          <div class="label">共有リンク &amp; QR</div>
-          <input id="share" class="copy" readonly>
           <div class="row">
-            <button id="copy" class="btn" type="button">リンクをコピー</button>
-            <a id="openTarget" class="btn ghost" target="_blank" rel="noopener">目的URLを開く</a>
-          </div>
-          <div class="row" style="align-items:flex-start;margin-top:10px">
-            <div class="qr"><canvas id="qr" width="160" height="160"></canvas></div>
-            <div style="font-size:13px;color:#666;max-width:360px">テキストチャットは右側のパネルから利用できます。</div>
+            <button id="copy" class="btn" type="button">この待合室のURLをコピー</button>
           </div>
         </div>
 
-        <!-- 右：チャット -->
+        <!-- 右：参加者一覧 + チャット -->
         <div class="panel">
-          <div class="label">テキストチャット（ベータ）</div>
+          <div class="label">参加者</div>
+          <div id="members" class="members"></div>
+
+          <div class="sep"></div>
+          <div class="label">テキストチャット</div>
           <div class="chat">
             <div id="chatLog" class="chat-log" aria-live="polite"></div>
             <div class="chat-input">
@@ -88,10 +95,10 @@
       <pre id="debug" style="font:12px ui-monospace,monospace;color:#555;white-space:pre-wrap"></pre>
     </div>
   </main>
+  <footer style="color:#888;font-size:12px;text-align:center;padding:18px">© DokodemoDoors</footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
   <script>
-  // ===== 既存ロビーのロジック（開始→消滅まで後XX分→自動削除）
+  // ===== 既存ロジック（開始→消滅まで後XX分→自動削除）
   const NEGATIVE_LIMIT_MS = 20*60*1000;
   const S='meetups-store', O='meetups-owners';
   const readStore=()=>JSON.parse(localStorage.getItem(S)||'[]');
@@ -105,6 +112,7 @@
     const owners = readOwners(); delete owners[roomId]; writeOwners(owners);
     console.info('[auto-delete - lobby]', roomId, 'を削除しました');
   }
+
   const $=(s)=>document.querySelector(s);
   const p=new URLSearchParams(location.search);
   const title=p.get('title')||'待ち合わせ';
@@ -113,14 +121,27 @@
   const target=p.get('target')||'';
   const roomId=p.get('roomId')||'';
   const user=localStorage.getItem('nickname')||`Guest-${Math.random().toString(16).slice(2,6)}`;
+
   $('#title').textContent=title;
   document.title=title+' | 待ち合わせロビー';
-  if(Number.isFinite(limit)&&limit>0){ const pill=document.createElement('div'); pill.className='pill'; pill.textContent=`参加上限 ${limit} 名`; pill.style.display='inline-flex'; $('#meta').prepend(pill); }
-  const validTarget=/^https?:\/\//i.test(target);
-  $('#openTarget').href=validTarget?target:'#';
-  if(!validTarget) $('#openTarget').classList.add('ghost');
-  $('#share').value=location.href;
-  let startDate=null; if(start){ startDate=new Date(start); $('#meta').append('　/　開始時刻：'+startDate.toLocaleString()); }
+  if(Number.isFinite(limit)&&limit>0){
+    const pill=document.createElement('div');
+    pill.className='pill';
+    pill.textContent=`参加上限 ${limit} 名`;
+    pill.style.display='inline-flex';
+    $('#limitPill').replaceWith(pill);
+  }
+
+  // ★ 「ツアーに行く」を常時リンク化。targetが無効ならボタン非表示
+  const enterBtn = $('#enter');
+  const validTarget = /^https?:\/\//i.test(target);
+  if (validTarget) {
+    enterBtn.href = target;
+  } else {
+    enterBtn.style.display = 'none';
+  }
+
+  let startDate=null; if(start){ startDate=new Date(start); $('#meta').textContent='開始時刻：'+startDate.toLocaleString(); }
   const pad=(n)=>String(n).padStart(2,'0');
   function tick(){
     if(!startDate){
@@ -141,20 +162,39 @@
       const remainMin = Math.ceil(remainMs / 60000);
       $('#count').textContent = `消滅まで後${pad(remainMin)}分`;
       $('#status').textContent='開始済み：入室できます（20分以内）';
-      if(validTarget){ const e=$('#enter'); e.removeAttribute('disabled'); e.href=target; }
       requestAnimationFrame(tick);
     } else {
       autoDeleteRoom(roomId);
       $('#count').textContent = '消滅しました';
       $('#status').innerHTML = '<span style="color:#b00020">この待ち合わせは終了しました</span>';
-      const e=$('#enter'); e.setAttribute('disabled','true'); e.removeAttribute('href');
     }
   }
   requestAnimationFrame(tick);
-  $('#startNow').onclick=()=>{ startDate=new Date(); requestAnimationFrame(tick); };
-  $('#copy').onclick=async()=>{ try{ await navigator.clipboard.writeText($('#share').value); $('#copy').textContent='コピーしました'; setTimeout(()=>$('#copy').textContent='リンクをコピー',1200);}catch(e){ prompt('手動コピー：', $('#share').value);} };
-  (async()=>{ if(window.QRCode){ await QRCode.toCanvas($('#qr'), location.href, {width:160, margin:1}); } })();
+
+  // コピー（この待合室のURL）
+  $('#copy').onclick=async()=>{ 
+    const url = location.href;
+    try{
+      await navigator.clipboard.writeText(url);
+      $('#copy').textContent = 'コピーしました';
+      setTimeout(()=>$('#copy').textContent='この待合室のURLをコピー', 1200);
+    }catch(e){
+      prompt('手動コピー：', url);
+    }
+  };
+
   $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user},null,2);
+
+  // ★ ニックネーム設定
+  function setNickname(){
+    const current = localStorage.getItem('nickname') || user;
+    const name = prompt('ニックネームを入力してください：', current);
+    if (!name) return;
+    localStorage.setItem('nickname', name.trim().slice(0, 32));
+    alert('ニックネームを保存しました。ページを再読み込みすると反映されます。');
+  }
+  const _btnSet = document.getElementById('setName');
+  if (_btnSet) _btnSet.onclick = setNickname;
 
   // ===== チャット（WebSocket + DO）
   const WS_BASE = 'wss://do-chat.awachima7.workers.dev';
@@ -164,7 +204,34 @@
   const chatInput = $('#chatInput');
   const chatSend = $('#chatSend');
   const chatStatus = $('#chatStatus');
+
+  // 参加者リスト表示
+  const membersEl = $('#members');
+  function renderMembers(list){
+    membersEl.innerHTML = '';
+    const uniq = Array.from(new Set(list));
+    uniq.forEach((name, idx)=>{
+      const row = document.createElement('div');
+      row.className = 'member';
+      const badge = document.createElement('div');
+      badge.className = 'badge';
+      badge.textContent = String(idx+1);
+      const label = document.createElement('div');
+      label.textContent = name;
+      row.appendChild(badge);
+      row.appendChild(label);
+      membersEl.appendChild(row);
+    });
+    if (uniq.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'status';
+      empty.textContent = '参加者はいません。';
+      membersEl.appendChild(empty);
+    }
+  }
+
   let ws, focused = true;
+  let roster = [];  // 現在の参加者一覧
   window.addEventListener('focus', ()=> focused=true);
   window.addEventListener('blur', ()=> focused=false);
 
@@ -175,7 +242,6 @@
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
   }
-
   function addSys(text){
     const div=document.createElement('div');
     div.className='msg sys';
@@ -191,7 +257,6 @@
       ws.onclose = ()=>{ chatStatus.textContent='切断されました。再接続を試みます…'; setTimeout(connect, 1500); };
       ws.onerror = ()=>{ chatStatus.textContent='エラーが発生しました'; };
       ws.onmessage = (ev)=>{
-        // sys payload or line {name,text,at}
         try{
           const data = JSON.parse(ev.data);
           if (data.sys){
@@ -202,6 +267,9 @@
                 addMsg(klass, `${obj.name}: ${obj.text}`);
               }catch{} });
               addSys('— 過去のメッセージを読み込みました —');
+            } else if (data.type === 'roster' && Array.isArray(data.members)){
+              roster = data.members;
+              renderMembers(roster);
             } else if (data.type === 'join'){
               addSys(`${data.name} が参加しました（合計 ${data.count} 名）`);
             } else if (data.type === 'leave'){
@@ -212,14 +280,8 @@
           const obj = data;
           const klass = (obj.name===user)?'me':'other';
           addMsg(klass, `${obj.name}: ${obj.text}`);
-          if (!focused && obj.name !== user) {
-            // index側の未読カウント更新用フラグ（localStorage）
-            const key = `unread:${roomId}`;
-            const n = parseInt(localStorage.getItem(key)||'0',10)+1;
-            localStorage.setItem(key, String(n));
-          }
         }catch{
-          // 非JSON（安全のため無視）
+          // 非JSONは無視
         }
       };
     }catch(e){
