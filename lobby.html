@@ -132,7 +132,7 @@
     $('#limitPill').replaceWith(pill);
   }
 
-  // ★ 「ツアーに行く」を常時リンク化。targetが無効ならボタン非表示
+  // 「ツアーに行く」を常時リンク化。targetが無効ならボタン非表示
   const enterBtn = $('#enter');
   const validTarget = /^https?:\/\//i.test(target);
   if (validTarget) {
@@ -177,7 +177,7 @@
     try{
       await navigator.clipboard.writeText(url);
       $('#copy').textContent = 'コピーしました';
-      setTimeout(()=>$('#copy').textContent='この待合室のURLをコピー', 1200);
+      setTimeout(()=>$('#copy').textContent='この待ち合わせのURLをコピー', 1200);
     }catch(e){
       prompt('手動コピー：', url);
     }
@@ -185,7 +185,7 @@
 
   $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user},null,2);
 
-  // ★ ニックネーム設定
+  // ニックネーム設定
   function setNickname(){
     const current = localStorage.getItem('nickname') || user;
     const name = prompt('ニックネームを入力してください：', current);
@@ -198,7 +198,12 @@
 
   // ===== チャット（WebSocket + DO）
   const WS_BASE = 'wss://do-chat.awachima7.workers.dev';
-  const CHAT_URL = `${WS_BASE}/ws/${encodeURIComponent(roomId)}?user=${encodeURIComponent(user)}`;
+
+  // ▼★ ここが修正ポイント：ページのクエリ（title/start/limit/target/roomId など）を
+  //    そのまま WS 接続先にも付け直し、さらに user を上書きして送る
+  const pageParams = new URLSearchParams(location.search);
+  pageParams.set('user', user);
+  const CHAT_URL = `${WS_BASE}/ws/${encodeURIComponent(roomId)}?${pageParams.toString()}`;
 
   const chatLog = $('#chatLog');
   const chatInput = $('#chatInput');
