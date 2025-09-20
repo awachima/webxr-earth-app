@@ -132,7 +132,7 @@
     const isOwner   =(roomId)=>Boolean(readOwners()[roomId]);
 
     // 共有レジストリ API（DO 内 /api/rooms）
-    const REGISTRY_API = '/api/rooms';
+    const REGISTRY_API = 'https://do-chat.awachima7.workers.dev/api/rooms';
 
     // 開始後20分で自動削除
     const NEGATIVE_LIMIT_MS = 20*60*1000;
