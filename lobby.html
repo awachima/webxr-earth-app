@@ -474,6 +474,7 @@
         });
         startCalls(rosterMembers);
         updateVoiceUI();
+        updateSttUI();
         // 参加時に自動再生解除も試す
         await tryPlayAllAudios();
         await resumeAudioContext();
@@ -486,6 +487,7 @@
       if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
       stopStt(); // 自動字幕も停止し、リモート音を復帰
       updateVoiceUI();
+      updateSttUI();
     }
     maybeShowEnableButton();
   };
@@ -574,8 +576,13 @@
   function sttSupportedMobile(){  return !!SR &&  isMobile; }
 
   function updateSttUI(){
-    sttBtn.style.display  = sttSupportedDesktop() ? '' : 'none';
-    sttHold.style.display = sttSupportedMobile()  ? '' : 'none';
+    const voiceOn = !!localStream;
+    const showDesktop = sttSupportedDesktop() && voiceOn;
+    const showMobile  = sttSupportedMobile()  && voiceOn;
+
+    sttBtn.style.display  = showDesktop ? '' : 'none';
+    sttHold.style.display = showMobile  ? '' : 'none';
+
     sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
     sttBtn.classList.toggle('ghost', !sttOn);
   }
