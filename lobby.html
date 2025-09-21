@@ -286,9 +286,6 @@
             return;
           }
 
-          // ★ sttAudio（音声チャンク）は表示しない（サーバー側で処理する前提）
-          if (data.sttAudio){ return; }
-
           // WebRTC シグナリング
           if (data.rtc) { onRtcSignal(data); return; }
 
@@ -297,7 +294,7 @@
             if (data.type === 'welcome'){ myId = data.id; }
             else if (data.type === 'history' && Array.isArray(data.messages)){
               data.messages.forEach((line)=>{ try{
-                const obj = JSON.parse(line); if (obj && obj.sttAudio) return; // ★ sttAudio を履歴表示から除外
+                const obj = JSON.parse(line);
                 const klass = (obj.name===user)?'me':'other';
                 addMsg(klass, `${obj.name}: ${obj.text}`);
               }catch{} });
@@ -562,7 +559,12 @@
   function startStt({continuous}){
     const useServer = serverSttMode() || !sttAvailable();
     if (!localStream){ alert('先に「音声ON」にしてください'); return; }
-    const ok = useServer ? startServerStt() : startLocalStt({continuous});
+    if (useServer){
+      const ok = startServerStt();
+      if (!ok) return;
+      sttOn = true; updateSttUI(); return;
+    }
+    const ok = startLocalStt({continuous});
     if (!ok) return; sttOn = true; updateSttUI();
   }
 

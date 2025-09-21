@@ -178,43 +178,11 @@
       requestAnimationFrame(tick);
     }
 
-    // ★★★ 追加：レジストリ存在確認（最小差分） ★★★
-    async function registryExists(roomId){
-      if (!roomId) return false;
-      try{
-        const res = await fetch(`${REGISTRY_API}?id=${encodeURIComponent(roomId)}`, {cache:'no-store'});
-        return res.ok; // 404 → false
-      }catch(_e){
-        // ネットワーク異常時は何もしない（誤削除を避ける）
-        return true;
-      }
-    }
-
-    // ★★★ 追加：ローカル保存の一括照合・除去（最小差分） ★★★
-    async function pruneDeletedLocals(){
-      const items = readStore();
-      for (const it of items){
-        const ok = await registryExists(it.roomId);
-        if (!ok){
-          autoDeleteRoom(it.roomId);
-          console.info('[prune]', it.roomId, 'はレジストリに存在しないため削除しました');
-        }
-      }
-    }
-
     function attachEnter(card){
       const btn=card.querySelector('[data-enter]');
-      btn.onclick=async ()=>{
-        const id = card.dataset.roomId || '';
-        // ★★★ 追加：入室直前の存在確認（最小差分） ★★★
-        const ok = await registryExists(id);
-        if (!ok){
-          autoDeleteRoom(id);
-          alert('この待ち合わせは削除されています。一覧からも削除しました。');
-          return;
-        }
+      btn.onclick=()=>{
         const p=new URLSearchParams({
-          roomId: id,
+          roomId: card.dataset.roomId || '',
           title : card.dataset.title,
           start : card.dataset.start,
           limit : card.dataset.limit,
@@ -387,11 +355,8 @@
       // ※ 共有レジストリ側は「開始+20分」で自動消滅。即時削除APIは最小差分のため未実装。
     }
 
-    // ===== 起動シーケンス（最小差分：先に照合→復元） =====
-    (async ()=>{
-      await pruneDeletedLocals(); // ← ここで他人が削除した部屋をローカルから即時除去
-      restore();
-    })();
+    // bind
+    restore();
 
     // 右上ボタンは削除済みなので安全にガード
     const oc = document.getElementById('openCreate');
