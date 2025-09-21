@@ -83,7 +83,12 @@
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
+            <!-- ★ 新：自動字幕のON/OFFボタン（音声ON時のみ表示） -->
+            <button id="sttMain" class="btn ghost" type="button" style="display:none">音声入力ON</button>
           </div>
+          <!-- ★ 新：音声入力の状態表示 -->
+          <div id="sttStatus" class="status" style="margin-top:6px; display:none;">音声入力してない状態</div>
+
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
 
           <!-- モバイル向け：成功するまで消えない有効化ボタン -->
@@ -98,12 +103,6 @@
             <div class="chat-input">
               <input id="chatInput" placeholder="メッセージを入力…" maxlength="2000">
               <button id="chatSend" class="btn" type="button">送信</button>
-              <!-- 自動字幕（PC:トグル / モバイル:長押し） -->
-              <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信（PC向け）">
-                自動字幕OFF
-              </button>
-              <button id="sttHold" class="btn ghost" type="button" style="display:none"
-                title="長押しで字幕（モバイル推奨）">長押しで字幕</button>
             </div>
           </div>
           <div class="status" id="chatStatus" style="margin-top:8px;color:#0a7f3f">接続していません</div>
@@ -452,10 +451,23 @@
   const micToggleBtn  = document.getElementById('micToggle');
   const voiceHint     = document.getElementById('voiceHint');
 
+  // STT UI 要素
+  const sttBtn    = document.getElementById('sttMain');
+  const sttStatus = document.getElementById('sttStatus');
+
   function updateVoiceUI(){
     const on = !!localStream;
     voicePowerBtn.textContent = on ? '音声OFF' : '音声ON';
     micToggleBtn.style.display = on ? '' : 'none';
+
+    // STTボタンと状態表示は音声ON時のみ
+    sttBtn.style.display    = on ? '' : 'none';
+    sttStatus.style.display = on ? '' : 'none';
+
+    // STTボタン文言は現在のsttOnに合わせる（後述のupdateSttUIでも更新）
+    sttBtn.textContent = sttOn ? '音声入力OFF' : '音声入力ON';
+    sttStatus.textContent = sttOn ? '音声入力してる状態' : '音声入力してない状態';
+
     if (on){
       const t = localStream.getAudioTracks()[0];
       micToggleBtn.textContent = (t && t.enabled) ? 'ミュート' : 'ミュート解除';
@@ -498,8 +510,6 @@
     t.enabled = !t.enabled;
     updateVoiceUI();
   };
-
-  updateVoiceUI();
 
   // ===== モバイル自動再生対策（成功まで消さない） =====
   const enableBtn = document.getElementById('enableSound');
@@ -566,18 +576,12 @@
 
   // ====== 音声→テキスト（自動字幕; 自分の発話のみ） ======
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const sttBtn  = document.getElementById('sttToggle'); // PC向けトグル
-  const sttHold = document.getElementById('sttHold');   // モバイル向け長押し
   let sttOn = false;
   let recog = null;
 
-  function sttSupportedDesktop(){ return !!SR && !isMobile; }
-  function sttSupportedMobile(){  return !!SR &&  isMobile; }
-
   function updateSttUI(){
-    sttBtn.style.display  = sttSupportedDesktop() ? '' : 'none';
-    sttHold.style.display = sttSupportedMobile()  ? '' : 'none';
-    sttBtn.textContent = sttOn ? '自動字幕ON' : '自動字幕OFF';
+    sttBtn.textContent   = sttOn ? '音声入力OFF' : '音声入力ON';
+    sttStatus.textContent = sttOn ? '音声入力してる状態' : '音声入力してない状態';
   }
 
   function stopStt(){
@@ -588,14 +592,15 @@
     updateSttUI();
   }
 
-  function startStt({continuous}){
+  function startStt(){
     if (!SR){ alert('このブラウザは音声認識に未対応です'); return; }
     if (!localStream){ alert('先に「音声ON」にしてください'); return; }
 
     recog = new SR();
     recog.lang = 'ja-JP';
     recog.interimResults = true;
-    recog.continuous = !!continuous; // PCはtrue、モバイルPTTはfalse
+    // PCは連続認識（自動再開あり）、モバイルは単発（ビープ抑制）
+    recog.continuous = !isMobile;
 
     recog.onresult = (e) => {
       let finalText = '';
@@ -604,14 +609,18 @@
         if (res.isFinal) finalText += res[0].transcript;
       }
       if (finalText.trim() && ws && ws.readyState===1) {
-        ws.send(`（自動字幕）${finalText.trim()}`);
+        // ★ タグを（音声）に変更
+        ws.send(`（音声）${finalText.trim()}`);
       }
     };
 
-    // 連続モード（PC）のみ自動再開。モバイルPTTは再開しない＝ビープ回避
     recog.onend = () => {
       if (sttOn && !isMobile) {
+        // PCのみ自動再開
         try { recog.start(); } catch {}
+      } else {
+        // モバイルは単発で終了
+        stopStt();
       }
     };
 
@@ -621,30 +630,85 @@
     };
 
     try { recog.start(); } catch (e) {
-      console.error(e); alert('自動字幕の起動に失敗しました'); return;
+      console.error(e); alert('音声入力の起動に失敗しました'); return;
     }
     sttOn = true;
     setRemoteMuted(true); // 自分が話す間は相手の音をミュート（ループ/ビープ抑制）
     updateSttUI();
   }
 
-  // PC：従来どおりON/OFFトグル（continuous = true）
-  sttBtn.onclick = () => {
-    if (!sttOn) startStt({ continuous: true });
-    else stopStt();
+  // STTボタン（音声ON時のみ表示）
+  sttBtn.onclick = () => { if (!sttOn) startStt(); else stopStt(); };
+
+  // ===== 初期UI反映 =====
+  updateVoiceUI();
+
+  // ===== 送信系 =====
+  chatSend.onclick = ()=>{
+    const t = (chatInput.value||'').trim();
+    if(!t || !ws || ws.readyState!==1) return;
+    ws.send(t);
+    chatInput.value='';
   };
+  chatInput.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); chatSend.click(); }
+  });
 
-  // モバイル：長押しで録音 → 離すと停止（continuous = false）
-  ['mousedown','touchstart'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (!sttOn) startStt({ continuous:false }); })
-  );
-  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (sttOn) stopStt(); })
-  );
+  // ===== WebRTC 接続まわり =====
+  let ws, focused = true;
+  window.addEventListener('focus', ()=> focused=true);
+  window.addEventListener('blur', ()=> focused=false);
+  let myId = null;
+  let rosterMembers = []; // [{name,id}]
 
+  function connect(){
+    try{
+      ws = new WebSocket(CHAT_URL);
+      ws.onopen = ()=>{ chatStatus.textContent='接続しました'; };
+      ws.onclose = ()=>{ chatStatus.textContent='切断されました。再接続を試みます…'; setTimeout(connect, 1500); };
+      ws.onerror = ()=>{ chatStatus.textContent='エラーが発生しました'; };
+      ws.onmessage = (ev)=>{
+        try{
+          const data = JSON.parse(ev.data);
+          if (data.rtc) { onRtcSignal(data); return; }
+          if (data.sys){
+            if (data.type === 'welcome'){ myId = data.id; }
+            else if (data.type === 'history' && Array.isArray(data.messages)){
+              data.messages.forEach((line)=>{ try{
+                const obj = JSON.parse(line);
+                const klass = (obj.name===user)?'me':'other';
+                addMsg(klass, `${obj.name}: ${obj.text}`);
+              }catch{} });
+              addSys('— 過去のメッセージを読み込みました —');
+            } else if (data.type === 'roster'){
+              rosterMembers = Array.isArray(data.members) ? data.members : [];
+              renderMembers(rosterMembers);
+              if (localStream) startCalls(rosterMembers);
+            } else if (data.type === 'join'){
+              addSys(`${data.name} が参加しました（合計 ${data.count} 名）`);
+            } else if (data.type === 'leave'){
+              addSys(`${data.name} が退出しました（合計 ${data.count} 名）`);
+              if (data.id) cleanupPeer(data.id);
+            }
+            return;
+          }
+          const obj = data;
+          const klass = (obj.name===user)?'me':'other';
+          addMsg(klass, `${obj.name}: ${obj.text}`);
+        }catch{}
+      };
+    }catch(e){
+      chatStatus.textContent='接続に失敗しました';
+      console.error(e);
+    }
+  }
+  connect();
+
+  // ===== ページ離脱時の後始末 =====
   window.addEventListener('beforeunload', stopStt);
-  updateSttUI();
-  // ===================================
+
+  // ===== デバッグ表示 =====
+  $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user},null,2);
   </script>
 </body>
 </html>
