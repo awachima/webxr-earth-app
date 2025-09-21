@@ -451,6 +451,9 @@
   function updateVoiceUI(){
     const on = !!localStream;
     voicePowerBtn.textContent = on ? '音声OFF' : '音声ON';
+    // ▼ 追加：音声がOFFの間だけ白ボタン（ghost）にする／ONの時は黒ボタンのまま
+    voicePowerBtn.classList.toggle('ghost', !on);
+
     micToggleBtn.style.display = on ? '' : 'none';
     if (on){
       const t = localStream.getAudioTracks()[0];
