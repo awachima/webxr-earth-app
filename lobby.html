@@ -86,16 +86,14 @@
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
-            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">
-              自動字幕ON
-            </button>
-            <button id="sttHold" class="btn ghost" type="button" style="display:none" title="長押しで字幕（旧モバイル方式）">長押しで字幕</button>
+            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">自動字幕ON</button>
+            <button id="sttHold" class="btn ghost" type="button" style="display:none" title="長押しで字幕（旧方式）">長押しで字幕</button>
           </div>
-          <!-- === iOS: 字幕優先モード === -->
-          <div id="iosModeRow" class="row" style="display:none">
-            <label class="switch" title="iOSではマイク送信と同時の音声認識ができません。認識中のみ相手へのマイク送信を一時停止して字幕化します。">
-              <input type="checkbox" id="iosCaptionMode">
-              <span>字幕優先モード（iOS）</span>
+          <!-- === モバイル共通：字幕優先モード（認識中のみ自分のマイク送信を一時停止） === -->
+          <div id="mobileModeRow" class="row" style="display:none">
+            <label class="switch" title="モバイルではブラウザ依存で同時利用が不安定です。認識中のみ相手へのマイク送信を一時停止して字幕化します。">
+              <input type="checkbox" id="mobileCaptionMode">
+              <span>字幕優先モード（モバイル）</span>
             </label>
           </div>
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
@@ -124,7 +122,7 @@
   <footer style="color:#888;font-size:12px;text-align:center;padding:18px">© DokodemoDoors</footer>
 
   <script>
-  // ===== 既存ロジック =====
+  // ===== 既存：カウントダウン/自動消滅 =====
   const NEGATIVE_LIMIT_MS = 20*60*1000;
   const S='meetups-store', O='meetups-owners';
   const readStore=()=>JSON.parse(localStorage.getItem(S)||'[]');
@@ -147,8 +145,10 @@
   const target=p.get('target')||'';
   const roomId=p.get('roomId')||'';
   const user=localStorage.getItem('nickname')||`Guest-${Math.random().toString(16).slice(2,6)}`;
+
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isIOS    = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition; // ブラウザ依存
 
   $('#title').textContent=title;
   document.title=title+' | 待ち合わせロビー';
@@ -194,27 +194,25 @@
   }
   requestAnimationFrame(tick);
 
+  // コピー
   $('#copy').onclick=async()=>{
     const url = location.href;
-    try{
-      await navigator.clipboard.writeText(url);
+    try{ await navigator.clipboard.writeText(url);
       $('#copy').textContent = 'コピーしました';
       setTimeout(()=>$('#copy').textContent='この待合室のURLをコピー', 1200);
-    }catch(e){
-      prompt('手動コピー：', url);
-    }
+    }catch(e){ prompt('手動コピー：', url); }
   };
 
-  $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user},null,2);
+  $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user,isMobile,hasSR:!!SR},null,2);
 
-  function setNickname(){
+  // ニックネーム
+  document.getElementById('setName').onclick = function setNickname(){
     const current = localStorage.getItem('nickname') || user;
     const name = prompt('ニックネームを入力してください：', current);
     if (!name) return;
     localStorage.setItem('nickname', name.trim().slice(0, 32));
     alert('ニックネームを保存しました。ページを再読み込みすると反映されます。');
-  }
-  document.getElementById('setName').onclick = setNickname;
+  };
 
   // ===== WebSocket（チャット + シグナリング） =====
   const WS_BASE = 'wss://do-chat.awachima7.workers.dev';
@@ -283,10 +281,8 @@
         try{
           const data = JSON.parse(ev.data);
 
-          // WebRTC シグナリング
           if (data.rtc) { onRtcSignal(data); return; }
 
-          // システム
           if (data.sys){
             if (data.type === 'welcome'){ myId = data.id; }
             else if (data.type === 'history' && Array.isArray(data.messages)){
@@ -309,7 +305,6 @@
             return;
           }
 
-          // テキスト
           const obj = data;
           const klass = (obj.name===user)?'me':'other';
           addMsg(klass, `${obj.name}: ${obj.text}`);
@@ -457,8 +452,8 @@
       voiceHint.textContent = '音声: 未参加';
     }
 
-    // iOS用モードの表示切替
-    document.getElementById('iosModeRow').style.display = (on && isIOS) ? '' : 'none';
+    // モバイル用モードの表示切替（音声ON時のみ）
+    document.getElementById('mobileModeRow').style.display = (on && isMobile) ? '' : 'none';
   }
 
   function isMicEnabled(){
@@ -467,13 +462,13 @@
     return !!(t && t.enabled);
   }
 
-  // iOS: 字幕優先モードの状態
-  const iosCaptionModeEl = document.getElementById('iosCaptionMode');
-  const iosCaptionMode = () => !!(isIOS && iosCaptionModeEl && iosCaptionModeEl.checked);
+  // === モバイル: 字幕優先モード状態 ===
+  const mobileCaptionModeEl = document.getElementById('mobileCaptionMode');
+  const mobileCaptionMode = () => !!(isMobile && mobileCaptionModeEl && mobileCaptionModeEl.checked);
 
-  // STTがマイクを使えるか（iOSモード時はミュートでも許可）
+  // STTが使用可能か（モバイル優先モードONのときはミュートでも開始可）
   function micIsUsableForStt(){
-    if (iosCaptionMode()) return true;
+    if (mobileCaptionMode()) return true;
     return isMicEnabled();
   }
 
@@ -514,7 +509,7 @@
 
     if (!t.enabled){
       sttPreMuteOn = sttOn;
-      if (sttOn && !iosCaptionMode()) stopStt(); // iOSモードならSTT継続可
+      if (sttOn && !mobileCaptionMode()) stopStt(); // モバイル優先モードなら継続可
     }else{
       if (sttPreMuteOn){
         startStt({ continuous: !isMobile });
@@ -526,7 +521,7 @@
 
   updateVoiceUI();
 
-  // ===== モバイル再生ゲート =====
+  // ===== モバイル音声再生ゲート =====
   const enableBtn = document.getElementById('enableSound');
 
   function anyAudioPlaying(){
@@ -589,15 +584,15 @@
   }
   setupMobileAudioGate();
 
-  // ====== 音声→テキスト（自動字幕; iOS対応強化） ======
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const sttBtn  = document.getElementById('sttToggle'); 
-  const sttHold = document.getElementById('sttHold');   // 非表示のまま
+  // ====== 音声→テキスト（自動字幕; モバイル優先モード対応） ======
+  const sttBtn  = document.getElementById('sttToggle');
+  const sttHold = document.getElementById('sttHold'); // 非表示のまま
+
   let sttOn = false;
   let recog = null;
   let sttBuffer = "";
   let sttCycleId = 0;
-  let iosMicWasEnabled = null; // iOSモードで一時停止したかどうか
+  let micWasEnabledDuringMobile = null; // 認識中だけ停止→終了時復帰用
 
   function sttAvailable(){ return !!SR; }
 
@@ -611,9 +606,24 @@
     sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
     sttBtn.classList.toggle('ghost', !sttOn);
 
+    // Android版ChromeなどSRが無い場合はボタン無効化
+    if (!sttAvailable()){
+      sttBtn.disabled = true;
+      sttBtn.title = 'このブラウザは自動字幕（音声認識）に対応していません。Samsung Internet 等をご利用ください。';
+      return;
+    }
+
     const micOk = micIsUsableForStt();
     sttBtn.disabled  = !micOk;
-    sttBtn.title  = micOk ? '自分の発話を自動で文字起こしして送信' : (isIOS ? '（iOS）マイク送信中は同時字幕ができません' : 'マイクがミュート中は自動字幕を使用できません');
+    if (!micOk){
+      sttBtn.title  = mobileCaptionMode()
+        ? '（モバイル優先モード）認識開始時に自動で一時停止/復帰します'
+        : 'マイクがミュート中は自動字幕を使用できません';
+    } else {
+      sttBtn.title  = mobileCaptionMode()
+        ? '（モバイル優先モード）認識中は相手への送信を一時停止して字幕化します'
+        : '自分の発話を自動で文字起こしして送信';
+    }
   }
 
   function sendChatLine(text){
@@ -627,11 +637,11 @@
     sttOn = false;
     sttBuffer = "";
 
-    // iOSモードで一時的に止めていたマイク送信を戻す
-    if (isIOS && localStream && iosMicWasEnabled !== null){
+    // モバイル優先モードで一時停止していたマイク送信を戻す
+    if (localStream && micWasEnabledDuringMobile !== null){
       const t = localStream.getAudioTracks()[0];
-      if (t) t.enabled = iosMicWasEnabled;
-      iosMicWasEnabled = null;
+      if (t) t.enabled = micWasEnabledDuringMobile;
+      micWasEnabledDuringMobile = null;
       updateVoiceUI();
     }
 
@@ -644,34 +654,27 @@
     r.lang = 'ja-JP';
     r.interimResults = true;
     r.maxAlternatives = 1;
-    r.continuous = !isMobile; // PC:true / モバイル:false
+    r.continuous = !isMobile; // PC:true / モバイル:false（onendで実質連続化）
     return r;
   }
 
   function startStt({continuous}){
-    if (!SR){ alert('このブラウザは音声認識に未対応です'); return; }
+    if (!sttAvailable()){ alert('このブラウザは音声認識に未対応です'); return; }
     if (!localStream){ alert('先に「音声ON」にしてください'); return; }
 
-    // iOSで同時利用は不可。字幕優先モードがOFFなら説明して中断。
-    if (isIOS && !iosCaptionMode()){
-      alert('iOSでは、マイク送信（WebRTC）と自動字幕（音声入力）を同時に使えません。\n「字幕優先モード（iOS）」をONにしてお使いください。');
-      updateSttUI();
-      return;
+    // モバイル優先モードOFFでマイク不可なら中断
+    if (!mobileCaptionMode() && !isMicEnabled()){
+      alert('マイクがミュートです。ミュート解除後に自動字幕を開始してください。');
+      updateSttUI(); return;
     }
 
-    // iOS字幕優先モード：認識中は自分のマイク送信を一時停止
-    if (isIOS && iosCaptionMode()){
+    // モバイル優先モード：認識中のみ自分のマイク送信を停止
+    if (mobileCaptionMode()){
       const t = localStream.getAudioTracks()[0];
       if (t){
-        iosMicWasEnabled = t.enabled;
-        t.enabled = false; // 認識にマイクを明け渡す
+        micWasEnabledDuringMobile = t.enabled;
+        t.enabled = false; // 認識に専念
         updateVoiceUI();
-      }
-    } else {
-      // iOS以外/通常
-      if (!micIsUsableForStt()){
-        alert('マイクがミュートです。ミュート解除後に自動字幕を開始してください。');
-        updateSttUI(); return;
       }
     }
 
@@ -703,22 +706,22 @@
     recog.onend = () => {
       if (myCycle !== sttCycleId) return;
 
-      // iOS: 認識が切れたらすぐにマイク送信を復帰
-      if (isIOS && localStream && iosMicWasEnabled !== null){
+      // 認識が切れたら、モバイル優先モードでは即マイク送信を復帰
+      if (localStream && micWasEnabledDuringMobile !== null){
         const t = localStream.getAudioTracks()[0];
-        if (t){ t.enabled = iosMicWasEnabled; }
-        iosMicWasEnabled = null;
+        if (t){ t.enabled = micWasEnabledDuringMobile; }
+        micWasEnabledDuringMobile = null;
         updateVoiceUI();
       }
 
       if (sttBuffer.trim()) { sendChatLine(sttBuffer.trim()); sttBuffer = ""; }
       if (sttOn){
-        // iOSモードでは「復帰→すぐ再開」の流れ：再開前にマイクを再び一時停止する
-        if (isIOS && iosCaptionMode()){
+        // 次サイクルへ（モバイル優先モードなら、開始前に再び一時停止）
+        if (mobileCaptionMode()){
           const t = localStream?.getAudioTracks?.()[0];
           if (t){
-            iosMicWasEnabled = t.enabled;
-            t.enabled = false; // 次の認識に備えて停止
+            micWasEnabledDuringMobile = t.enabled;
+            t.enabled = false;
             updateVoiceUI();
           }
         }
@@ -732,12 +735,10 @@
       console.warn('[STT:error]', ev.error);
       const dbg = document.getElementById('debug');
       dbg.textContent += `\n[STT:error] ${ev.error||''}`;
-
-      // iOSでaudio-busyなどが来たらガイダンス
-      if (isIOS && ['audio-busy','not-allowed','service-not-allowed','no-speech','aborted'].includes(ev.error||'')){
-        alert('iOSでは同時利用ができません。字幕優先モード（iOS）をONにしてお試しください。');
-      }
       stopStt();
+      if (['not-allowed','service-not-allowed','no-speech','aborted','audio-busy'].includes(ev.error||'')){
+        alert('自動字幕に失敗しました。権限や端末の音声入力設定、別ブラウザ（Samsung Internet等）をご確認ください。');
+      }
     };
 
     try { recog.start(); }
@@ -746,11 +747,11 @@
       const dbg = document.getElementById('debug');
       dbg.textContent += `\n[STT:start-failed] ${e.message||e}`;
       alert('自動字幕の起動に失敗しました');
-      // 失敗したら、iOSモードで停止していたマイク送信を戻す
-      if (isIOS && localStream && iosMicWasEnabled !== null){
+      // 失敗したら停止していたマイク送信を戻す
+      if (localStream && micWasEnabledDuringMobile !== null){
         const t = localStream.getAudioTracks()[0];
-        if (t) t.enabled = iosMicWasEnabled;
-        iosMicWasEnabled = null;
+        if (t) t.enabled = micWasEnabledDuringMobile;
+        micWasEnabledDuringMobile = null;
         updateVoiceUI();
       }
       setRemoteMuted(false);
@@ -766,11 +767,12 @@
     else stopStt();
   };
 
+  // 旧：長押しは封印
   ['mousedown','touchstart'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); /* 非表示運用 */ })
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); })
   );
   ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); /* 非表示運用 */ })
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); })
   );
 
   window.addEventListener('beforeunload', stopStt);
