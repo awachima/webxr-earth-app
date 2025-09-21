@@ -22,7 +22,9 @@
     .btn[disabled]{opacity:.5;cursor:not-allowed}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
     .sep{height:1px;background:#eee;margin:16px 0}
-    .copy{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font:14px system-ui}
+    .copy{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ddd;border-radius:10px}
+
+    /* chat */
     .chat{display:flex;flex-direction:column;height:520px}
     .chat-log{flex:1;border:1px solid #eee;border-radius:12px;padding:10px;overflow:auto;background:#fafafa}
     .msg{margin:6px 0;padding:8px 10px;border-radius:10px;max-width:85%;word-break:break-word;font-size:14px}
@@ -31,9 +33,15 @@
     .msg.sys{background:#f3f4f6;border:1px dashed #ddd;color:#555;font-size:12px;text-align:center}
     .chat-input{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
     .chat-input input{flex:1;min-width:200px;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px}
+
+    /* members */
     .members{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto;margin-top:8px}
     .member{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid #eee;border-radius:9999px;background:#fafafa;font-size:14px}
     .badge{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:9999px;background:#111;color:#fff;font-size:12px;font-weight:700}
+
+    /* small helper */
+    .switch{display:inline-flex;align-items:center;gap:6px;font-size:13px}
+    .switch input{width:18px;height:18px}
   </style>
 </head>
 <body>
@@ -58,9 +66,11 @@
           <div class="label">カウントダウン</div>
           <div class="count" id="count">--:--:--</div>
           <div class="status" id="status">開始までお待ちください。</div>
+
           <div class="row">
             <a id="enter" class="btn" target="_top" rel="noopener">ツアーに行く</a>
           </div>
+
           <div class="sep"></div>
           <div class="row">
             <button id="copy" class="btn" type="button">この待合室のURLをコピー</button>
@@ -76,8 +86,17 @@
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
-            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">自動字幕ON</button>
-            <button id="sttHold" class="btn ghost" type="button" style="display:none" title="長押しで字幕（旧方式）">長押しで字幕</button>
+            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">
+              自動字幕ON
+            </button>
+            <button id="sttHold" class="btn ghost" type="button" style="display:none" title="長押しで字幕（旧モバイル方式）">長押しで字幕</button>
+          </div>
+          <!-- === iOS: 字幕優先モード === -->
+          <div id="iosModeRow" class="row" style="display:none">
+            <label class="switch" title="iOSではマイク送信と同時の音声認識ができません。認識中のみ相手へのマイク送信を一時停止して字幕化します。">
+              <input type="checkbox" id="iosCaptionMode">
+              <span>字幕優先モード（iOS）</span>
+            </label>
           </div>
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
 
@@ -105,7 +124,7 @@
   <footer style="color:#888;font-size:12px;text-align:center;padding:18px">© DokodemoDoors</footer>
 
   <script>
-  // ===== 既存: ルーム自動消滅等 =====
+  // ===== 既存ロジック =====
   const NEGATIVE_LIMIT_MS = 20*60*1000;
   const S='meetups-store', O='meetups-owners';
   const readStore=()=>JSON.parse(localStorage.getItem(S)||'[]');
@@ -129,6 +148,7 @@
   const roomId=p.get('roomId')||'';
   const user=localStorage.getItem('nickname')||`Guest-${Math.random().toString(16).slice(2,6)}`;
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   $('#title').textContent=title;
   document.title=title+' | 待ち合わせロビー';
@@ -140,7 +160,6 @@
     $('#limitPill').replaceWith(pill);
   }
 
-  // 入室リンク
   const enterBtn = $('#enter');
   const validTarget = /^https?:\/\//i.test(target);
   if (validTarget) { enterBtn.href = target; } else { enterBtn.style.display = 'none'; }
@@ -175,18 +194,19 @@
   }
   requestAnimationFrame(tick);
 
-  // コピー
   $('#copy').onclick=async()=>{
     const url = location.href;
-    try{ await navigator.clipboard.writeText(url);
+    try{
+      await navigator.clipboard.writeText(url);
       $('#copy').textContent = 'コピーしました';
       setTimeout(()=>$('#copy').textContent='この待合室のURLをコピー', 1200);
-    }catch(e){ prompt('手動コピー：', url); }
+    }catch(e){
+      prompt('手動コピー：', url);
+    }
   };
 
   $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user},null,2);
 
-  // ニックネーム
   function setNickname(){
     const current = localStorage.getItem('nickname') || user;
     const name = prompt('ニックネームを入力してください：', current);
@@ -263,8 +283,10 @@
         try{
           const data = JSON.parse(ev.data);
 
+          // WebRTC シグナリング
           if (data.rtc) { onRtcSignal(data); return; }
 
+          // システム
           if (data.sys){
             if (data.type === 'welcome'){ myId = data.id; }
             else if (data.type === 'history' && Array.isArray(data.messages)){
@@ -287,6 +309,7 @@
             return;
           }
 
+          // テキスト
           const obj = data;
           const klass = (obj.name===user)?'me':'other';
           addMsg(klass, `${obj.name}: ${obj.text}`);
@@ -433,12 +456,25 @@
       micToggleBtn.textContent = 'ミュート';
       voiceHint.textContent = '音声: 未参加';
     }
+
+    // iOS用モードの表示切替
+    document.getElementById('iosModeRow').style.display = (on && isIOS) ? '' : 'none';
   }
 
   function isMicEnabled(){
     if (!localStream) return false;
     const t = localStream.getAudioTracks()[0];
     return !!(t && t.enabled);
+  }
+
+  // iOS: 字幕優先モードの状態
+  const iosCaptionModeEl = document.getElementById('iosCaptionMode');
+  const iosCaptionMode = () => !!(isIOS && iosCaptionModeEl && iosCaptionModeEl.checked);
+
+  // STTがマイクを使えるか（iOSモード時はミュートでも許可）
+  function micIsUsableForStt(){
+    if (iosCaptionMode()) return true;
+    return isMicEnabled();
   }
 
   let sttPreMuteOn = false;
@@ -478,7 +514,7 @@
 
     if (!t.enabled){
       sttPreMuteOn = sttOn;
-      if (sttOn) stopStt();
+      if (sttOn && !iosCaptionMode()) stopStt(); // iOSモードならSTT継続可
     }else{
       if (sttPreMuteOn){
         startStt({ continuous: !isMobile });
@@ -490,6 +526,7 @@
 
   updateVoiceUI();
 
+  // ===== モバイル再生ゲート =====
   const enableBtn = document.getElementById('enableSound');
 
   function anyAudioPlaying(){
@@ -552,14 +589,15 @@
   }
   setupMobileAudioGate();
 
-  // ====== 音声→テキスト（自動字幕; 改良版） ======
+  // ====== 音声→テキスト（自動字幕; iOS対応強化） ======
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const sttBtn  = document.getElementById('sttToggle');
-  const sttHold = document.getElementById('sttHold');
+  const sttBtn  = document.getElementById('sttToggle'); 
+  const sttHold = document.getElementById('sttHold');   // 非表示のまま
   let sttOn = false;
   let recog = null;
-  let sttBuffer = "";        // ★ 追加：暫定テキストのバッファ
-  let sttCycleId = 0;        // ★ 再作成用の世代管理
+  let sttBuffer = "";
+  let sttCycleId = 0;
+  let iosMicWasEnabled = null; // iOSモードで一時停止したかどうか
 
   function sttAvailable(){ return !!SR; }
 
@@ -573,9 +611,9 @@
     sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
     sttBtn.classList.toggle('ghost', !sttOn);
 
-    const micOk = isMicEnabled();
+    const micOk = micIsUsableForStt();
     sttBtn.disabled  = !micOk;
-    sttBtn.title  = micOk ? '自分の発話を自動で文字起こしして送信' : 'マイクがミュート中は自動字幕を使用できません';
+    sttBtn.title  = micOk ? '自分の発話を自動で文字起こしして送信' : (isIOS ? '（iOS）マイク送信中は同時字幕ができません' : 'マイクがミュート中は自動字幕を使用できません');
   }
 
   function sendChatLine(text){
@@ -588,11 +626,19 @@
     recog = null;
     sttOn = false;
     sttBuffer = "";
+
+    // iOSモードで一時的に止めていたマイク送信を戻す
+    if (isIOS && localStream && iosMicWasEnabled !== null){
+      const t = localStream.getAudioTracks()[0];
+      if (t) t.enabled = iosMicWasEnabled;
+      iosMicWasEnabled = null;
+      updateVoiceUI();
+    }
+
     setRemoteMuted(false);
     updateSttUI();
   }
 
-  // ★ iOS向け：セッションごとに新規インスタンスを作るヘルパ
   function newRecognizer(){
     const r = new SR();
     r.lang = 'ja-JP';
@@ -605,15 +651,33 @@
   function startStt({continuous}){
     if (!SR){ alert('このブラウザは音声認識に未対応です'); return; }
     if (!localStream){ alert('先に「音声ON」にしてください'); return; }
-    if (!isMicEnabled()){
-      alert('マイクがミュートです。ミュート解除後に自動字幕を開始してください。');
-      updateSttUI(); return;
+
+    // iOSで同時利用は不可。字幕優先モードがOFFなら説明して中断。
+    if (isIOS && !iosCaptionMode()){
+      alert('iOSでは、マイク送信（WebRTC）と自動字幕（音声入力）を同時に使えません。\n「字幕優先モード（iOS）」をONにしてお使いください。');
+      updateSttUI();
+      return;
+    }
+
+    // iOS字幕優先モード：認識中は自分のマイク送信を一時停止
+    if (isIOS && iosCaptionMode()){
+      const t = localStream.getAudioTracks()[0];
+      if (t){
+        iosMicWasEnabled = t.enabled;
+        t.enabled = false; // 認識にマイクを明け渡す
+        updateVoiceUI();
+      }
+    } else {
+      // iOS以外/通常
+      if (!micIsUsableForStt()){
+        alert('マイクがミュートです。ミュート解除後に自動字幕を開始してください。');
+        updateSttUI(); return;
+      }
     }
 
     sttCycleId++;
     const myCycle = sttCycleId;
 
-    // 新インスタンスで開始
     recog = newRecognizer();
     recog.continuous = !!continuous;
 
@@ -621,58 +685,59 @@
     setRemoteMuted(true);
 
     recog.onresult = (e) => {
-      if (!isMicEnabled()) return;
       let finalText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
         const t = res[0].transcript || '';
-        if (res.isFinal) {
-          finalText += t;
-        } else {
-          // ★ 最終でない場合はバッファに保持
-          if (t.trim()) sttBuffer = t.trim();
-        }
+        if (res.isFinal) finalText += t;
+        else if (t.trim()) sttBuffer = t.trim();
       }
-      // 最終結果があれば即送信＆バッファクリア
-      if (finalText.trim()) {
-        sendChatLine(finalText.trim());
-        sttBuffer = "";
-      }
+      if (finalText.trim()) { sendChatLine(finalText.trim()); sttBuffer = ""; }
     };
 
-    // ★ 話し終わりイベントで、バッファ分を救済送信
     recog.onspeechend = () => {
-      if (sttBuffer.trim()) {
-        sendChatLine(sttBuffer.trim());
-        sttBuffer = "";
-      }
+      if (sttBuffer.trim()) { sendChatLine(sttBuffer.trim()); sttBuffer = ""; }
       try { recog.stop(); } catch {}
     };
 
     recog.onend = () => {
-      if (myCycle !== sttCycleId) return; // 古いセッションは無視
-      // 終了時に残っていれば送る（iOSでfinalが付かない対策）
-      if (sttBuffer.trim()) {
-        sendChatLine(sttBuffer.trim());
-        sttBuffer = "";
+      if (myCycle !== sttCycleId) return;
+
+      // iOS: 認識が切れたらすぐにマイク送信を復帰
+      if (isIOS && localStream && iosMicWasEnabled !== null){
+        const t = localStream.getAudioTracks()[0];
+        if (t){ t.enabled = iosMicWasEnabled; }
+        iosMicWasEnabled = null;
+        updateVoiceUI();
       }
-      if (sttOn && isMicEnabled()){
-        // ★ インスタンス再作成での再開（iOSのinvalid-state回避）
-        try {
-          setTimeout(()=>{ if (sttOn && myCycle===sttCycleId) startStt({ continuous: !isMobile }); }, 120);
-        } catch {}
+
+      if (sttBuffer.trim()) { sendChatLine(sttBuffer.trim()); sttBuffer = ""; }
+      if (sttOn){
+        // iOSモードでは「復帰→すぐ再開」の流れ：再開前にマイクを再び一時停止する
+        if (isIOS && iosCaptionMode()){
+          const t = localStream?.getAudioTracks?.()[0];
+          if (t){
+            iosMicWasEnabled = t.enabled;
+            t.enabled = false; // 次の認識に備えて停止
+            updateVoiceUI();
+          }
+        }
+        try { setTimeout(()=>{ if (sttOn && myCycle===sttCycleId) startStt({ continuous: !isMobile }); }, 120); } catch {}
+      } else {
+        setRemoteMuted(false);
       }
     };
 
     recog.onerror = (ev) => {
       console.warn('[STT:error]', ev.error);
       const dbg = document.getElementById('debug');
-      dbg.textContent += `\n[STT:error] ${ev.error || ''}`;
-      // 権限/未対応などは停止
-      if (['not-allowed','service-not-allowed','no-speech','audio-capture','aborted'].includes(ev.error)){
-        stopStt();
-        alert('自動字幕が利用できません（端末の音声入力/ディクテーション設定や権限をご確認ください）');
+      dbg.textContent += `\n[STT:error] ${ev.error||''}`;
+
+      // iOSでaudio-busyなどが来たらガイダンス
+      if (isIOS && ['audio-busy','not-allowed','service-not-allowed','no-speech','aborted'].includes(ev.error||'')){
+        alert('iOSでは同時利用ができません。字幕優先モード（iOS）をONにしてお試しください。');
       }
+      stopStt();
     };
 
     try { recog.start(); }
@@ -681,6 +746,13 @@
       const dbg = document.getElementById('debug');
       dbg.textContent += `\n[STT:start-failed] ${e.message||e}`;
       alert('自動字幕の起動に失敗しました');
+      // 失敗したら、iOSモードで停止していたマイク送信を戻す
+      if (isIOS && localStream && iosMicWasEnabled !== null){
+        const t = localStream.getAudioTracks()[0];
+        if (t) t.enabled = iosMicWasEnabled;
+        iosMicWasEnabled = null;
+        updateVoiceUI();
+      }
       setRemoteMuted(false);
       return;
     }
@@ -695,10 +767,10 @@
   };
 
   ['mousedown','touchstart'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); })
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); /* 非表示運用 */ })
   );
   ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); })
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); /* 非表示運用 */ })
   );
 
   window.addEventListener('beforeunload', stopStt);
