@@ -23,7 +23,6 @@
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
     .sep{height:1px;background:#eee;margin:16px 0}
     .copy{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font:14px system-ui}
-
     .chat{display:flex;flex-direction:column;height:520px}
     .chat-log{flex:1;border:1px solid #eee;border-radius:12px;padding:10px;overflow:auto;background:#fafafa}
     .msg{margin:6px 0;padding:8px 10px;border-radius:10px;max-width:85%;word-break:break-word;font-size:14px}
@@ -32,12 +31,9 @@
     .msg.sys{background:#f3f4f6;border:1px dashed #ddd;color:#555;font-size:12px;text-align:center}
     .chat-input{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
     .chat-input input{flex:1;min-width:200px;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px}
-
     .members{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto;margin-top:8px}
     .member{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid #eee;border-radius:9999px;background:#fafafa;font-size:14px}
     .badge{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:9999px;background:#111;color:#fff;font-size:12px;font-weight:700}
-
-    /* エラーバナー */
     #errbanner{position:fixed;left:16px;right:16px;top:12px;z-index:9999;background:#b00020;color:#fff;padding:10px 14px;border-radius:10px;display:none;box-shadow:0 6px 20px rgba(0,0,0,.2);font:13px/1.4 system-ui}
     #errbanner small{opacity:.9}
   </style>
@@ -66,15 +62,9 @@
           <div class="label">カウントダウン</div>
           <div class="count" id="count">--:--:--</div>
           <div class="status" id="status">開始までお待ちください。</div>
-
-          <div class="row">
-            <a id="enter" class="btn" target="_top" rel="noopener">ツアーに行く</a>
-          </div>
-
+          <div class="row"><a id="enter" class="btn" target="_top" rel="noopener">ツアーに行く</a></div>
           <div class="sep"></div>
-          <div class="row">
-            <button id="copy" class="btn" type="button">この待合室のURLをコピー</button>
-          </div>
+          <div class="row"><button id="copy" class="btn" type="button">この待合室のURLをコピー</button></div>
         </div>
 
         <div class="panel">
@@ -86,7 +76,7 @@
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
-            <!-- 初期は非表示（JSが死んでも出ないように） -->
+            <!-- JSで条件を満たしたら表示 -->
             <button id="sttToggle" class="btn ghost" type="button" style="display:none"
               title="自分の発話を自動で文字起こしして送信（PC向け）">自動字幕ON</button>
             <button id="sttHold" class="btn ghost" type="button" style="display:none"
@@ -137,10 +127,9 @@
   </script>
 
   <script>
-  // ===== 基本（ロビー情報/自動削除・表示） =====
+  // ===== 基本（表示など） =====
   const NEGATIVE_LIMIT_MS = 20*60*1000;
   const $=(s)=>document.querySelector(s);
-
   const p=new URLSearchParams(location.search);
   const title=p.get('title')||'待ち合わせ';
   const start=p.get('start');
@@ -166,7 +155,7 @@
     $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user},null,2);
   }catch(e){ console.error(e); }
 
-  function pad(n){ return String(n).padStart(2,'0'); }
+  const pad=n=>String(n).padStart(2,'0');
   let startDate=null; if(start){ startDate=new Date(start); $('#meta').textContent='開始時刻：'+startDate.toLocaleString(); }
   function tick(){
     try{
@@ -212,7 +201,7 @@
     };
   }catch(e){ console.error(e); }
 
-  // ===== WebSocket（チャット + シグナリング） =====
+  // ===== WebSocket（チャット + シグナリング分離） =====
   const WS_BASE = 'wss://do-chat.awachima7.workers.dev';
   const pageParams = new URLSearchParams(location.search);
   pageParams.set('user', user);
@@ -232,33 +221,14 @@
   }
   function addSys(text){ addMsg('sys', text); }
 
-  const membersEl = $('#members');
-  function renderMembers(list){
-    membersEl.innerHTML = '';
-    if (!list || list.length===0){
-      const empty = document.createElement('div');
-      empty.className = 'status';
-      empty.textContent = '参加者はいません。';
-      membersEl.appendChild(empty);
-      return;
-    }
-    list.forEach((m, idx)=>{
-      const row = document.createElement('div');
-      row.className = 'member';
-      const badge = document.createElement('div');
-      badge.className = 'badge';
-      badge.textContent = String(idx+1);
-      const label = document.createElement('div');
-      label.textContent = m.name + (m.id ? ` (${m.id.slice(0,6)})` : '');
-      row.appendChild(badge);
-      row.appendChild(label);
-      membersEl.appendChild(row);
-    });
-  }
-
   let ws=null, myId=null, rosterMembers=[], focused=true;
   window.addEventListener('focus', ()=> focused=true);
   window.addEventListener('blur',  ()=> focused=false);
+
+  function wsSendChat(text){ try{ ws?.readyState===1 && ws.send(text); }catch{} }
+  function wsSendRTC(obj){  // ★ ここがポイント：必ず "RTC:" プレフィクス付き文字列で送る
+    try{ ws?.readyState===1 && ws.send('RTC:'+JSON.stringify(obj)); }catch{}
+  }
 
   function connect(){
     try{
@@ -267,6 +237,16 @@
       ws.onclose = ()=>{ chatStatus.textContent='切断されました。再接続を試みます…'; setTimeout(connect, 1500); };
       ws.onerror = (e)=>{ chatStatus.textContent='エラーが発生しました'; console.error(e); };
       ws.onmessage = (ev)=>{
+        // 1) まずRTC（文字列）を先に振り分け
+        if (typeof ev.data === 'string' && ev.data.startsWith('RTC:')){
+          try{
+            const data = JSON.parse(ev.data.slice(4));
+            if (data && data.rtc) { onRtcSignal(data); return; }
+          }catch(_){}
+          return; // 解析できなくてもチャットには流さない
+        }
+
+        // 2) JSONオブジェクト（sys or rtc）ならパースして振り分け
         try{
           const data = JSON.parse(ev.data);
 
@@ -275,10 +255,18 @@
           if (data.sys){
             if (data.type==='welcome'){ myId = data.id; }
             else if (data.type==='history' && Array.isArray(data.messages)){
-              data.messages.forEach(line=>{ try{
-                const obj=JSON.parse(line);
-                addMsg(obj.name===user?'me':'other', `${obj.name}: ${obj.text}`);
-              }catch{} });
+              // 履歴も "RTC:" を弾く
+              data.messages.forEach(line=>{
+                try{
+                  if (typeof line === 'string' && line.startsWith('RTC:')) return;
+                  const obj = JSON.parse(line);
+                  if (typeof obj === 'string' && obj.startsWith('RTC:')) return;
+                  addMsg(obj.name===user?'me':'other', `${obj.name}: ${obj.text}`);
+                }catch{
+                  // 純テキスト履歴
+                  if (typeof line === 'string' && !line.startsWith('RTC:')) addMsg('other', line);
+                }
+              });
               addSys('— 過去のメッセージを読み込みました —');
             } else if (data.type==='roster'){
               rosterMembers = Array.isArray(data.members)?data.members:[];
@@ -293,9 +281,15 @@
             return;
           }
 
+          // 3) それ以外は通常チャット
           const obj = data;
           addMsg(obj.name===user?'me':'other', `${obj.name}: ${obj.text}`);
-        }catch(e){ /* ignore malformed */ }
+        }catch{
+          // 4) 純テキスト（RTC:以外）はチャットとして表示
+          if (typeof ev.data === 'string' && !ev.data.startsWith('RTC:')){
+            addMsg('other', ev.data);
+          }
+        }
       };
     }catch(e){
       chatStatus.textContent='接続に失敗しました';
@@ -307,7 +301,7 @@
   chatSend.onclick = ()=>{
     const t=(chatInput.value||'').trim();
     if(!t || !ws || ws.readyState!==1) return;
-    ws.send(t);
+    wsSendChat(t);
     chatInput.value='';
   };
   chatInput.addEventListener('keydown', (e)=>{
@@ -401,7 +395,7 @@
       maybeShowEnableButton();
     };
 
-    pc.onicecandidate = (ev)=>{ if(ev.candidate) wsSend({ rtc:{ to:peerId, type:'candidate', data: ev.candidate }}); };
+    pc.onicecandidate = (ev)=>{ if(ev.candidate) wsSendRTC({ rtc:{ to:peerId, type:'candidate', data: ev.candidate }}); };
     pc.oniceconnectionstatechange = async ()=>{
       const st = pc.iceConnectionState; console.info('[ICE]', peerId, st);
       if (st==='failed' || st==='disconnected'){
@@ -410,18 +404,17 @@
             try{
               const offer = await pc.createOffer({ iceRestart:true });
               await pc.setLocalDescription(offer);
-              wsSend({ rtc:{ to:peerId, type:'offer', data: pc.localDescription }});
+              wsSendRTC({ rtc:{ to:peerId, type:'offer', data: pc.localDescription }});
             }catch(e){ console.warn('[iceRestart]', peerId, e); }
           }
         }, 1500);
       }
     };
 
-    // 重要：localStreamがあれば直ちに addTrack（シンプル安定版）
+    // localStreamがあれば直ちに addTrack（簡潔で安定）
     if (localStream){
       localStream.getAudioTracks().forEach(tr => { try{ pc.addTrack(tr, localStream); }catch(e){ console.warn('[addTrack]', e); }});
     }else{
-      // 未参加でも受け口は用意
       try{ pc.addTransceiver('audio', { direction:'recvonly' }); }catch{}
     }
 
@@ -430,7 +423,7 @@
         makingOffer.set(peerId,true);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        wsSend({ rtc:{ to:peerId, type:'offer', data: pc.localDescription }});
+        wsSendRTC({ rtc:{ to:peerId, type:'offer', data: pc.localDescription }});
       }catch(e){ console.warn('[negoneeded]', peerId, e); }
       finally{ makingOffer.set(peerId,false); }
     };
@@ -446,7 +439,7 @@
     try{
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      wsSend({ rtc:{ to:peerId, type:'offer', data: pc.localDescription }});
+      wsSendRTC({ rtc:{ to:peerId, type:'offer', data: pc.localDescription }});
     }catch(e){ console.warn('[callPeer offer]', peerId, e); }
   }
 
@@ -463,8 +456,6 @@
     makingOffer.delete(peerId); ignoreOffer.delete(peerId); polite.delete(peerId); candQueue.delete(peerId);
     setDebug();
   }
-
-  function wsSend(obj){ try { ws?.readyState===1 && ws.send(JSON.stringify(obj)); } catch {} }
 
   async function onRtcSignal(msg){
     const { from:peerId, type, data } = msg.rtc;
@@ -494,13 +485,12 @@
         }else{
           await pc.setRemoteDescription(new RTCSessionDescription(data));
         }
-        // localStreamあるのにsenderが無い場合は補修
         if (localStream && pc.getSenders().every(s=>!(s.track && s.track.kind==='audio'))){
           localStream.getAudioTracks().forEach(tr=>{ try{ pc.addTrack(tr, localStream); }catch{} });
         }
         const q=candQueue.get(peerId); while(q.length){ const c=q.shift(); try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){ console.warn('[flush cand]', peerId, e); } }
         const answer=await pc.createAnswer(); await pc.setLocalDescription(answer);
-        wsSend({ rtc:{ to:peerId, type:'answer', data: pc.localDescription }});
+        wsSendRTC({ rtc:{ to:peerId, type:'answer', data: pc.localDescription }});
       }catch(e){ console.warn('[handle offer]', peerId, e); }
       return;
     }
@@ -541,12 +531,8 @@
     if (!localStream){
       try{
         localStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation:true, noiseSuppression:true, autoGainControl:true,
-            channelCount:1
-          }
+          audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1 }
         });
-        // 既存Peerに即addTrack（重要）
         for (const pc of peers.values()){
           localStream.getAudioTracks().forEach(tr=>{ try{ pc.addTrack(tr, localStream); }catch{} });
         }
@@ -577,8 +563,8 @@
   };
 
   // ====== STT（自動字幕） ======
-  const sttBtn  = document.getElementById('sttToggle'); // PC向けトグル
-  const sttHold = document.getElementById('sttHold');   // モバイル向け長押し
+  const sttBtn  = document.getElementById('sttToggle');
+  const sttHold = document.getElementById('sttHold');
   let sttOn=false, recog=null;
 
   function sttSupportedDesktop(){ return !!(window.SpeechRecognition||window.webkitSpeechRecognition) && !isMobile; }
@@ -615,7 +601,7 @@
 
     recog=new SRClass(); recog.lang='ja-JP'; recog.interimResults=true; recog.continuous=!!continuous;
     recog.onresult=(e)=>{ if(!isMicEnabled()) return; let txt=''; for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i]; if(r.isFinal) txt+=r[0].transcript;}
-      if (txt.trim() && ws && ws.readyState===1){ ws.send(`（自動字幕）${txt.trim()}`); } };
+      if (txt.trim() && ws && ws.readyState===1){ wsSendChat(`（自動字幕）${txt.trim()}`); } };
     recog.onend=()=>{ if (sttOn && !isMobile && isMicEnabled()){ try{ recog.start(); }catch{} } };
     recog.onerror=(ev)=>{ console.warn('[STT]', ev.error); stopStt(); };
     try{ recog.start(); }catch(e){ console.error(e); alert('自動字幕の起動に失敗しました'); return; }
