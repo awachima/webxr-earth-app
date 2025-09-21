@@ -86,7 +86,7 @@
           </div>
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
 
-          <!-- モバイル向け：成功するまで消えない -->
+          <!-- モバイル向け：成功するまで消えない有効化ボタン -->
           <button id="enableSound" class="btn ghost" type="button" style="display:none;margin-top:6px">
             スマホで音を有効化
           </button>
@@ -323,14 +323,16 @@
   });
 
   // ========= WebRTC (voice) =========
+  // STUNのみ（無料運用）。NATが厳しい回線では失敗する場合があります。
   const iceServers = [{ urls: [
     "stun:stun.l.google.com:19302",
     "stun:stun1.l.google.com:19302"
   ]}];
+  const pcConfig = { iceServers };
+
   let localStream = null;
   const peers = new Map();  // id -> RTCPeerConnection
   const audios = new Map(); // id -> <audio>
-  const pcConfig = { iceServers };
 
   // === WebAudio Bridge ===
   let audioCtx = null;
@@ -355,8 +357,9 @@
 
   function createPeer(peerId){
     const pc = new RTCPeerConnection(pcConfig);
+
     pc.ontrack = (ev) => {
-      // 1) <audio> での再生も継続
+      // 1) <audio> 再生
       let el = audios.get(peerId);
       if (!el) {
         el = document.createElement('audio');
@@ -370,26 +373,34 @@
       el.srcObject = ev.streams[0];
       try { el.play(); } catch (e) {}
 
-      // 2) WebAudio にもブリッジ（自動再生制限を迂回しやすい）
+      // 2) WebAudioにも接続（自動再生制限に強い）
       bindRemoteToAudioCtx(ev.streams[0]);
 
-      // 3) 失敗している場合は「音を有効化」を再提示
+      // 再試行ボタンの表示更新
       maybeShowEnableButton();
     };
+
     pc.onicecandidate = (ev) => {
       if (ev.candidate) wsSend({ rtc: { to: peerId, type: "candidate", data: ev.candidate }});
     };
-    pc.onconnectionstatechange = ()=> console.info("[RTC]", peerId, pc.connectionState);
-    if (localStream) {
+    pc.oniceconnectionstatechange = ()=> console.info("[ICE]", peerId, pc.iceConnectionState);
+    pc.onconnectionstatechange = ()=> console.info("[PC]", peerId, pc.connectionState);
+
+    // ★ポイント：自分が送信していなくても、受信用 m=audio を用意
+    if (localStream && localStream.getAudioTracks().length){
       for (const track of localStream.getAudioTracks()) pc.addTrack(track, localStream);
+    } else {
+      try { pc.addTransceiver('audio', { direction: 'recvonly' }); } catch {}
     }
+
     peers.set(peerId, pc);
     return pc;
   }
 
   async function callPeer(peerId){
     const pc = createPeer(peerId);
-    const offer = await pc.createOffer({ offerToReceiveAudio: true });
+    // offerToReceiveAudio は不要（transceiverでm=audioを確保済み）
+    const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     wsSend({ rtc: { to: peerId, type: "offer", data: offer }});
   }
@@ -451,7 +462,7 @@
         localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
         startCalls(rosterMembers); // 参加中なら新規相手へ発呼
         updateVoiceUI();
-        // 参加時にも音解禁を試す（モバイルで効きやすい）
+        // 参加時にも音解禁を試す
         await tryPlayAllAudios();
         await resumeAudioContext();
       }catch(e){
@@ -487,11 +498,9 @@
   }
 
   async function tryPlayAllAudios(){
-    // 既存Map
     for (const el of audios.values()){
       try { el.volume = 1; el.muted = false; await el.play(); } catch (e) {}
     }
-    // 念のためDOM上すべて
     document.querySelectorAll('audio').forEach(async (el)=>{
       try { el.volume = 1; el.muted = false; await el.play(); } catch (e) {}
     });
@@ -509,10 +518,8 @@
   }
 
   async function enableSound(){
-    // ユーザー操作内で両輪を実行
     const r1 = await resumeAudioContext();
     await tryPlayAllAudios();
-    // 成功判定：AudioContextがrunning もしくは何かが再生中
     if (r1 || anyAudioPlaying()){
       enableBtn.style.display = 'none';
     }else{
@@ -523,7 +530,6 @@
 
   function maybeShowEnableButton(){
     if (!isMobile) return;
-    // 成功済みなら隠す。未成功なら表示して再試行を促す。
     const ctxOk = audioCtx && audioCtx.state === 'running';
     if (ctxOk || anyAudioPlaying()){
       enableBtn.style.display = 'none';
@@ -536,15 +542,10 @@
     if (!isMobile) return;
     enableBtn.style.display = '';
     enableBtn.onclick = enableSound;
-
-    // 一度でもタップ/クリックがあれば再生を試みる（毎回試すがUXに影響しない）
-    const oneShot = async ()=>{
-      await enableSound();
-    };
-    document.addEventListener('touchend', oneShot);
-    document.addEventListener('click',     oneShot);
-
-    // ページが再表示されたときにも試す
+    // タップ/クリックのたびに試す（UXを損ねない範囲で）
+    const retry = async ()=>{ await enableSound(); };
+    document.addEventListener('touchend', retry);
+    document.addEventListener('click',     retry);
     document.addEventListener('visibilitychange', ()=>{
       if (!document.hidden) maybeShowEnableButton();
     });
