@@ -598,6 +598,7 @@
   const sttHold = document.getElementById('sttHold');   // モバイル向け長押し
   let sttOn = false;
   let recog = null;
+  let sttBuffer = "";
 
   function sttSupportedDesktop(){ return !!SR && !isMobile; }
   function sttSupportedMobile(){  return !!SR &&  isMobile; }
@@ -652,7 +653,13 @@
       let finalText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
-        if (res.isFinal) finalText += res[0].transcript;
+        const txt = res[0]?.transcript || '';
+        if (res.isFinal) {
+          finalText += txt;
+          sttBuffer = ''; // 確定が来たら暫定バッファはクリア
+        } else {
+          sttBuffer = txt; // 暫定を保持（最新で上書き）
+        }
       }
       if (finalText.trim() && ws && ws.readyState===1) {
         ws.send(`（自動字幕）${finalText.trim()}`);
@@ -690,7 +697,7 @@
     sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (!sttOn) startStt({ continuous:false }); })
   );
   ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (sttOn) stopStt(); })
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (sttOn) setTimeout(()=>stopStt(), 200); })
   );
 
   window.addEventListener('beforeunload', stopStt);
