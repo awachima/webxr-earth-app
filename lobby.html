@@ -82,7 +82,6 @@
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
             <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">自動字幕ON</button>
-            <button id="sttHold" class="btn ghost" type="button" style="display:none" title="長押しで字幕（旧方式）">長押しで字幕</button>
           </div>
           <div id="mobileModeRow" class="row" style="display:none">
             <label class="switch" title="認識中のみ相手へのマイク送信を一時停止して字幕化します（同時利用が不安定な端末向け）">
@@ -235,7 +234,7 @@
     alert('ニックネームを保存しました。ページを再読み込みすると反映されます。');
   };
 
-  // ===== 以降：チャット + 音声（既存相当の実装） =====
+  // ===== チャット + 音声 =====
   const WS_BASE = 'wss://do-chat.awachima7.workers.dev';
   const pageParams = new URLSearchParams(location.search);
   pageParams.set('user', user);
@@ -310,7 +309,7 @@
 
   // ===== 音声 UI（トグル） =====
   const voicePower=$('#voicePower'), micToggle=$('#micToggle');
-  const sttBtn=$('#sttToggle'), sttHold=$('#sttHold');
+  const sttBtn=$('#sttToggle');
   const voiceHint=$('#voiceHint');
   const enableSound=$('#enableSound');
   const mobileCaptionMode=$('#mobileCaptionMode');
@@ -323,7 +322,6 @@
     voicePower.textContent = audioOn ? '音声OFF' : '音声ON';
     micToggle.style.display = audioOn ? 'inline-flex' : 'none';
     sttBtn.style.display = audioOn ? 'inline-flex' : 'none';
-    sttHold.style.display = audioOn ? 'inline-flex' : 'none';
     voiceHint.textContent = audioOn ? (micMuted?'ミュート中':'音声有効') : '未参加';
   }
   function updateSttUI(){
@@ -352,9 +350,6 @@
   function stopStt(){ if(!sttOn) return; try{ recog&&recog.stop(); }catch{} sttOn=false; updateSttUI(); }
 
   sttBtn.onclick = ()=>{ if (!sttOn) startStt({ continuous: !isMobile }); else stopStt(); };
-
-  ['mousedown','touchstart'].forEach(ev => sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); }));
-  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev => sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); }));
 
   function stopAll(){ stopStt(); }
   window.addEventListener('beforeunload', stopAll);
