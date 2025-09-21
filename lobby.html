@@ -89,7 +89,7 @@
               title="長押しで字幕（モバイル推奨）">長押しで字幕</button>
           </div>
 
-          <!-- VUメーター（簡易） -->
+          <!-- VUメーター -->
           <div id="vu" class="status" style="margin-top:6px">🎙️ マイク入力レベル：□□□□□</div>
 
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
@@ -273,12 +273,17 @@
   const pcConfig = { iceServers };
 
   let localStream = null;
-  const peers = new Map();        // id -> RTCPeerConnection
-  const audios = new Map();       // id -> <audio>
+  const peers = new Map();             // id -> RTCPeerConnection
+  const audios = new Map();            // id -> <audio>
+  const transceivers = new Map();      // id -> RTCRtpTransceiver (audio)
   // Perfect Negotiation 状態管理
-  const makingOffer = new Map();  // id -> boolean
-  const ignoreOffer = new Map();  // id -> boolean
-  const polite = new Map();       // id -> boolean（ID比較で決定）
+  const makingOffer = new Map();       // id -> boolean
+  const ignoreOffer = new Map();       // id -> boolean
+  const polite = new Map();            // id -> boolean（ID比較で決定）
+  // 受信前Candidateの一時キュー
+  const candQueue = new Map();         // id -> RTCIceCandidateInit[]
+  // 交渉直列化の簡易キュー
+  const negoLock = new Map();          // id -> Promise (最後の交渉タスク)
 
   function wsSend(obj){
     try { ws?.readyState===1 && ws.send(JSON.stringify(obj)); } catch {}
@@ -421,11 +426,17 @@
     return !!(t && t.enabled);
   }
 
-  // --- Peer 作成（Perfect Negotiation対応） ---
+  // --- Perfect Negotiation 補助 ---
   function computePolite(peerId){
-    // ID文字列の辞書順で安定決定。myIdが未確定の間は自分はpolite=trueで受け流し重視
-    if (!myId || !peerId) return true;
-    return myId < peerId; // 小さい方を polite とする
+    if (!peerId || !myId) return true;
+    return myId < peerId; // 小さい方をpolite
+  }
+  function queueNegotiation(peerId, task){
+    const prev = negoLock.get(peerId) || Promise.resolve();
+    const next = prev.then(()=>task()).catch(e=>console.warn('[nego]', peerId, e));
+    negoLock.set(peerId, next.finally(()=> {
+      if (negoLock.get(peerId) === next) negoLock.delete(peerId);
+    }));
   }
 
   function createPeer(peerId){
@@ -433,6 +444,11 @@
     polite.set(peerId, computePolite(peerId));
     makingOffer.set(peerId, false);
     ignoreOffer.set(peerId, false);
+    candQueue.set(peerId, []);
+
+    // 常設 sendrecv の器
+    const trx = pc.addTransceiver('audio', { direction: 'sendrecv' });
+    transceivers.set(peerId, trx);
 
     pc.ontrack = async (ev) => {
       let el = audios.get(peerId);
@@ -446,58 +462,74 @@
         document.body.appendChild(el);
       }
       el.srcObject = ev.streams[0];
-      try { await el.play(); } catch (e) { /* autoplay失敗 → 復帰UI */ }
+      try { await el.play(); } catch {}
       bindRemoteToAudioCtx(ev.streams[0]);
       maybeShowEnableButton();
-      // ユーザー操作での再試行も常に仕込む
       const retry = async()=>{ await resumeAudioContext(); await tryPlayAllAudios(); maybeShowEnableButton(); };
-      document.addEventListener('click', retry, { once:false });
-      document.addEventListener('touchend', retry, { once:false });
+      document.addEventListener('click', retry);
+      document.addEventListener('touchend', retry);
     };
 
     pc.onicecandidate = (ev) => {
       if (ev.candidate) wsSend({ rtc: { to: peerId, type: "candidate", data: ev.candidate }});
     };
-    pc.oniceconnectionstatechange = ()=> console.info("[ICE]", peerId, pc.iceConnectionState);
+    pc.oniceconnectionstatechange = async () => {
+      const st = pc.iceConnectionState;
+      console.info("[ICE]", peerId, st);
+      if (st === 'failed' || st === 'disconnected'){
+        // 少し待って復帰しなければICE Restart
+        setTimeout(async ()=>{
+          if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected'){
+            queueNegotiation(peerId, async ()=>{
+              const offer = await pc.createOffer({ iceRestart: true });
+              await pc.setLocalDescription(offer);
+              wsSend({ rtc:{ to: peerId, type:'offer', data: pc.localDescription }});
+            });
+          }
+        }, 1500);
+      }
+    };
     pc.onconnectionstatechange = ()=> console.info("[PC]", peerId, pc.connectionState);
 
-    // 送受を常に用意：自分ストリームがあればsendrecv、なければrecvonlyを確保
-    if (localStream && localStream.getAudioTracks().length){
-      for (const track of localStream.getAudioTracks()) pc.addTrack(track, localStream);
-    } else {
-      try { pc.addTransceiver('audio', { direction: 'recvonly' }); } catch {}
-    }
-
-    // Perfect Negotiation: 発呼側のトリガ
-    pc.onnegotiationneeded = async () => {
-      try{
-        makingOffer.set(peerId, true);
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        wsSend({ rtc:{ to: peerId, type:'offer', data: pc.localDescription }});
-      }catch(e){
-        console.warn('[onnegotiationneeded]', peerId, e);
-      }finally{
-        makingOffer.set(peerId, false);
-      }
+    // negotiationneeded は直列化
+    pc.onnegotiationneeded = () => {
+      queueNegotiation(peerId, async ()=>{
+        try{
+          makingOffer.set(peerId, true);
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          wsSend({ rtc:{ to: peerId, type:'offer', data: pc.localDescription }});
+        }finally{
+          makingOffer.set(peerId, false);
+        }
+      });
     };
 
     peers.set(peerId, pc);
     return pc;
   }
 
+  async function ensureLocalOnPeer(peerId){
+    const pc = peers.get(peerId);
+    if (!pc) return;
+    const trx = transceivers.get(peerId);
+    if (!trx) return;
+    const track = localStream?.getAudioTracks()[0] || null;
+    try { await trx.sender.replaceTrack(track); } catch(e){ console.warn('[replaceTrack]', peerId, e); }
+  }
+
   async function callPeer(peerId){
     const pc = createPeer(peerId);
-    // ここでは onnegotiationneeded に任せる（ブラウザが発火しない場合もあるため保険で一発Offer）
-    try{
+    await ensureLocalOnPeer(peerId);
+    // 明示Offer（保険）
+    queueNegotiation(peerId, async ()=>{
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       wsSend({ rtc:{ to: peerId, type:"offer", data: pc.localDescription }});
-    }catch(e){ console.warn('[callPeer createOffer]', peerId, e); }
+    });
   }
 
   function startCalls(memberList){
-    if (!localStream) return;
     const others = (memberList||[]).filter(m => m.id && m.id !== myId);
     for (const m of others) if (!peers.has(m.id)) callPeer(m.id);
   }
@@ -507,34 +539,41 @@
     if (pc) { try { pc.close(); } catch{}; peers.delete(peerId); }
     const el = audios.get(peerId);
     if (el) { try { el.srcObject=null; el.remove(); } catch{}; audios.delete(peerId); }
+    transceivers.delete(peerId);
     makingOffer.delete(peerId); ignoreOffer.delete(peerId); polite.delete(peerId);
+    candQueue.delete(peerId); negoLock.delete(peerId);
   }
 
-  // Perfect Negotiation を踏まえたシグナリング処理
+  // Perfect Negotiation + candidateキュー
   async function onRtcSignal(msg){
     const { from:peerId, type, data } = msg.rtc;
     if (!peerId || peerId === myId) return;
     let pc = peers.get(peerId);
     if (!pc) pc = createPeer(peerId);
 
-    // politeが未確定であれば再算定
     if (!polite.has(peerId)) polite.set(peerId, computePolite(peerId));
 
-    try{
-      if (type === 'offer'){
-        const offerCollision = (makingOffer.get(peerId) || pc.signalingState !== 'stable');
-        const iAmPolite = !!polite.get(peerId);
+    if (type === 'candidate'){
+      if (pc.remoteDescription) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(data)); } catch(e){ console.warn('[addCandidate]', peerId, e); }
+      } else {
+        candQueue.get(peerId)?.push(data);
+      }
+      return;
+    }
 
-        if (!iAmPolite && offerCollision){
-          // impolite側は衝突Offerを無視
-          ignoreOffer.set(peerId, true);
-          console.info('[PN] ignore remote offer (impolite, collision)', peerId);
-          return;
-        }
-        ignoreOffer.set(peerId, false);
+    if (type === 'offer'){
+      const iAmPolite = !!polite.get(peerId);
+      const offerCollision = (makingOffer.get(peerId) || pc.signalingState !== 'stable');
+      if (!iAmPolite && offerCollision){
+        ignoreOffer.set(peerId, true);
+        console.info('[PN] ignore remote offer (impolite/collision)', peerId);
+        return;
+      }
+      ignoreOffer.set(peerId, false);
 
+      queueNegotiation(peerId, async ()=>{
         if (offerCollision){
-          // ロールバックしてから受け入れ
           await Promise.all([
             pc.setLocalDescription({type:'rollback'}),
             pc.setRemoteDescription(new RTCSessionDescription(data))
@@ -542,27 +581,32 @@
         }else{
           await pc.setRemoteDescription(new RTCSessionDescription(data));
         }
+
+        // 溜めていたcandidateを適用
+        const q = candQueue.get(peerId) || [];
+        while(q.length){
+          const c = q.shift();
+          try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){ console.warn('[flushCandidate]', peerId, e); }
+        }
+
+        // Answer
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         wsSend({ rtc:{ to: peerId, type:'answer', data: pc.localDescription }});
-        return;
-      }
+      });
+      return;
+    }
 
-      if (type === 'answer'){
-        if (ignoreOffer.get(peerId)) { console.info('[PN] ignored answer because we ignored offer', peerId); return; }
-        await pc.setRemoteDescription(new RTCSessionDescription(data));
-        return;
+    if (type === 'answer'){
+      if (ignoreOffer.get(peerId)) { console.info('[PN] ignored answer because we ignored offer', peerId); return; }
+      try{ await pc.setRemoteDescription(new RTCSessionDescription(data)); }catch(e){ console.warn('[setRD answer]', peerId, e); }
+      // 溜めていたcandidateを適用
+      const q = candQueue.get(peerId) || [];
+      while(q.length){
+        const c = q.shift();
+        try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){ console.warn('[flushCandidate]', peerId, e); }
       }
-
-      if (type === 'candidate'){
-        try{ await pc.addIceCandidate(new RTCIceCandidate(data)); }catch(e){
-          // setRemoteDescription 前に届く場合は一時的に捨てる
-          console.warn('[ICE addCandidate]', peerId, e);
-        }
-        return;
-      }
-    }catch(e){
-      console.warn('[onRtcSignal error]', peerId, e);
+      return;
     }
   }
 
@@ -576,8 +620,9 @@
         localStream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
+        // 既存peerへ送信トラックを反映
+        for (const peerId of peers.keys()) await ensureLocalOnPeer(peerId);
         startCalls(rosterMembers);
-        await attachLocalToAllPeers();   // 既存PCへ送信トラックを後付け＆再交渉
         updateVoiceUI();
         updateSttUI();
         await tryPlayAllAudios();
@@ -588,8 +633,10 @@
       }
     } else {
       // OFF（退出）
-      detachLocalFromAllPeers();
-      for (const id of Array.from(peers.keys())) cleanupPeer(id);
+      for (const [peerId, pc] of peers.entries()){
+        try{ await transceivers.get(peerId)?.sender.replaceTrack(null); }catch{}
+        cleanupPeer(peerId);
+      }
       if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
       stopStt();
       sttPreMuteOn=false;
@@ -609,53 +656,14 @@
     updateVoiceUI();
 
     if (!t.enabled){
-      // ミュートへ：現在のSTT状態を記憶し、必ず停止（ミュート中は字幕非送出）
       sttPreMuteOn = sttOn;
       if (sttOn) stopStt();
     }else{
-      // ミュート解除：ミュート前にONだったなら自動復帰
-      if (sttPreMuteOn){
-        startStt({ continuous: !isMobile }); // PCはcontinuous、モバイルは非連続
-      }
+      if (sttPreMuteOn){ startStt({ continuous: !isMobile }); }
       sttPreMuteOn = false;
     }
     updateSttUI();
   };
-
-  // 送信トラックの後付け & 再交渉
-  async function attachLocalToAllPeers(){
-    if (!localStream) return;
-    const track = localStream.getAudioTracks()[0];
-    if (!track) return;
-
-    for (const [peerId, pc] of peers.entries()){
-      let sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
-      if (sender) {
-        try { await sender.replaceTrack(track); } catch(e){ console.warn('[replaceTrack]', peerId, e); }
-      } else {
-        try { sender = pc.addTrack(track, localStream); } catch(e){ console.warn('[addTrack]', peerId, e); }
-      }
-      try{
-        const offer = await pc.createOffer({ offerToReceiveAudio: true });
-        await pc.setLocalDescription(offer);
-        wsSend({ rtc: { to: peerId, type: "offer", data: pc.localDescription }});
-        console.info('[renegotiate] sent offer to', peerId);
-      }catch(e){
-        console.warn('[renegotiate]', peerId, e);
-      }
-    }
-  }
-  function detachLocalFromAllPeers(){
-    for (const [, pc] of peers.entries()){
-      try{
-        pc.getSenders()?.forEach(s => {
-          if (s.track && s.track.kind === 'audio') {
-            try { s.replaceTrack(null); } catch {}
-          }
-        });
-      }catch{}
-    }
-  }
 
   // ====== STT（自動字幕） ======
   const sttBtn  = document.getElementById('sttToggle'); // PC向けトグル
@@ -670,7 +678,6 @@
     const SRAvail = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
     const voiceOn = !!localStream;
 
-    // STT非対応端末 → ボタン非表示＋注意文表示
     if (!SRAvail){
       sttBtn.style.display  = 'none';
       sttHold.style.display = 'none';
@@ -759,10 +766,7 @@
     updateSttUI();
   }
 
-  sttBtn.onclick = () => {
-    if (!sttOn) startStt({ continuous: true });
-    else stopStt();
-  };
+  sttBtn.onclick = () => { if (!sttOn) startStt({ continuous: true }); else stopStt(); };
   ['mousedown','touchstart'].forEach(ev =>
     sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (!sttOn) startStt({ continuous:false }); })
   );
@@ -797,9 +801,8 @@
             } else if (data.type === 'roster'){
               rosterMembers = Array.isArray(data.members) ? data.members : [];
               renderMembers(rosterMembers);
-              // polite の再評価（myId確定後）
               rosterMembers.forEach(m => { if (m.id && m.id !== myId) polite.set(m.id, computePolite(m.id)); });
-              if (localStream) startCalls(rosterMembers);
+              startCalls(rosterMembers);
             } else if (data.type === 'join'){
               addSys(`${data.name} が参加しました（合計 ${data.count} 名）`);
             } else if (data.type === 'leave'){
@@ -834,7 +837,8 @@
     if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); chatSend.click(); }
   });
 
-  window.addEventListener('beforeunload', stopStt);
+  // ===== 最後の初期化 =====
+  window.addEventListener('beforeunload', ()=>{ try{ stopStt(); }catch{} });
   updateVoiceUI();
   updateSttUI();
   </script>
