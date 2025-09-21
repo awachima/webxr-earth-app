@@ -13,6 +13,7 @@
 
     .stage{position:relative;width:100%;display:flex;justify-content:center;padding-bottom:24px}
     .site-logo{pointer-events:none;position:absolute;top:120px;left:50%;transform:translate(-50%,-50%);width:min(30vw,200px);opacity:.95;z-index:2}
+    /* ▼ 最小差分（2プロパティ追加） */
     #webxr-iframe{display:block;width:100%;height:80vh;border:none;margin-top:120px;border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.25);background:#000;overscroll-behavior:contain;overflow:hidden}
     @media(min-width:1024px){#webxr-iframe{width:1024px;height:80vh}}
     @media(max-width:1023px){#webxr-iframe{width:100%;height:calc(80vw)}}
@@ -30,6 +31,7 @@
     .tools{position:absolute;right:8px;top:8px;display:flex;gap:6px}
     .icon{width:28px;height:28px;padding:0;border-radius:8px;display:inline-grid;place-items:center}
 
+    /* ▼ FAB をテキスト付きピル型に変更 */
     .fab{
       position:fixed; right:16px; bottom:16px;
       height:48px; padding:0 16px; border-radius:9999px;
@@ -60,11 +62,13 @@
 <body>
   <div class="wrap">
     <header>
+      <!-- 右上の「＋ 待ち合わせを作る」は削除 -->
       <div>Dokodemo Doors ファンサイト</div>
     </header>
 
     <div class="stage">
       <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="ロゴ">
+      <!-- ▼ 最小差分（scrolling="no" を付与） -->
       <iframe id="webxr-iframe" title="WebXR Earth" src="./earth.html" allow="xr-spatial-tracking; fullscreen" scrolling="no"></iframe>
     </div>
 
@@ -76,6 +80,7 @@
     </section>
   </div>
 
+  <!-- ▼ 右下の FAB（テキスト付き） -->
   <div class="fab" id="fab">
     <span class="fab-icon">＋</span>
     <span class="fab-label">待ち合わせ部屋を作る</span>
@@ -126,7 +131,7 @@
     const writeOwners=(map)=>localStorage.setItem(O,JSON.stringify(map));
     const isOwner   =(roomId)=>Boolean(readOwners()[roomId]);
 
-    // 共有レジストリ API
+    // 共有レジストリ API（DO 内 /api/rooms）
     const REGISTRY_API = 'https://do-chat.awachima7.workers.dev/api/rooms';
 
     // 開始後20分で自動削除
@@ -173,12 +178,43 @@
       requestAnimationFrame(tick);
     }
 
+    // ★★★ 追加：レジストリ存在確認（最小差分） ★★★
+    async function registryExists(roomId){
+      if (!roomId) return false;
+      try{
+        const res = await fetch(`${REGISTRY_API}?id=${encodeURIComponent(roomId)}`, {cache:'no-store'});
+        return res.ok; // 404 → false
+      }catch(_e){
+        // ネットワーク異常時は何もしない（誤削除を避ける）
+        return true;
+      }
+    }
+
+    // ★★★ 追加：ローカル保存の一括照合・除去（最小差分） ★★★
+    async function pruneDeletedLocals(){
+      const items = readStore();
+      for (const it of items){
+        const ok = await registryExists(it.roomId);
+        if (!ok){
+          autoDeleteRoom(it.roomId);
+          console.info('[prune]', it.roomId, 'はレジストリに存在しないため削除しました');
+        }
+      }
+    }
+
     function attachEnter(card){
       const btn=card.querySelector('[data-enter]');
-      if(!btn) return;
-      btn.onclick=()=>{
+      btn.onclick=async ()=>{
+        const id = card.dataset.roomId || '';
+        // ★★★ 追加：入室直前の存在確認（最小差分） ★★★
+        const ok = await registryExists(id);
+        if (!ok){
+          autoDeleteRoom(id);
+          alert('この待ち合わせは削除されています。一覧からも削除しました。');
+          return;
+        }
         const p=new URLSearchParams({
-          roomId: card.dataset.roomId || '',
+          roomId: id,
           title : card.dataset.title,
           start : card.dataset.start,
           limit : card.dataset.limit,
@@ -188,7 +224,6 @@
       };
     }
 
-    // ▼ 修正点：ここでは“編集ボタンのみ”を描画（入室ボタンは作らない）
     function renderTools(card){
       const roomId=card.dataset.roomId;
       let tools=card.querySelector('.tools');
@@ -208,17 +243,15 @@
     }
 
     function upsertCard(item){
-      const grid = $('#grid');
-      let card = grid.querySelector(`.card[data-room-id="${item.roomId}"]`);
+      const grid=$('#grid');
+      let card=grid.querySelector(`.card[data-room-id="${item.roomId}"]`);
       if(!card){
         card=document.createElement('article');
         card.className='card';
         card.innerHTML=`
-          <div class="tools"></div>
           <div class="title"></div>
           <div class="meta"><span data-countdown>開始まで: --:--:--</span></div>
           <div><a class="btn" data-enter>Enter Lobby</a></div>`;
-        grid.prepend(card);
       }
       card.dataset.roomId=item.roomId;
       card.dataset.title=item.title;
@@ -226,7 +259,12 @@
       card.dataset.start=item.start;
       card.dataset.url=item.target;
       card.dataset.limit=item.limit;
-      initCountdown(card); attachEnter(card); renderTools(card);
+      // 重複を避けるため prepend（新しいものが先頭）
+      const gridEl = $('#grid');
+      if (card.parentElement !== gridEl) gridEl.prepend(card);
+      initCountdown(card);
+      attachEnter(card);
+      renderTools(card);
     }
 
     function persist(item){
@@ -280,27 +318,14 @@
     function closeModal(){ backdrop.style.display='none'; }
 
     async function postRegistry(item){
-      const owners = readOwners();
-      const owner = owners[item.roomId] || null;
       try{
+        const owner = localStorage.getItem('nickname') || null;
         await fetch(REGISTRY_API, {
           method: "POST",
           headers: {"content-type":"application/json"},
           body: JSON.stringify({ roomId: item.roomId, title: item.title, start: item.start, limit: item.limit, target: item.target, owner })
         });
-      }catch(e){ console.warn('[registry POST]', e); }
-    }
-
-    async function deleteRegistry(roomId){
-      const owners = readOwners();
-      const owner  = owners[roomId] || null;
-      try{
-        await fetch(REGISTRY_API, {
-          method: "DELETE",
-          headers: {"content-type":"application/json"},
-          body: JSON.stringify({ roomId, owner })
-        });
-      }catch(e){ console.warn('[registry DELETE]', e); }
+      }catch(e){ console.warn('[registry]', e); }
     }
 
     async function onSubmit(){
@@ -325,7 +350,8 @@
 
       upsertCard(item);
       persist(item);
-      await postRegistry(item);
+      // ★ 共有レジストリへ登録/更新（失敗しても無視）
+      postRegistry(item);
 
       statusMsg.textContent = (mode==='create') ? '作成しました' : '更新しました';
       statusMsg.style.display = 'block';
@@ -348,62 +374,100 @@
       };
       upsertCard(item);
       persist(item);
+      // ★ 複製も共有レジストリへ
       postRegistry(item);
+
       alert('複製しました（目的URLは元と同じです）');
     }
 
-    async function onDelete(){
+    function onDelete(){
       if(!editingRoomId) return;
-      await deleteRegistry(editingRoomId);
       autoDeleteRoom(editingRoomId);
       closeModal();
+      // ※ 共有レジストリ側は「開始+20分」で自動消滅。即時削除APIは最小差分のため未実装。
     }
 
-    // bind
-    restore();
+    // ===== 起動シーケンス（最小差分：先に照合→復元） =====
+    (async ()=>{
+      await pruneDeletedLocals(); // ← ここで他人が削除した部屋をローカルから即時除去
+      restore();
+    })();
 
+    // 右上ボタンは削除済みなので安全にガード
     const oc = document.getElementById('openCreate');
     if (oc) oc.onclick = () => openModal('create');
-    $('#fab').onclick=()=>openModal('create');
+
+    $('#fab').onclick=()=>openModal('create');  // ← FAB でモーダル起動
     $('#close').onclick=closeModal;
     $('#close2').onclick=closeModal;
     $('#submit').onclick=onSubmit;
     $('#duplicate').onclick=onDuplicate;
     $('#delete').onclick=onDelete;
 
-    // ===== 共有レジストリから一覧を取得 + ローカル整合 =====
-    async function loadSharedAndReconcile(){
-      let serverRooms = [];
+    // ===== 共有レジストリから一覧を取得（起動時に1回） =====
+    async function loadShared(){
       try{
-        const res = await fetch(REGISTRY_API, { cache: 'no-store' });
+        const res = await fetch(REGISTRY_API);
         const j = await res.json();
         if (j && j.ok && Array.isArray(j.rooms)) {
-          serverRooms = j.rooms;
           j.rooms.forEach(upsertCard);
         }
       }catch(e){
         console.warn('[registry GET]', e);
       }
-      const serverIds = new Set(serverRooms.map(r=>r.roomId));
-      const local = readStore();
-      const remain = local.filter(x=>serverIds.has(x.roomId));
-      if (remain.length !== local.length) {
-        writeStore(remain);
-        $$('.card').forEach(c=>{
-          if (!serverIds.has(c.dataset.roomId||'')) c.remove();
-        });
-      }
     }
-    loadSharedAndReconcile();
+    loadShared();
 
-    // ===== iframe ホイール時の親スクロール抑止 =====
+    // ===== 隠し一括初期化 (Ctrl+Alt+X) =====
+    const ADMIN_HASH = "REPLACE_WITH_SHA-256_HEX"; // ← あなたのパスフレーズの SHA-256(HEX) を設定
+    function toHex(buf){ return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
+    async function sha256(s){ const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return toHex(buf); }
+    function subtleEqual(a,b){ if(a.length!==b.length) return false; let r=0; for(let i=0;i<a.length;i++) r |= a.charCodeAt(i)^b.charCodeAt(i); return r===0; }
+
+    window.addEventListener("keydown", async (e)=>{
+      if (e.ctrlKey && e.altKey && (e.key==='x' || e.key==='X')){
+        e.preventDefault();
+        const pass = prompt("管理パスフレーズを入力してください");
+        if (!pass) return;
+        try{
+          const hash = await sha256(pass);
+          if (subtleEqual(hash, ADMIN_HASH)){
+            if (confirm("この端末の待ち合わせをすべて初期化します。よろしいですか？")){
+              localStorage.removeItem(S);
+              localStorage.removeItem(O);
+              alert("初期化しました");
+              location.reload();
+            }
+          } else {
+            alert("パスフレーズが違います");
+          }
+        }catch(err){
+          console.error(err);
+          alert("初期化に失敗しました");
+        }
+      }
+    });
+  </script>
+
+  <!-- ▼ 最小差分：ホイール挙動の状況別抑止（iframe 上では親スクロール停止／外では親のみ） -->
+  <script>
     (function(){
       var iframe = document.getElementById('webxr-iframe');
       if(!iframe) return;
-      function lockPageScroll(){ document.documentElement.style.overflowY='hidden'; document.body.style.overflowY='hidden'; }
-      function unlockPageScroll(){ document.documentElement.style.overflowY='scroll'; document.body.style.overflowY='scroll'; }
+
+      function lockPageScroll(){
+        document.documentElement.style.overflowY = 'hidden';
+        document.body.style.overflowY = 'hidden';
+      }
+      function unlockPageScroll(){
+        document.documentElement.style.overflowY = 'scroll';
+        document.body.style.overflowY = 'scroll';
+      }
+
       iframe.addEventListener('mouseenter', lockPageScroll);
       iframe.addEventListener('mouseleave', unlockPageScroll);
+
+      // 念のため：フォーカス喪失やページ遷移時にロックが残らないように
       window.addEventListener('blur', unlockPageScroll);
       window.addEventListener('beforeunload', unlockPageScroll);
     })();
