@@ -400,10 +400,12 @@
   }
   function queueNegotiation(peerId, task){
     const prev = negoLock.get(peerId) || Promise.resolve();
-    const next = prev.then(()=>task()).catch(e=>console.warn('[nego]', peerId, e));
-    negoLock.set(peerId, next.finally(()=> {
-      if (negoLock.get(peerId) === next) negoLock.delete(peerId);
-    }));
+    try{
+      const next = prev.then(()=>task()).catch(e=>console.warn('[nego]', peerId, e));
+      negoLock.set(peerId, next.finally(()=> {
+        if (negoLock.get(peerId) === next) negoLock.delete(peerId);
+      }));
+    }catch(e){ console.warn('[nego-queue]', peerId, e); }
   }
 
   function createPeer(peerId){
@@ -438,7 +440,6 @@
     };
     pc.oniceconnectionstatechange = async () => {
       const st = pc.iceConnectionState;
-      console.info("[ICE]", peerId, st);
       if (st === 'failed' || st === 'disconnected'){
         // 少し待って復帰しなければICE Restart
         setTimeout(async ()=>{
@@ -452,7 +453,6 @@
         }, 1500);
       }
     };
-    pc.onconnectionstatechange = ()=> console.info("[PC]", peerId, pc.connectionState);
 
     // negotiationneeded は直列化
     pc.onnegotiationneeded = () => {
@@ -530,7 +530,6 @@
       const offerCollision = (makingOffer.get(peerId) || pc.signalingState !== 'stable');
       if (!iAmPolite && offerCollision){
         ignoreOffer.set(peerId, true);
-        console.info('[PN] ignore remote offer (impolite/collision)', peerId);
         return;
       }
       ignoreOffer.set(peerId, false);
@@ -561,7 +560,7 @@
     }
 
     if (type === 'answer'){
-      if (ignoreOffer.get(peerId)) { console.info('[PN] ignored answer because we ignored offer', peerId); return; }
+      if (ignoreOffer.get(peerId)) return;
       try{ await pc.setRemoteDescription(new RTCSessionDescription(data)); }catch(e){ console.warn('[setRD answer]', peerId, e); }
       // 溜めていたcandidateを適用
       const q = candQueue.get(peerId) || [];
@@ -744,7 +743,7 @@
       ws.onclose = ()=>{ chatStatus.textContent='切断されました。再接続を試みます…'; setTimeout(connect, 1500); };
       ws.onerror = ()=>{ chatStatus.textContent='エラーが発生しました'; };
       ws.onmessage = (ev)=>{
-        // 1) "RTC:" 文字列はシグナリングへ
+        // 1) "RTC:" 文字列はシグナリングへ（チャット表示しない）
         if (typeof ev.data === 'string' && ev.data.startsWith('RTC:')){
           try{ const data = JSON.parse(ev.data.slice(4)); if (data && data.rtc) onRtcSignal(data); }catch{}
           return;
@@ -752,24 +751,42 @@
         try{
           const data = JSON.parse(ev.data);
 
-          // 2) WebRTC シグナリング（JSONの場合も一応対応）
-          if (data.rtc) { onRtcSignal(data); return; }
+          // 2) WebRTC シグナリング（JSONで来る場合）
+          if (data && data.rtc) { onRtcSignal(data); return; }
 
           // 3) システム
-          if (data.sys){
+          if (data && data.sys){
             if (data.type === 'welcome'){ myId = data.id; }
             else if (data.type === 'history' && Array.isArray(data.messages)){
               data.messages.forEach((line)=>{
                 try{
-                  if (typeof line === 'string' && line.startsWith('RTC:')) return; // RTC履歴はスキップ
-                  const obj = JSON.parse(line);
-                  if (typeof obj === 'string' && obj.startsWith('RTC:')) return;
-                  const klass = (obj.name===user)?'me':'other';
-                  addMsg(klass, `${obj.name}: ${obj.text}`);
-                }catch{
-                  // 純テキスト履歴
-                  if (typeof line==='string' && !line.startsWith('RTC:')) addMsg('other', line);
-                }
+                  if (typeof line === 'string'){
+                    if (line.startsWith('RTC:')) return; // 文字列RTCはスキップ
+                    // {name,text} のJSON文字列パターン
+                    try{
+                      const obj = JSON.parse(line);
+                      if (obj && typeof obj.text === 'string' && obj.text.startsWith('RTC:')){
+                        // RTC: をシグナリングへ
+                        const payload = JSON.parse(obj.text.slice(4)); if (payload && payload.rtc) onRtcSignal(payload);
+                        return;
+                      }
+                      if (obj && typeof obj.name==='string' && typeof obj.text==='string'){
+                        addMsg(obj.name===user?'me':'other', `${obj.name}: ${obj.text}`);
+                        return;
+                      }
+                    }catch{}
+                    // 純テキスト
+                    addMsg('other', line);
+                  }else if (line && typeof line === 'object'){
+                    if (typeof line.text === 'string' && line.text.startsWith('RTC:')){
+                      try{ const payload=JSON.parse(line.text.slice(4)); if (payload && payload.rtc) onRtcSignal(payload); }catch{}
+                      return;
+                    }
+                    if (typeof line.name==='string' && typeof line.text==='string'){
+                      addMsg(line.name===user?'me':'other', `${line.name}: ${line.text}`);
+                    }
+                  }
+                }catch{}
               });
               addSys('— 過去のメッセージを読み込みました —');
             } else if (data.type === 'roster'){
@@ -786,10 +803,16 @@
             return;
           }
 
-          // 4) テキスト
+          // 4) 通常テキスト or {name,text}
           const obj = data;
-          const klass = (obj.name===user)?'me':'other';
-          addMsg(klass, `${obj.name}: ${obj.text}`);
+          // ★ ここが追加：text に RTC: が来たら表示しないでシグナリングへ
+          if (obj && typeof obj.text === 'string' && obj.text.startsWith('RTC:')){
+            try{ const payload=JSON.parse(obj.text.slice(4)); if (payload && payload.rtc) onRtcSignal(payload); }catch{}
+            return;
+          }
+          if (typeof obj.name==='string' && typeof obj.text==='string'){
+            addMsg(obj.name===user?'me':'other', `${obj.name}: ${obj.text}`);
+          }
         }catch{
           // 5) 純テキスト（RTC:以外）はチャットとして表示
           if (typeof ev.data === 'string' && !ev.data.startsWith('RTC:')) addMsg('other', ev.data);
