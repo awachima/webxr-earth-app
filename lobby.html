@@ -36,9 +36,15 @@
     .members{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto;margin-top:8px}
     .member{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid #eee;border-radius:9999px;background:#fafafa;font-size:14px}
     .badge{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:9999px;background:#111;color:#fff;font-size:12px;font-weight:700}
+
+    /* エラーバナー */
+    #errbanner{position:fixed;left:16px;right:16px;top:12px;z-index:9999;background:#b00020;color:#fff;padding:10px 14px;border-radius:10px;display:none;box-shadow:0 6px 20px rgba(0,0,0,.2);font:13px/1.4 system-ui}
+    #errbanner small{opacity:.9}
   </style>
 </head>
 <body>
+  <div id="errbanner"></div>
+
   <header>
     <div>待ち合わせロビー</div>
     <div style="display:flex; gap:8px; align-items:center">
@@ -80,9 +86,9 @@
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
-            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信（PC向け）">
-              自動字幕ON
-            </button>
+            <!-- 初期は非表示（JSが死んでも出ないように） -->
+            <button id="sttToggle" class="btn ghost" type="button" style="display:none"
+              title="自分の発話を自動で文字起こしして送信（PC向け）">自動字幕ON</button>
             <button id="sttHold" class="btn ghost" type="button" style="display:none"
               title="長押しで字幕（モバイル推奨）">長押しで字幕</button>
           </div>
@@ -111,23 +117,30 @@
   </main>
   <footer style="color:#888;font-size:12px;text-align:center;padding:18px">© DokodemoDoors</footer>
 
+  <!-- グローバルエラーバナー -->
   <script>
-  // ===== 基本（ロビー情報/自動削除） =====
-  const NEGATIVE_LIMIT_MS = 20*60*1000;
-  const S='meetups-store', O='meetups-owners';
-  const readStore=()=>JSON.parse(localStorage.getItem(S)||'[]');
-  const writeStore=(arr)=>localStorage.setItem(S,JSON.stringify(arr));
-  const readOwners=()=>JSON.parse(localStorage.getItem(O)||'{}');
-  const writeOwners=(map)=>localStorage.setItem(O,JSON.stringify(map));
-  function autoDeleteRoom(roomId){
-    if(!roomId) return;
-    const remain = readStore().filter(x=>x.roomId!==roomId);
-    writeStore(remain);
-    const owners = readOwners(); delete owners[roomId]; writeOwners(owners);
-    console.info('[auto-delete - lobby]', roomId, 'を削除しました');
-  }
+  (function(){
+    const banner = document.getElementById('errbanner');
+    const debug  = document.getElementById('debug');
+    function showErr(msg, src, line, col){
+      banner.style.display = '';
+      banner.innerHTML = `<b>スクリプトエラー:</b> ${msg}<br><small>${src||''} ${line||''}:${col||''}</small>`;
+      try{
+        const prev = debug.textContent || '';
+        const lineMsg = `[ERR] ${new Date().toISOString()} ${msg} @ ${src||''}:${line||''}:${col||''}\n`;
+        debug.textContent = lineMsg + prev;
+      }catch(_){}
+    }
+    window.addEventListener('error', e => showErr(e.message, e.filename, e.lineno, e.colno));
+    window.addEventListener('unhandledrejection', e => showErr(String(e.reason), '(promise)', 0, 0));
+  })();
+  </script>
 
+  <script>
+  // ===== 基本（ロビー情報/自動削除・表示） =====
+  const NEGATIVE_LIMIT_MS = 20*60*1000;
   const $=(s)=>document.querySelector(s);
+
   const p=new URLSearchParams(location.search);
   const title=p.get('title')||'待ち合わせ';
   const start=p.get('start');
@@ -137,82 +150,67 @@
   const user=localStorage.getItem('nickname')||`Guest-${Math.random().toString(16).slice(2,6)}`;
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  $('#title').textContent=title;
-  document.title=title+' | 待ち合わせロビー';
-  if(Number.isFinite(limit)&&limit>0){
-    const pill=document.createElement('div');
-    pill.className='pill';
-    pill.textContent=`参加上限 ${limit} 名`;
-    pill.style.display='inline-flex';
-    $('#limitPill').replaceWith(pill);
-  }
+  try{
+    $('#title').textContent=title;
+    document.title=title+' | 待ち合わせロビー';
+    if(Number.isFinite(limit)&&limit>0){
+      const pill=document.createElement('div');
+      pill.className='pill';
+      pill.textContent=`参加上限 ${limit} 名`;
+      pill.style.display='inline-flex';
+      $('#limitPill').replaceWith(pill);
+    }
+    const enterBtn=$('#enter');
+    const validTarget=/^https?:\/\//i.test(target);
+    if(validTarget){ enterBtn.href=target; } else { enterBtn.style.display='none'; }
+    $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user},null,2);
+  }catch(e){ console.error(e); }
 
-  const enterBtn = $('#enter');
-  const validTarget = /^https?:\/\//i.test(target);
-  if (validTarget) { enterBtn.href = target; } else { enterBtn.style.display = 'none'; }
-
+  function pad(n){ return String(n).padStart(2,'0'); }
   let startDate=null; if(start){ startDate=new Date(start); $('#meta').textContent='開始時刻：'+startDate.toLocaleString(); }
-  const pad=(n)=>String(n).padStart(2,'0');
   function tick(){
-    if(!startDate){
-      $('#count').textContent='--:--:--';
-      $('#status').innerHTML='<span style="color:#b00020">開始時刻未設定</span>';
-      requestAnimationFrame(tick); return;
-    }
-    const now = new Date(); const diff = startDate - now;
-    if (diff > 0){
-      const h=Math.floor(diff/3600000), m=Math.floor(diff/60000)%60, s=Math.floor(diff/1000)%60;
-      $('#count').textContent=`${pad(h)}:${pad(m)}:${pad(s)}`;
-      $('#status').textContent='開始までお待ちください。';
-      requestAnimationFrame(tick); return;
-    }
-    const expireAt = new Date(startDate.getTime() + NEGATIVE_LIMIT_MS);
-    const remainMs = expireAt - now;
-    if (remainMs > 0){
-      const remainMin = Math.ceil(remainMs / 60000);
-      $('#count').textContent = `消滅まで後${pad(remainMin)}分`;
-      $('#status').textContent='開始済み：入室できます（20分以内）';
-      requestAnimationFrame(tick);
-    } else {
-      autoDeleteRoom(roomId);
-      $('#count').textContent = '消滅しました';
-      $('#status').innerHTML = '<span style="color:#b00020">この待ち合わせは終了しました</span>';
-    }
+    try{
+      if(!startDate){
+        $('#count').textContent='--:--:--';
+        $('#status').innerHTML='<span style="color:#b00020">開始時刻未設定</span>';
+        requestAnimationFrame(tick); return;
+      }
+      const now=new Date(), diff=startDate-now;
+      if (diff>0){
+        $('#count').textContent=`${pad(Math.floor(diff/3600000))}:${pad(Math.floor(diff/60000)%60)}:${pad(Math.floor(diff/1000)%60)}`;
+        $('#status').textContent='開始までお待ちください。';
+        requestAnimationFrame(tick); return;
+      }
+      const expireAt=new Date(startDate.getTime()+NEGATIVE_LIMIT_MS);
+      const remainMs=expireAt-now;
+      if (remainMs>0){
+        const remainMin=Math.ceil(remainMs/60000);
+        $('#count').textContent=`消滅まで後${pad(remainMin)}分`;
+        $('#status').textContent='開始済み：入室できます（20分以内）';
+        requestAnimationFrame(tick);
+      } else {
+        $('#count').textContent='消滅しました';
+        $('#status').innerHTML='<span style="color:#b00020">この待ち合わせは終了しました</span>';
+      }
+    }catch(e){}
   }
   requestAnimationFrame(tick);
 
-  // ===== UIユーティリティ =====
-  $('#copy').onclick=async()=>{
-    const url = location.href;
-    try{
-      await navigator.clipboard.writeText(url);
-      $('#copy').textContent = 'コピーしました';
-      setTimeout(()=>$('#copy').textContent='この待合室のURLをコピー', 1200);
-    }catch(e){
-      prompt('手動コピー：', url);
-    }
-  };
-
-  function setDebug(info){
-    const t = {
-      title,start,limit,target,roomId,user,
-      peers: [...peers.keys()],
-      local: localStream ? {
-        tracks: localStream.getAudioTracks().map(t=>({enabled:t.enabled, readyState:t.readyState, muted:t.muted})),
-      } : null,
-      ...info
+  // 便利UI
+  try{
+    document.getElementById('setName').onclick=function(){
+      const current=localStorage.getItem('nickname')||user;
+      const name=prompt('ニックネームを入力してください：', current);
+      if(!name) return;
+      localStorage.setItem('nickname', name.trim().slice(0,32));
+      alert('ニックネームを保存しました。ページを再読み込みすると反映されます。');
     };
-    $('#debug').textContent = JSON.stringify(t,null,2);
-  }
-  setDebug();
-
-  document.getElementById('setName').onclick = function setNickname(){
-    const current = localStorage.getItem('nickname') || user;
-    const name = prompt('ニックネームを入力してください：', current);
-    if (!name) return;
-    localStorage.setItem('nickname', name.trim().slice(0, 32));
-    alert('ニックネームを保存しました。ページを再読み込みすると反映されます。');
-  };
+    document.getElementById('copy').onclick=async function(){
+      const url=location.href;
+      try{ await navigator.clipboard.writeText(url); this.textContent='コピーしました'; setTimeout(()=>this.textContent='この待合室のURLをコピー',1200); }
+      catch{ prompt('手動コピー：', url); }
+    };
+  }catch(e){ console.error(e); }
 
   // ===== WebSocket（チャット + シグナリング） =====
   const WS_BASE = 'wss://do-chat.awachima7.workers.dev';
@@ -224,6 +222,15 @@
   const chatInput = $('#chatInput');
   const chatSend = $('#chatSend');
   const chatStatus = $('#chatStatus');
+
+  function addMsg(elClass, text){
+    const div=document.createElement('div');
+    div.className='msg '+elClass;
+    div.textContent=text;
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+  function addSys(text){ addMsg('sys', text); }
 
   const membersEl = $('#members');
   function renderMembers(list){
@@ -249,29 +256,65 @@
     });
   }
 
-  function addMsg(elClass, text){
-    const div=document.createElement('div');
-    div.className='msg '+elClass;
-    div.textContent=text;
-    chatLog.appendChild(div);
-    chatLog.scrollTop = chatLog.scrollHeight;
-  }
-  function addSys(text){
-    const div=document.createElement('div');
-    div.className='msg sys';
-    div.textContent=text;
-    chatLog.appendChild(div);
-    chatLog.scrollTop = chatLog.scrollHeight;
-  }
-
-  let ws, focused = true;
+  let ws=null, myId=null, rosterMembers=[], focused=true;
   window.addEventListener('focus', ()=> focused=true);
-  window.addEventListener('blur', ()=> focused=false);
+  window.addEventListener('blur',  ()=> focused=false);
 
-  let myId = null;
-  let rosterMembers = []; // [{name,id}]
+  function connect(){
+    try{
+      ws = new WebSocket(CHAT_URL);
+      ws.onopen  = ()=>{ chatStatus.textContent='接続しました'; };
+      ws.onclose = ()=>{ chatStatus.textContent='切断されました。再接続を試みます…'; setTimeout(connect, 1500); };
+      ws.onerror = (e)=>{ chatStatus.textContent='エラーが発生しました'; console.error(e); };
+      ws.onmessage = (ev)=>{
+        try{
+          const data = JSON.parse(ev.data);
 
-  // ====== WebRTC（音声） ======
+          if (data.rtc) { onRtcSignal(data); return; }
+
+          if (data.sys){
+            if (data.type==='welcome'){ myId = data.id; }
+            else if (data.type==='history' && Array.isArray(data.messages)){
+              data.messages.forEach(line=>{ try{
+                const obj=JSON.parse(line);
+                addMsg(obj.name===user?'me':'other', `${obj.name}: ${obj.text}`);
+              }catch{} });
+              addSys('— 過去のメッセージを読み込みました —');
+            } else if (data.type==='roster'){
+              rosterMembers = Array.isArray(data.members)?data.members:[];
+              renderMembers(rosterMembers);
+              if (localStream) startCalls(rosterMembers);
+            } else if (data.type==='join'){
+              addSys(`${data.name} が参加しました（合計 ${data.count} 名）`);
+            } else if (data.type==='leave'){
+              addSys(`${data.name} が退出しました（合計 ${data.count} 名）`);
+              if (data.id) cleanupPeer(data.id);
+            }
+            return;
+          }
+
+          const obj = data;
+          addMsg(obj.name===user?'me':'other', `${obj.name}: ${obj.text}`);
+        }catch(e){ /* ignore malformed */ }
+      };
+    }catch(e){
+      chatStatus.textContent='接続に失敗しました';
+      console.error(e);
+    }
+  }
+  connect();
+
+  chatSend.onclick = ()=>{
+    const t=(chatInput.value||'').trim();
+    if(!t || !ws || ws.readyState!==1) return;
+    ws.send(t);
+    chatInput.value='';
+  };
+  chatInput.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); chatSend.click(); }
+  });
+
+  // ========= WebRTC (voice) 安定版 =========
   const iceServers = [{ urls: [
     "stun:stun.l.google.com:19302",
     "stun:stun1.l.google.com:19302"
@@ -283,14 +326,13 @@
   const makingOffer = new Map();       // id -> boolean
   const ignoreOffer = new Map();       // id -> boolean
   const polite = new Map();            // id -> boolean
-  const candQueue = new Map();         // id -> RTCIceCandidateInit[]
+  const candQueue = new Map();         // id -> ICE候補一時キュー
 
   const audios = new Map();            // id -> <audio>
   let audioCtx = null;
   function getAudioCtx(){
     try{ if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }catch{ return null; }
   }
-
   const enableBtn = document.getElementById('enableSound');
   function anyAudioPlaying(){ let ok=false; audios.forEach(el=>{ if(!el.paused) ok=true; }); return ok; }
   async function tryPlayAllAudios(){
@@ -375,15 +417,14 @@
       }
     };
 
-    // ここが“確実化”の肝：localStreamがあれば即 addTrack
+    // 重要：localStreamがあれば直ちに addTrack（シンプル安定版）
     if (localStream){
       localStream.getAudioTracks().forEach(tr => { try{ pc.addTrack(tr, localStream); }catch(e){ console.warn('[addTrack]', e); }});
     }else{
-      // まだ未参加なら受信用スロットだけ確保（あると安心）
+      // 未参加でも受け口は用意
       try{ pc.addTransceiver('audio', { direction:'recvonly' }); }catch{}
     }
 
-    // 競合を避けつつ Offer を出す
     pc.onnegotiationneeded = async ()=>{
       try{
         makingOffer.set(peerId,true);
@@ -423,16 +464,16 @@
     setDebug();
   }
 
+  function wsSend(obj){ try { ws?.readyState===1 && ws.send(JSON.stringify(obj)); } catch {} }
+
   async function onRtcSignal(msg){
     const { from:peerId, type, data } = msg.rtc;
     if (!peerId || peerId===myId) return;
-
-    let pc = peers.get(peerId);
-    if (!pc) pc = createPeer(peerId);
+    let pc = peers.get(peerId); if (!pc) pc = createPeer(peerId);
 
     if (type==='candidate'){
       if (pc.remoteDescription){
-        try{ await pc.addIceCandidate(new RTCIceCandidate(data)); }catch(e){ console.warn('[addCandidate]', peerId, e); }
+        try{ await pc.addIceCandidate(new RTCIceCandidate(data)); }catch(e){ console.warn('[addCand]', peerId, e); }
       }else{
         candQueue.get(peerId).push(data);
       }
@@ -440,13 +481,9 @@
     }
 
     if (type==='offer'){
-      const iAmPolite = !!polite.get(peerId);
+      const iAmPolite=!!polite.get(peerId);
       const offerCollision = (makingOffer.get(peerId) || pc.signalingState!=='stable');
-      if (!iAmPolite && offerCollision){
-        ignoreOffer.set(peerId, true);
-        console.info('[PN] ignore remote offer (impolite/collision)', peerId);
-        return;
-      }
+      if (!iAmPolite && offerCollision){ ignoreOffer.set(peerId,true); console.info('[PN] ignore offer (impolite/collision)', peerId); return; }
       ignoreOffer.set(peerId,false);
       try{
         if (offerCollision){
@@ -457,12 +494,12 @@
         }else{
           await pc.setRemoteDescription(new RTCSessionDescription(data));
         }
-        // 待機中candidateを適用
-        const q = candQueue.get(peerId); while(q.length){
-          const c=q.shift(); try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){ console.warn('[flush cand]', peerId, e); }
+        // localStreamあるのにsenderが無い場合は補修
+        if (localStream && pc.getSenders().every(s=>!(s.track && s.track.kind==='audio'))){
+          localStream.getAudioTracks().forEach(tr=>{ try{ pc.addTrack(tr, localStream); }catch{} });
         }
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
+        const q=candQueue.get(peerId); while(q.length){ const c=q.shift(); try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){ console.warn('[flush cand]', peerId, e); } }
+        const answer=await pc.createAnswer(); await pc.setLocalDescription(answer);
         wsSend({ rtc:{ to:peerId, type:'answer', data: pc.localDescription }});
       }catch(e){ console.warn('[handle offer]', peerId, e); }
       return;
@@ -470,10 +507,8 @@
 
     if (type==='answer'){
       if (ignoreOffer.get(peerId)){ console.info('[PN] ignored answer', peerId); return; }
-      try{ await pc.setRemoteDescription(new RTCSessionDescription(data)); }catch(e){ console.warn('[setRD answer]', peerId, e); }
-      const q = candQueue.get(peerId); while(q.length){
-        const c=q.shift(); try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){ console.warn('[flush cand]', peerId, e); }
-      }
+      try{ await pc.setRemoteDescription(new RTCSessionDescription(data)); }catch(e){ console.warn('[answer RD]', peerId, e); }
+      const q=candQueue.get(peerId); while(q.length){ const c=q.shift(); try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){ console.warn('[flush cand]', peerId, e); } }
       return;
     }
   }
@@ -541,10 +576,11 @@
     updateVoiceUI(); updateSttUI();
   };
 
-  // ===== STT（自動字幕） =====
-  const sttBtn  = document.getElementById('sttToggle');
-  const sttHold = document.getElementById('sttHold');
+  // ====== STT（自動字幕） ======
+  const sttBtn  = document.getElementById('sttToggle'); // PC向けトグル
+  const sttHold = document.getElementById('sttHold');   // モバイル向け長押し
   let sttOn=false, recog=null;
+
   function sttSupportedDesktop(){ return !!(window.SpeechRecognition||window.webkitSpeechRecognition) && !isMobile; }
   function sttSupportedMobile(){  return !!(window.SpeechRecognition||window.webkitSpeechRecognition) &&  isMobile; }
 
@@ -592,108 +628,23 @@
 
   function setRemoteMuted(m){ document.querySelectorAll('audio').forEach(el=>{ try{ el.muted=m; el.volume=m?0:1; }catch{} }); }
 
-  // ===== WebSocket接続 =====
-  function connect(){
-    try{
-      ws = new WebSocket(CHAT_URL);
-      ws.onopen = ()=>{ chatStatus.textContent='接続しました'; };
-      ws.onclose = ()=>{ chatStatus.textContent='切断されました。再接続を試みます…'; setTimeout(connect, 1500); };
-      ws.onerror = ()=>{ chatStatus.textContent='エラーが発生しました'; };
-      ws.onmessage = (ev)=>{
-        try{
-          const data = JSON.parse(ev.data);
-
-          if (data.rtc) { onRtcSignal(data); return; }
-
-          if (data.sys){
-            if (data.type==='welcome'){ myId=data.id; }
-            else if (data.type==='history' && Array.isArray(data.messages)){
-              data.messages.forEach(line=>{ try{ const obj=JSON.parse(line); const klass=(obj.name===user)?'me':'other'; addMsg(klass, `${obj.name}: ${obj.text}`);}catch{} });
-              addSys('— 過去のメッセージを読み込みました —');
-            } else if (data.type==='roster'){
-              rosterMembers = Array.isArray(data.members)?data.members:[];
-              renderMembers(rosterMembers);
-              rosterMembers.forEach(m=>{ if(m.id && m.id!==myId) polite.set(m.id, computePolite(m.id)); });
-              startCalls(rosterMembers);
-            } else if (data.type==='join'){
-              addSys(`${data.name} が参加しました（合計 ${data.count} 名）`);
-            } else if (data.type==='leave'){
-              addSys(`${data.name} が退出しました（合計 ${data.count} 名）`);
-              if (data.id) cleanupPeer(data.id);
-            }
-            return;
-          }
-
-          const obj = data;
-          const klass = (obj.name===user)?'me':'other';
-          addMsg(klass, `${obj.name}: ${obj.text}`);
-        }catch{}
-      };
-    }catch(e){
-      chatStatus.textContent='接続に失敗しました';
-      console.error(e);
-    }
+  // ===== デバッグ表示 =====
+  function setDebug(extra){
+    const t = {
+      title,start,limit,target,roomId,user,
+      peers: [...peers.keys()],
+      local: localStream ? {
+        tracks: localStream.getAudioTracks().map(t=>({enabled:t.enabled, readyState:t.readyState, muted:t.muted})),
+      } : null,
+      ...extra
+    };
+    $('#debug').textContent = JSON.stringify(t,null,2);
   }
-  connect();
+  setInterval(()=>setDebug(), 1000);
 
-  chatSend.onclick = ()=>{
-    const t=(chatInput.value||'').trim();
-    if(!t || !ws || ws.readyState!==1) return;
-    ws.send(t); chatInput.value='';
-  };
-  chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); chatSend.click(); } });
-
-  // ===== シグナリング（PN + 候補キュー） =====
-  async function onRtcSignal(msg){
-    const { from:peerId, type, data } = msg.rtc;
-    if (!peerId || peerId===myId) return;
-    let pc = peers.get(peerId); if (!pc) pc = createPeer(peerId);
-
-    if (type==='candidate'){
-      if (pc.remoteDescription){ try{ await pc.addIceCandidate(new RTCIceCandidate(data)); }catch(e){ console.warn('[addCand]', peerId, e); } }
-      else{ candQueue.get(peerId).push(data); }
-      return;
-    }
-
-    if (type==='offer'){
-      const iAmPolite=!!polite.get(peerId);
-      const offerCollision = (makingOffer.get(peerId) || pc.signalingState!=='stable');
-      if (!iAmPolite && offerCollision){ ignoreOffer.set(peerId,true); console.info('[PN] ignore offer (impolite/collision)', peerId); return; }
-      ignoreOffer.set(peerId,false);
-      try{
-        if (offerCollision){
-          await Promise.all([
-            pc.setLocalDescription({type:'rollback'}),
-            pc.setRemoteDescription(new RTCSessionDescription(data))
-          ]);
-        }else{
-          await pc.setRemoteDescription(new RTCSessionDescription(data));
-        }
-        // まだlocalStreamがあるのにsenderが無いケース → 念のためaddTrack
-        if (localStream && pc.getSenders().every(s=>!(s.track && s.track.kind==='audio'))){
-          localStream.getAudioTracks().forEach(tr=>{ try{ pc.addTrack(tr, localStream); }catch{} });
-        }
-        const q=candQueue.get(peerId); while(q.length){ const c=q.shift(); try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){ console.warn('[flush]', peerId, e); } }
-        const answer=await pc.createAnswer(); await pc.setLocalDescription(answer);
-        wsSend({ rtc:{ to:peerId, type:'answer', data: pc.localDescription }});
-      }catch(e){ console.warn('[offer]', peerId, e); }
-      return;
-    }
-
-    if (type==='answer'){
-      if (ignoreOffer.get(peerId)){ console.info('[PN] ignored answer', peerId); return; }
-      try{ await pc.setRemoteDescription(new RTCSessionDescription(data)); }catch(e){ console.warn('[answer RD]', peerId, e); }
-      const q=candQueue.get(peerId); while(q.length){ const c=q.shift(); try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){ console.warn('[flush]', peerId, e); } }
-      return;
-    }
-  }
-
-  // ===== 初期化 =====
+  // ===== 最後の初期化 =====
   window.addEventListener('beforeunload', ()=>{ try{ stopStt(); }catch{} });
   updateVoiceUI(); updateSttUI();
-
-  // ===== 便利: 定期デバッグ更新 =====
-  setInterval(()=>setDebug(), 1000);
   </script>
 </body>
 </html>
