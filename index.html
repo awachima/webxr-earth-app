@@ -13,7 +13,6 @@
 
     .stage{position:relative;width:100%;display:flex;justify-content:center;padding-bottom:24px}
     .site-logo{pointer-events:none;position:absolute;top:120px;left:50%;transform:translate(-50%,-50%);width:min(30vw,200px);opacity:.95;z-index:2}
-    /* ▼ iframe スクロール抑止は下の <script> で行う */
     #webxr-iframe{display:block;width:100%;height:80vh;border:none;margin-top:120px;border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.25);background:#000;overscroll-behavior:contain;overflow:hidden}
     @media(min-width:1024px){#webxr-iframe{width:1024px;height:80vh}}
     @media(max-width:1023px){#webxr-iframe{width:100%;height:calc(80vw)}}
@@ -31,7 +30,6 @@
     .tools{position:absolute;right:8px;top:8px;display:flex;gap:6px}
     .icon{width:28px;height:28px;padding:0;border-radius:8px;display:inline-grid;place-items:center}
 
-    /* ▼ 右下の FAB（ラベル付き） */
     .fab{
       position:fixed; right:16px; bottom:16px;
       height:48px; padding:0 16px; border-radius:9999px;
@@ -62,7 +60,6 @@
 <body>
   <div class="wrap">
     <header>
-      <!-- 右上のリンク類は触らず、既存表示のみ -->
       <div>Dokodemo Doors ファンサイト</div>
     </header>
 
@@ -129,7 +126,7 @@
     const writeOwners=(map)=>localStorage.setItem(O,JSON.stringify(map));
     const isOwner   =(roomId)=>Boolean(readOwners()[roomId]);
 
-    // 共有レジストリ API（DO 内 /api/rooms）
+    // 共有レジストリ API
     const REGISTRY_API = 'https://do-chat.awachima7.workers.dev/api/rooms';
 
     // 開始後20分で自動削除
@@ -178,6 +175,7 @@
 
     function attachEnter(card){
       const btn=card.querySelector('[data-enter]');
+      if(!btn) return;
       btn.onclick=()=>{
         const p=new URLSearchParams({
           roomId: card.dataset.roomId || '',
@@ -190,6 +188,7 @@
       };
     }
 
+    // ▼ 修正点：ここでは“編集ボタンのみ”を描画（入室ボタンは作らない）
     function renderTools(card){
       const roomId=card.dataset.roomId;
       let tools=card.querySelector('.tools');
@@ -206,9 +205,6 @@
         });
         tools.appendChild(b);
       }
-      const e=document.createElement('button'); e.className='btn'; e.textContent='入室';
-      e.onclick=()=>{ const fake={ dataset:card.dataset }; attachEnter(fake); };
-      tools.appendChild(e);
     }
 
     function upsertCard(item){
@@ -218,6 +214,7 @@
         card=document.createElement('article');
         card.className='card';
         card.innerHTML=`
+          <div class="tools"></div>
           <div class="title"></div>
           <div class="meta"><span data-countdown>開始まで: --:--:--</span></div>
           <div><a class="btn" data-enter>Enter Lobby</a></div>`;
@@ -229,7 +226,6 @@
       card.dataset.start=item.start;
       card.dataset.url=item.target;
       card.dataset.limit=item.limit;
-      // 重複を避けるため prepend（新しいものが先頭）
       initCountdown(card); attachEnter(card); renderTools(card);
     }
 
@@ -358,8 +354,8 @@
 
     async function onDelete(){
       if(!editingRoomId) return;
-      await deleteRegistry(editingRoomId); // 先にサーバから消す
-      autoDeleteRoom(editingRoomId);      // ローカルも削除
+      await deleteRegistry(editingRoomId);
+      autoDeleteRoom(editingRoomId);
       closeModal();
     }
 
@@ -375,7 +371,7 @@
     $('#duplicate').onclick=onDuplicate;
     $('#delete').onclick=onDelete;
 
-    // ===== 共有レジストリから一覧を取得（起動時） + ローカル整合 =====
+    // ===== 共有レジストリから一覧を取得 + ローカル整合 =====
     async function loadSharedAndReconcile(){
       let serverRooms = [];
       try{
@@ -400,24 +396,14 @@
     }
     loadSharedAndReconcile();
 
-    // ===== iframe ホイール時の親スクロール抑止（最小差分） =====
+    // ===== iframe ホイール時の親スクロール抑止 =====
     (function(){
       var iframe = document.getElementById('webxr-iframe');
       if(!iframe) return;
-
-      function lockPageScroll(){
-        document.documentElement.style.overflowY = 'hidden';
-        document.body.style.overflowY = 'hidden';
-      }
-      function unlockPageScroll(){
-        document.documentElement.style.overflowY = 'scroll';
-        document.body.style.overflowY = 'scroll';
-      }
-
+      function lockPageScroll(){ document.documentElement.style.overflowY='hidden'; document.body.style.overflowY='hidden'; }
+      function unlockPageScroll(){ document.documentElement.style.overflowY='scroll'; document.body.style.overflowY='scroll'; }
       iframe.addEventListener('mouseenter', lockPageScroll);
       iframe.addEventListener('mouseleave', unlockPageScroll);
-
-      // 念のため：フォーカス喪失やページ遷移時にロックが残らないように
       window.addEventListener('blur', unlockPageScroll);
       window.addEventListener('beforeunload', unlockPageScroll);
     })();
