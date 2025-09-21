@@ -598,7 +598,6 @@
   const sttHold = document.getElementById('sttHold');   // モバイル向け長押し
   let sttOn = false;
   let recog = null;
-  let sttBuffer = "";
 
   function sttSupportedDesktop(){ return !!SR && !isMobile; }
   function sttSupportedMobile(){  return !!SR &&  isMobile; }
@@ -653,13 +652,7 @@
       let finalText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
-        const txt = res[0]?.transcript || '';
-        if (res.isFinal) {
-          finalText += txt;
-          sttBuffer = ''; // 確定が来たら暫定バッファはクリア
-        } else {
-          sttBuffer = txt; // 暫定を保持（最新で上書き）
-        }
+        if (res.isFinal) finalText += res[0].transcript;
       }
       if (finalText.trim() && ws && ws.readyState===1) {
         ws.send(`（自動字幕）${finalText.trim()}`);
@@ -697,7 +690,7 @@
     sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (!sttOn) startStt({ continuous:false }); })
   );
   ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (sttOn) setTimeout(()=>stopStt(), 200); })
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (sttOn) stopStt(); })
   );
 
   window.addEventListener('beforeunload', stopStt);
@@ -705,139 +698,63 @@
   // ===================================
   </script>
 
-<!-- ===== Mobile STT Toggle Override (minimal diff) ===== -->
+<!-- ==== Force-show STT Toggle when voice is ON (minimal diff) ==== -->
 <script>
-// モバイルもPC同様のON/OFFトグル方式に統一し、暫定の自動フラッシュを実装
 (function(){
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  const sttBtn  = document.getElementById('sttToggle');
-  const sttHold = document.getElementById('sttHold');
-  let sttOn = (typeof window.sttOn !== 'undefined') ? window.sttOn : false;
-  let recog = (typeof window.recog !== 'undefined') ? window.recog : null;
-  let sttBuffer = (typeof window.sttBuffer !== 'undefined') ? window.sttBuffer : "";
-  let sttFlushTimer = null;
-  const ws = window.ws;
+  // Ensure SR symbol exists (may be null)
+  window.SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
-  // sttHold は非表示に固定（トグルに一本化）
-  if (sttHold) sttHold.style.display = 'none';
-
-  // 既存の関数を安全に参照
-  const _updateVoiceUI = window.updateVoiceUI || function(){};
-  const _isMicEnabled  = window.isMicEnabled  || function(){ return true; };
-  const _setRemoteMuted= window.setRemoteMuted|| function(){};
-
-  function scheduleFlush(ms=700){
-    if (sttFlushTimer) clearTimeout(sttFlushTimer);
-    sttFlushTimer = setTimeout(()=>{
-      if (sttBuffer && sttBuffer.trim() && window.ws && window.ws.readyState===1){
-        window.ws.send(`（自動字幕）${sttBuffer.trim()}`);
-        sttBuffer = "";
-      }
-    }, ms);
-  }
-
-  // updateSttUI を上書き：SR対応＆マイクONなら常に sttToggle を表示
-  window.updateSttUI = function(){
-    const voiceOn = !!window.localStream;
+  function forceUpdateSttUI(){
+    const sttBtn  = document.getElementById('sttToggle');
+    const sttHold = document.getElementById('sttHold');
     const sttHint = document.getElementById('sttHint');
+    const voiceOn = !!window.localStream;
+
     if (sttBtn){
-      sttBtn.style.display = (SR && voiceOn) ? '' : 'none';
-      sttBtn.disabled = !voiceOn;
-      sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
+      // ▼ 重要：SRの有無に関わらず、マイクがONなら表示
+      sttBtn.style.display = voiceOn ? '' : 'none';
+      // SRが無ければ無効化（押下時に警告を出す）
+      sttBtn.disabled = !voiceOn || !window.SR;
+      sttBtn.textContent = (window.sttOn ? '自動字幕OFF' : '自動字幕ON');
+      if (!window.SR && voiceOn){
+        sttHint && (sttHint.textContent = '音声認識非対応ブラウザです（ボタンは無効）');
+      } else if (voiceOn){
+        sttHint && (sttHint.textContent = 'クリックでON/OFF');
+      } else {
+        sttHint && (sttHint.textContent = '未対応/音声OFF');
+      }
     }
-    if (sttHold) sttHold.style.display = 'none';
-    if (!voiceOn){
-      sttHint && (sttHint.textContent = '未対応/音声OFF');
-    }else{
-      sttHint && (sttHint.textContent = 'クリックでON/OFF');
-    }
+    if (sttHold){ sttHold.style.display = 'none'; } // モバイル長押しは隠す（任意）
+  }
+
+  // 既存 updateSttUI をラップ/置換
+  const _updateSttUI = window.updateSttUI;
+  window.updateSttUI = function(){
+    try { if (typeof _updateSttUI === 'function') _updateSttUI(); } catch(e){}
+    forceUpdateSttUI();
   };
 
-  // stopStt を上書き
-  window.stopStt = function(){
-    try{ if (recog) recog.stop(); }catch{}
-    recog = null;
-    sttOn = false;
-    // 残バッファがあれば送る
-    if (sttBuffer && sttBuffer.trim() && window.ws && window.ws.readyState===1){
-      window.ws.send(`（自動字幕）${sttBuffer.trim()}`);
-    }
-    sttBuffer = "";
-    if (sttFlushTimer) { clearTimeout(sttFlushTimer); sttFlushTimer = null; }
-    _setRemoteMuted(false);
-    window.sttOn = sttOn;
-    window.recog = recog;
-    window.sttBuffer = sttBuffer;
-    window.updateSttUI();
-  };
-
-  // startStt を上書き（モバイルもトグル）
-  window.startStt = function(){
-    if (!SR){ alert('このブラウザは音声認識に未対応です'); return; }
-    if (!window.localStream){ alert('先に「音声ON」にしてください'); return; }
-
-    recog = new SR();
-    recog.lang = 'ja-JP';
-    recog.interimResults = true;
-    // iOSの仕様上 continuous は false 扱いになるが、onendで自動再開する
-    recog.continuous = !isMobile;
-
-    recog.onresult = (e)=>{
-      let finalText = '';
-      for (let i=e.resultIndex; i<e.results.length; i++){
-        const res = e.results[i];
-        const txt = (res[0] && res[0].transcript) ? res[0].transcript : '';
-        if (res.isFinal){
-          finalText += txt;
-          sttBuffer = "";
-        } else {
-          sttBuffer = txt;
-          scheduleFlush(700); // 入力停止っぽい間が来たら送る
-        }
-      }
-      if (finalText.trim() && window.ws && window.ws.readyState===1){
-        window.ws.send(`（自動字幕）${finalText.trim()}`);
-      }
-    };
-
-    recog.onend = ()=>{
-      // 確定が出ずに止まった時の救済
-      if (sttBuffer && sttBuffer.trim() && window.ws && window.ws.readyState===1){
-        window.ws.send(`（自動字幕）${sttBuffer.trim()}`);
-        sttBuffer = "";
-      }
-      if (sttOn && _isMicEnabled()){
-        // iOSの疑似連続対応：短い遅延で再開
-        setTimeout(()=>{
-          try{ recog.start(); }catch{}
-        }, 150);
-      }
-    };
-
-    recog.onerror = (ev)=>{
-      console.warn('[STT]', ev.error);
-      window.stopStt();
-    };
-
-    try{ recog.start(); }catch(e){ console.error(e); alert('自動字幕の起動に失敗しました'); return; }
-    sttOn = true;
-    _setRemoteMuted(true);
-    window.sttOn = sttOn;
-    window.recog = recog;
-    window.sttBuffer = sttBuffer;
-    window.updateSttUI();
-  };
-
-  if (sttBtn){
-    sttBtn.onclick = ()=>{
-      if (!sttOn) window.startStt();
-      else window.stopStt();
+  // 音声ON直後にも再評価されるよう、enableSound完了後のUI更新を保証
+  const _enableSound = window.enableSound;
+  if (typeof _enableSound === 'function'){
+    window.enableSound = async function(){
+      try { await _enableSound(); } finally { window.updateSttUI(); }
     };
   }
 
-  // 初期UI更新
-  window.updateSttUI();
+  // クリック時、未対応なら警告
+  const btn = document.getElementById('sttToggle');
+  if (btn){
+    btn.addEventListener('click', function(e){
+      if (!window.SR){
+        e.preventDefault();
+        alert('このブラウザは音声認識に未対応です。iPhoneはSafari、AndroidはChromeを推奨します。');
+      }
+    });
+  }
+
+  // 初期呼び出し
+  window.updateSttUI && window.updateSttUI();
 })();
 </script>
 
