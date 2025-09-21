@@ -668,6 +668,11 @@
 
     // 連続モード（PC）のみ自動再開。ただしミュート中は再開しない
     recog.onend = () => {
+      // 確定が来なかった場合の救済送信（モバイル長押し向け）
+      if (sttBuffer && sttBuffer.trim() && ws && ws.readyState===1) {
+        ws.send(`（自動字幕）${sttBuffer.trim()}`);
+      }
+      sttBuffer = "";
       if (sttOn && !isMobile && isMicEnabled()) {
         try { recog.start(); } catch {}
       }
