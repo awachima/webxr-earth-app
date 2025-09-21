@@ -82,7 +82,7 @@
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
             <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信（PC向け）">
-              自動字幕OFF
+              自動字幕ON
             </button>
             <button id="sttHold" class="btn ghost" type="button" style="display:none"
               title="長押しで字幕（モバイル推奨）">長押しで字幕</button>
@@ -576,7 +576,8 @@
   function updateSttUI(){
     sttBtn.style.display  = sttSupportedDesktop() ? '' : 'none';
     sttHold.style.display = sttSupportedMobile()  ? '' : 'none';
-    sttBtn.textContent = sttOn ? '自動字幕ON' : '自動字幕OFF';
+    sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
+    sttBtn.classList.toggle('ghost', !sttOn);
   }
 
   function stopStt(){
