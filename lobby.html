@@ -80,12 +80,13 @@
 
           <div class="sep"></div>
           <div class="label">ボイスチャット</div>
+          <!-- ▼▼ ここを単一ボタン化（音声ON/音声OFF）＋ ミュートは音声ON時のみ表示 ▼▼ -->
           <div class="row">
-            <button id="voiceJoin"  class="btn" type="button">音声に参加</button>
-            <button id="voiceLeave" class="btn ghost" type="button" disabled>退出</button>
-            <button id="micToggle"  class="btn ghost" type="button" disabled>ミュート</button>
+            <button id="voicePower" class="btn" type="button">音声ON</button>
+            <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
           </div>
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
+          <!-- ▲▲ ここまで変更 ▲▲ -->
 
           <div class="sep"></div>
           <div class="label">テキストチャット</div>
@@ -177,7 +178,7 @@
   requestAnimationFrame(tick);
 
   // コピー（この待合室のURL）
-  $('#copy').onclick=async()=>{ 
+  $('#copy').onclick=async()=>{
     const url = location.href;
     try{
       await navigator.clipboard.writeText(url);
@@ -394,35 +395,53 @@
     }
   }
 
-  // UI操作（音声）
-  const voiceJoinBtn  = document.getElementById('voiceJoin');
-  const voiceLeaveBtn = document.getElementById('voiceLeave');
+  // ===== ▼ 新：音声ON/OFFトグル＋ミュート表示制御 ▼ =====
+  const voicePowerBtn = document.getElementById('voicePower');
   const micToggleBtn  = document.getElementById('micToggle');
   const voiceHint     = document.getElementById('voiceHint');
 
-  voiceJoinBtn.onclick = async ()=>{
-    try{
-      localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
-      voiceHint.textContent = '音声: 参加中（マイクON）';
-      voiceJoinBtn.disabled = true; voiceLeaveBtn.disabled = false; micToggleBtn.disabled = false;
-      startCalls(rosterMembers);
-    }catch(e){
-      alert('マイク権限を許可してください'); console.error(e);
+  function updateVoiceUI(){
+    const on = !!localStream;
+    voicePowerBtn.textContent = on ? '音声OFF' : '音声ON';
+    micToggleBtn.style.display = on ? '' : 'none';
+    if (on){
+      const t = localStream.getAudioTracks()[0];
+      micToggleBtn.textContent = (t && t.enabled) ? 'ミュート' : 'ミュート解除';
+      voiceHint.textContent = `音声: 参加中（マイク${t && t.enabled ? 'ON' : 'OFF'}）`;
+    } else {
+      micToggleBtn.textContent = 'ミュート';
+      voiceHint.textContent = '音声: 未参加';
+    }
+  }
+
+  voicePowerBtn.onclick = async ()=>{
+    if (!localStream){
+      // ON（参加）
+      try{
+        localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+        startCalls(rosterMembers); // 参加中なら新規相手へ発呼
+        updateVoiceUI();
+      }catch(e){
+        alert('マイク権限を許可してください'); console.error(e);
+      }
+    } else {
+      // OFF（退出）
+      for (const id of Array.from(peers.keys())) cleanupPeer(id);
+      if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+      updateVoiceUI();
     }
   };
-  voiceLeaveBtn.onclick = ()=>{
-    for (const id of Array.from(peers.keys())) cleanupPeer(id);
-    if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
-    voiceHint.textContent = '音声: 未参加';
-    voiceJoinBtn.disabled = false; voiceLeaveBtn.disabled = true; micToggleBtn.disabled = true;
-  };
+
   micToggleBtn.onclick = ()=>{
     if (!localStream) return;
     const t = localStream.getAudioTracks()[0];
+    if (!t) return;
     t.enabled = !t.enabled;
-    micToggleBtn.textContent = t.enabled ? 'ミュート' : 'ミュート解除';
-    voiceHint.textContent = `音声: 参加中（マイク${t.enabled?'ON':'OFF'}）`;
+    updateVoiceUI();
   };
+
+  updateVoiceUI();
+  // ===== ▲ 新ロジックここまで ▲ =====
   </script>
 </body>
 </html>
