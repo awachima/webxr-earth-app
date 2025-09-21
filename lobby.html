@@ -492,15 +492,12 @@
     maybeShowEnableButton();
   };
 
-  micToggleBtn.onclick = () =>{
+  micToggleBtn.onclick = ()=>{
     if (!localStream) return;
     const t = localStream.getAudioTracks()[0];
     if (!t) return;
     t.enabled = !t.enabled;
-    // ミュートにしたら字幕も強制停止
-    if (!t.enabled && sttOn) stopStt();
     updateVoiceUI();
-    updateSttUI();
   };
 
   updateVoiceUI();
@@ -601,8 +598,6 @@
   function startStt({continuous}){
     if (!SR){ alert('このブラウザは音声認識に未対応です'); return; }
     if (!localStream){ alert('先に「音声ON」にしてください'); return; }
-    const tr = localStream.getAudioTracks()[0];
-    if (!tr || !tr.enabled){ alert('マイクがミュートです。ミュート解除してください。'); return; }
 
     recog = new SR();
     recog.lang = 'ja-JP';
@@ -621,7 +616,7 @@
     };
 
     // 連続モード（PC）のみ自動再開。モバイルPTTは再開しない＝ビープ回避
-    recog.onend = () => { = () => {
+    recog.onend = () => {
       if (sttOn && !isMobile) {
         try { recog.start(); } catch {}
       }
@@ -642,13 +637,8 @@
 
   // PC：従来どおりON/OFFトグル（continuous = true）
   sttBtn.onclick = () => {
-    const track = localStream && localStream.getAudioTracks()[0];
-    if (!sttOn) {
-      if (!track || !track.enabled) { alert('マイクがミュートです。ミュート解除後に自動字幕をONにしてください。'); return; }
-      startStt({ continuous: true });
-    } else {
-      stopStt();
-    }
+    if (!sttOn) startStt({ continuous: true });
+    else stopStt();
   };
 
   // モバイル：長押しで録音 → 離すと停止（continuous = false）
