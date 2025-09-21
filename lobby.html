@@ -19,6 +19,7 @@
     .status{font-size:13px;color:#666}
     .btn{appearance:none;border:1px solid #111;background:#111;color:#fff;padding:10px 16px;border-radius:12px;cursor:pointer;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
     .btn.ghost{background:#fff;color:#111}
+    .btn[disabled]{opacity:.5;cursor:not-allowed}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
     .sep{height:1px;background:#eee;margin:16px 0}
     .copy{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font:14px system-ui}
@@ -451,8 +452,7 @@
   function updateVoiceUI(){
     const on = !!localStream;
     voicePowerBtn.textContent = on ? '音声OFF' : '音声ON';
-    // ▼ 追加：音声がOFFの間だけ白ボタン（ghost）にする／ONの時は黒ボタンのまま
-    voicePowerBtn.classList.toggle('ghost', !on);
+    voicePowerBtn.classList.toggle('ghost', !on); // OFF中は白ボタン
 
     micToggleBtn.style.display = on ? '' : 'none';
     if (on){
@@ -465,16 +465,23 @@
     }
   }
 
+  // ★ 追加: マイク有効判定（STT制御でも使用）
+  function isMicEnabled(){
+    if (!localStream) return false;
+    const t = localStream.getAudioTracks()[0];
+    return !!(t && t.enabled);
+  }
+
   voicePowerBtn.onclick = async ()=>{
     if (!localStream){
-      // ON（参加）— エコー抑制系Constraintを有効化
+      // ON（参加）
       try{
         localStream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
         startCalls(rosterMembers);
         updateVoiceUI();
-        updateSttUI();
+        updateSttUI();  // 表示可否/disabledを更新
         // 参加時に自動再生解除も試す
         await tryPlayAllAudios();
         await resumeAudioContext();
@@ -485,7 +492,7 @@
       // OFF（退出）
       for (const id of Array.from(peers.keys())) cleanupPeer(id);
       if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
-      stopStt(); // 自動字幕も停止し、リモート音を復帰
+      stopStt(); // ★ 音声OFF時は必ず字幕も停止
       updateVoiceUI();
       updateSttUI();
     }
@@ -498,11 +505,15 @@
     if (!t) return;
     t.enabled = !t.enabled;
     updateVoiceUI();
+    // ★ 追加: ミュートした瞬間に字幕を停止（再開は手動）
+    if (!t.enabled && sttOn) stopStt();
+    // ★ 追加: STTボタンの有効/無効を更新
+    updateSttUI();
   };
 
   updateVoiceUI();
 
-  // ===== モバイル自動再生対策（成功まで消さない） =====
+  // ===== モバイル自動再生対策 =====
   const enableBtn = document.getElementById('enableSound');
 
   function anyAudioPlaying(){
@@ -585,6 +596,13 @@
 
     sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
     sttBtn.classList.toggle('ghost', !sttOn);
+
+    // ★ 追加: ミュート中はボタン無効化（クリック/長押し不可）
+    const micOk = isMicEnabled();
+    sttBtn.disabled  = !micOk;
+    sttHold.disabled = !micOk;
+    sttBtn.title  = micOk ? '自分の発話を自動で文字起こしして送信（PC向け）' : 'マイクがミュート中は自動字幕を使用できません';
+    sttHold.title = micOk ? '長押しで字幕（モバイル推奨）' : 'マイクがミュート中は自動字幕を使用できません';
   }
 
   function stopStt(){
@@ -599,12 +617,22 @@
     if (!SR){ alert('このブラウザは音声認識に未対応です'); return; }
     if (!localStream){ alert('先に「音声ON」にしてください'); return; }
 
+    // ★ 追加: ミュート中は開始不可
+    if (!isMicEnabled()){
+      alert('マイクがミュートです。ミュート解除後に自動字幕を開始してください。');
+      updateSttUI();
+      return;
+    }
+
     recog = new SR();
     recog.lang = 'ja-JP';
     recog.interimResults = true;
     recog.continuous = !!continuous; // PCはtrue、モバイルPTTはfalse
 
     recog.onresult = (e) => {
+      // ★ 念のため: 途中でミュートされたら送信しない
+      if (!isMicEnabled()) return;
+
       let finalText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
@@ -615,9 +643,9 @@
       }
     };
 
-    // 連続モード（PC）のみ自動再開。モバイルPTTは再開しない＝ビープ回避
+    // 連続モード（PC）のみ自動再開。★ ただしミュート中は再開しない
     recog.onend = () => {
-      if (sttOn && !isMobile) {
+      if (sttOn && !isMobile && isMicEnabled()) {
         try { recog.start(); } catch {}
       }
     };
