@@ -81,7 +81,7 @@
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
-            <!-- ▼ 初期は OFF なので ghost（白背景）。ON に切り替え時は JS で ghost を外す -->
+            <!-- OFF初期＝白背景／ON時＝黒背景（JSで切替） -->
             <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">自動字幕ON</button>
           </div>
           <div id="mobileModeRow" class="row" style="display:none">
@@ -118,6 +118,9 @@
     </div>
   </main>
   <footer style="color:#888;font-size:12px;text-align:center;padding:18px">© DokodemoDoors</footer>
+
+  <!-- ▼ 受信音声の再生先（自動再生制限回避のため playsinline / autoplay） -->
+  <audio id="remoteAudio" autoplay playsinline style="display:none"></audio>
 
   <script>
   // ===== 基本パラメータ =====
@@ -235,7 +238,7 @@
     alert('ニックネームを保存しました。ページを再読み込みすると反映されます。');
   };
 
-  // ===== チャット + 音声 =====
+  // ===== チャット + 音声（復元：WebRTC） =====
   const WS_BASE = 'wss://do-chat.awachima7.workers.dev';
   const pageParams = new URLSearchParams(location.search);
   pageParams.set('user', user);
@@ -248,6 +251,15 @@
   const chatSend=$('#chatSend');
   const members=$('#members');
   const chatStatus=$('#chatStatus');
+
+  // --- WebRTC: 追加 ---
+  const remoteAudio = document.getElementById('remoteAudio');
+  let pc = null;
+  let localStream = null;
+  let remoteStream = null;
+  let micTrack = null;
+
+  const rtcConfig = { iceServers:[{urls:'stun:stun.l.google.com:19302'}] };
 
   function pushMsg(el, cls, text){
     const li=document.createElement('div');
@@ -270,14 +282,124 @@
     });
   }
 
+  function sendSignal(payload){
+    if(!ws || ws.readyState!==1) return;
+    ws.send(JSON.stringify({ rtc: payload, from: user }));
+  }
+
+  async function ensureLocalStream(){
+    if (localStream) return localStream;
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    micTrack = localStream.getAudioTracks()[0] || null;
+    return localStream;
+  }
+
+  async function createPeerIfNeeded(){
+    if (pc) return pc;
+    pc = new RTCPeerConnection(rtcConfig);
+
+    // 受信処理
+    remoteStream = new MediaStream();
+    pc.addEventListener('track', (ev)=>{
+      remoteStream.addTrack(ev.track);
+      remoteAudio.srcObject = remoteStream;
+      // ユーザー操作直後のコンテキストで呼ばれることが多いが、念のため
+      remoteAudio.play().catch(()=>{ /* ブロック時は無視 */ });
+    });
+
+    // 送信（ローカルマイク）—音声ONで addTrack 済みならOK
+    if (localStream){
+      localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+    }
+
+    // ICE
+    pc.addEventListener('icecandidate', (e)=>{
+      if(e.candidate) sendSignal({ type: 'candidate', candidate: e.candidate });
+    });
+
+    pc.addEventListener('connectionstatechange', ()=>{
+      console.info('[webrtc state]', pc.connectionState);
+    });
+
+    return pc;
+  }
+
+  async function startAudio(){
+    // 1) ローカルマイク
+    await ensureLocalStream();
+
+    // 2) PeerConnection
+    await createPeerIfNeeded();
+
+    // 3) まだ送っていなければ addTrack（二重防止）
+    if (localStream && pc.getSenders().length===0){
+      localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+    }
+
+    // 4) Offer → シグナリング
+    const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
+    await pc.setLocalDescription(offer);
+    sendSignal({ type:'offer', sdp:offer.sdp });
+
+    // 5) 自動再生解除のためユーザー操作内で play
+    try{ await remoteAudio.play(); }catch{}
+  }
+
+  async function stopAudio(){
+    // 送信停止
+    if (localStream){
+      localStream.getTracks().forEach(t=>{ try{ t.stop(); }catch{} });
+      localStream = null; micTrack = null;
+    }
+    // Peer閉じる
+    if (pc){
+      try{ pc.getSenders().forEach(s=>{ try{ s.track && s.track.stop(); }catch{} }); }catch{}
+      try{ pc.close(); }catch{}
+      pc = null;
+    }
+    // 受信停止
+    if (remoteStream){
+      remoteStream.getTracks().forEach(t=>{ try{ t.stop(); }catch{} });
+      remoteStream = null;
+    }
+    remoteAudio.srcObject = null;
+  }
+
+  // --- WebSocket ---
   function connect(){
     if(ws){ try{ ws.close(); }catch{} ws=null; }
     ws=new WebSocket(CHAT_URL);
     ws.addEventListener('open', ()=>{ connected=true; chatStatus.textContent='接続中'; });
-    ws.addEventListener('message', (ev)=>{
+    ws.addEventListener('message', async (ev)=>{
       const data=String(ev.data||'');
+      let j=null;
+      try{ j=JSON.parse(data); }catch{}
+      if(!j){ return; }
+
+      // ★ まずはシグナリングを処理（UIに出さない）
+      if (j.rtc && j.from !== user){
+        const kind = j.rtc.type;
+        if (kind === 'offer'){
+          await ensureLocalStream();            // 受信だけでも OK。話すなら必要
+          await createPeerIfNeeded();
+          await pc.setRemoteDescription({ type:'offer', sdp:j.rtc.sdp });
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          sendSignal({ type:'answer', sdp:answer.sdp });
+        } else if (kind === 'answer'){
+          if (pc && !pc.currentRemoteDescription){
+            await pc.setRemoteDescription({ type:'answer', sdp:j.rtc.sdp });
+          }
+        } else if (kind === 'candidate'){
+          if (pc){
+            try{ await pc.addIceCandidate(j.rtc.candidate); }catch(e){ console.warn('ICE add failed', e); }
+          }
+        }
+        return; // シグナリングはここで終わり。以降はチャット系
+      }
+
+      // 既存のシステムメッセージ
       try{
-        const j=JSON.parse(data);
         if(j?.sys && j.type==='welcome'){ myId=j.id; return; }
         if(j?.sys && j.type==='history'){
           const msgs=(Array.isArray(j.messages)?j.messages:[]).map(s=>{try{return JSON.parse(s)}catch{return null}}).filter(Boolean);
@@ -326,23 +448,35 @@
     voiceHint.textContent = audioOn ? (micMuted?'ミュート中':'音声有効') : '未参加';
   }
 
-  // ★ ここを要件どおりに変更：
-  //   ON = 黒背景／白文字（.btn）、表示テキスト「自動字幕OFF」
-  //   OFF = 白背景／黒文字（.btn.ghost）、表示テキスト「自動字幕ON」
   function updateSttUI(){
-    if (sttOn) {
-      sttBtn.className = 'btn';         // 黒背景・白文字
-      sttBtn.textContent = '自動字幕OFF';
-    } else {
-      sttBtn.className = 'btn ghost';   // 白背景・黒文字
-      sttBtn.textContent = '自動字幕ON';
-    }
+    if (sttOn) { sttBtn.className='btn'; sttBtn.textContent='自動字幕OFF'; }
+    else { sttBtn.className='btn ghost'; sttBtn.textContent='自動字幕ON'; }
   }
 
-  voicePower.onclick=()=>{ audioOn=!audioOn; updateVoiceUI(); };
-  micToggle.onclick = ()=>{ micMuted=!micMuted; updateVoiceUI(); };
+  voicePower.onclick=async ()=>{
+    audioOn=!audioOn;
+    updateVoiceUI();
+    if (audioOn){
+      try{
+        await startAudio();
+        voiceHint.textContent='音声有効';
+      }catch(e){
+        console.warn(e);
+        audioOn=false; updateVoiceUI();
+        alert('マイクまたは音声の初期化に失敗しました。ブラウザの許可設定を確認してください。');
+      }
+    }else{
+      await stopAudio();
+      voiceHint.textContent='未参加';
+    }
+  };
 
-  // ===== STT（Web Speech API ベース） =====
+  micToggle.onclick = ()=>{
+    micMuted=!micMuted; updateVoiceUI();
+    if (micTrack){ micTrack.enabled = !micMuted; }
+  };
+
+  // ===== STT（Web Speech API） =====
   let recog=null;
   function startStt({continuous=false}={}){
     if(sttOn) return;
@@ -362,7 +496,7 @@
 
   sttBtn.onclick = ()=>{ if (!sttOn) startStt({ continuous: !isMobile }); else stopStt(); };
 
-  function stopAll(){ stopStt(); }
+  function stopAll(){ stopStt(); stopAudio(); }
   window.addEventListener('beforeunload', stopAll);
 
   // 初期UI反映
