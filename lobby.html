@@ -82,11 +82,12 @@
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
-            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信（PC向け）">
+            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">
               自動字幕ON
             </button>
+            <!-- 長押しボタンは実装は残すが常時非表示に変更 -->
             <button id="sttHold" class="btn ghost" type="button" style="display:none"
-              title="長押しで字幕（モバイル推奨）">長押しで字幕</button>
+              title="長押しで字幕（旧モバイル方式・現在は非表示）">長押しで字幕</button>
           </div>
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
 
@@ -594,31 +595,30 @@
 
   // ====== 音声→テキスト（自動字幕; 自分の発話のみ） ======
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const sttBtn  = document.getElementById('sttToggle'); // PC向けトグル
-  const sttHold = document.getElementById('sttHold');   // モバイル向け長押し
+  const sttBtn  = document.getElementById('sttToggle'); // ← PC/モバイル共通トグルに統一
+  const sttHold = document.getElementById('sttHold');   // ← 非表示のまま
   let sttOn = false;
   let recog = null;
 
-  function sttSupportedDesktop(){ return !!SR && !isMobile; }
-  function sttSupportedMobile(){  return !!SR &&  isMobile; }
+  // ※サポート判定は存在チェックのみ（端末別で分岐しない）
+  function sttAvailable(){ return !!SR; }
 
   function updateSttUI(){
     const voiceOn = !!localStream;
-    const showDesktop = sttSupportedDesktop() && voiceOn;
-    const showMobile  = sttSupportedMobile()  && voiceOn;
+    const canUse = sttAvailable() && voiceOn;
 
-    sttBtn.style.display  = showDesktop ? '' : 'none';
-    sttHold.style.display = showMobile  ? '' : 'none';
+    // 端末に関係なくトグルを出す（音声ON時のみ）
+    sttBtn.style.display  = canUse ? '' : 'none';
+    // 長押しUIは廃止（最小差分として常時非表示）
+    sttHold.style.display = 'none';
 
     sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
     sttBtn.classList.toggle('ghost', !sttOn);
 
-    // ★ ミュート中はボタン無効化（クリック/長押し不可）
+    // ★ ミュート中は無効化
     const micOk = isMicEnabled();
     sttBtn.disabled  = !micOk;
-    sttHold.disabled = !micOk;
-    sttBtn.title  = micOk ? '自分の発話を自動で文字起こしして送信（PC向け）' : 'マイクがミュート中は自動字幕を使用できません';
-    sttHold.title = micOk ? '長押しで字幕（モバイル推奨）' : 'マイクがミュート中は自動字幕を使用できません';
+    sttBtn.title  = micOk ? '自分の発話を自動で文字起こしして送信' : 'マイクがミュート中は自動字幕を使用できません';
   }
 
   function stopStt(){
@@ -643,12 +643,13 @@
     recog = new SR();
     recog.lang = 'ja-JP';
     recog.interimResults = true;
-    recog.continuous = !!continuous; // PCはtrue、モバイルPTTはfalse
+
+    // PCはcontinuous=true、モバイルはfalse（iOS制約）だが onend で再開して実質トグル運用
+    const isPC = !isMobile;
+    recog.continuous = isPC ? true : false;
 
     recog.onresult = (e) => {
-      // 途中でミュートされたら送信しない
       if (!isMicEnabled()) return;
-
       let finalText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
@@ -659,10 +660,10 @@
       }
     };
 
-    // 連続モード（PC）のみ自動再開。ただしミュート中は再開しない
+    // ★ PC/モバイル共通：トグルONの間は自動再開（ミュート中は再開しない）
     recog.onend = () => {
-      if (sttOn && !isMobile && isMicEnabled()) {
-        try { recog.start(); } catch {}
+      if (sttOn && isMicEnabled()){
+        try { setTimeout(()=>{ try{ recog && recog.start(); }catch{} }, 150); } catch {}
       }
     };
 
@@ -679,18 +680,18 @@
     updateSttUI();
   }
 
-  // PC：ON/OFFトグル（continuous = true）
+  // トグル（PC/モバイル共通）
   sttBtn.onclick = () => {
-    if (!sttOn) startStt({ continuous: true });
+    if (!sttOn) startStt({ continuous: !isMobile });
     else stopStt();
   };
 
-  // モバイル：長押しで録音 → 離すと停止（continuous = false）
+  // 旧：モバイル長押しは封印（イベントは残しておくがdisplay:none）
   ['mousedown','touchstart'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (!sttOn) startStt({ continuous:false }); })
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); /* 非表示運用 */ })
   );
   ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (sttOn) stopStt(); })
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); /* 非表示運用 */ })
   );
 
   window.addEventListener('beforeunload', stopStt);
