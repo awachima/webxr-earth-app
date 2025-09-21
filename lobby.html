@@ -121,34 +121,6 @@
   </main>
   <footer style="color:#888;font-size:12px;text-align:center;padding:18px">© DokodemoDoors</footer>
 
-  <!-- ▼▼▼ 追加（最小差分）：削除済みロビーの早期検出と即時離脱 ▼▼▼ -->
-  <script>
-    (async ()=>{
-      try{
-        const params = new URLSearchParams(location.search);
-        const roomId = params.get('roomId') || '';
-        if (!roomId) return;
-        const REGISTRY_API = 'https://do-chat.awachima7.workers.dev/api/rooms';
-        const res = await fetch(`${REGISTRY_API}?id=${encodeURIComponent(roomId)}`, {cache:'no-store'});
-        if (!res.ok){
-          // ローカル掃除（index.html と同じストレージ構成）
-          const S='meetups-store', O='meetups-owners';
-          try{
-            const store = JSON.parse(localStorage.getItem(S)||'[]').filter(x=>x.roomId!==roomId);
-            localStorage.setItem(S, JSON.stringify(store));
-            const owners = JSON.parse(localStorage.getItem(O)||'{}'); delete owners[roomId];
-            localStorage.setItem(O, JSON.stringify(owners));
-          }catch(_e){}
-          alert('この待ち合わせは削除されています。トップへ戻ります。');
-          location.replace('./index.html');
-        }
-      }catch(_e){
-        // ネットワーク異常時は既存挙動を維持（何もしない）
-      }
-    })();
-  </script>
-  <!-- ▲▲▲ 追加ここまで ▲▲▲ -->
-
   <script>
   // ===== 基本パラメータ =====
   const NEGATIVE_LIMIT_MS = 20*60*1000;
@@ -314,6 +286,9 @@
             return;
           }
 
+          // ★ sttAudio（音声チャンク）は表示しない（サーバー側で処理する前提）
+          if (data.sttAudio){ return; }
+
           // WebRTC シグナリング
           if (data.rtc) { onRtcSignal(data); return; }
 
@@ -322,7 +297,7 @@
             if (data.type === 'welcome'){ myId = data.id; }
             else if (data.type === 'history' && Array.isArray(data.messages)){
               data.messages.forEach((line)=>{ try{
-                const obj = JSON.parse(line);
+                const obj = JSON.parse(line); if (obj && obj.sttAudio) return; // ★ sttAudio を履歴表示から除外
                 const klass = (obj.name===user)?'me':'other';
                 addMsg(klass, `${obj.name}: ${obj.text}`);
               }catch{} });
