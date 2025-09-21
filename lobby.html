@@ -30,8 +30,8 @@
     .msg.me{background:#e6f3ff;margin-left:auto}
     .msg.other{background:#fff;border:1px solid #eee}
     .msg.sys{background:#f3f4f6;border:1px dashed #ddd;color:#555;font-size:12px;text-align:center}
-    .chat-input{display:flex;gap:8px;margin-top:10px}
-    .chat-input input{flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px}
+    .chat-input{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .chat-input input{flex:1;min-width:200px;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px}
 
     /* members */
     .members{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto;margin-top:8px}
@@ -98,6 +98,10 @@
             <div class="chat-input">
               <input id="chatInput" placeholder="メッセージを入力…" maxlength="2000">
               <button id="chatSend" class="btn" type="button">送信</button>
+              <!-- 自動字幕トグル -->
+              <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">
+                自動字幕OFF
+              </button>
             </div>
           </div>
           <div class="status" id="chatStatus" style="margin-top:8px;color:#0a7f3f">接続していません</div>
@@ -323,7 +327,7 @@
   });
 
   // ========= WebRTC (voice) =========
-  // STUNのみ（無料運用）。NATが厳しい回線では失敗する場合があります。
+  // STUNのみ（無料）。厳しいNATでは失敗する場合あり
   const iceServers = [{ urls: [
     "stun:stun.l.google.com:19302",
     "stun:stun1.l.google.com:19302"
@@ -348,7 +352,7 @@
       if (!ctx) return;
       const src = ctx.createMediaStreamSource(stream);
       src.connect(ctx.destination);
-    }catch(e){ /* 失敗しても無視 */ }
+    }catch(e){ /* ignore */ }
   }
 
   function wsSend(obj){
@@ -373,10 +377,9 @@
       el.srcObject = ev.streams[0];
       try { el.play(); } catch (e) {}
 
-      // 2) WebAudioにも接続（自動再生制限に強い）
+      // 2) WebAudioにも接続
       bindRemoteToAudioCtx(ev.streams[0]);
 
-      // 再試行ボタンの表示更新
       maybeShowEnableButton();
     };
 
@@ -386,7 +389,7 @@
     pc.oniceconnectionstatechange = ()=> console.info("[ICE]", peerId, pc.iceConnectionState);
     pc.onconnectionstatechange = ()=> console.info("[PC]", peerId, pc.connectionState);
 
-    // ★ポイント：自分が送信していなくても、受信用 m=audio を用意
+    // ★自分が送信していなくても受信用 m=audio を確保
     if (localStream && localStream.getAudioTracks().length){
       for (const track of localStream.getAudioTracks()) pc.addTrack(track, localStream);
     } else {
@@ -399,8 +402,7 @@
 
   async function callPeer(peerId){
     const pc = createPeer(peerId);
-    // offerToReceiveAudio は不要（transceiverでm=audioを確保済み）
-    const offer = await pc.createOffer();
+    const offer = await pc.createOffer(); // transceiverによりm=audioが立つ
     await pc.setLocalDescription(offer);
     wsSend({ rtc: { to: peerId, type: "offer", data: offer }});
   }
@@ -460,9 +462,9 @@
       // ON（参加）
       try{
         localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
-        startCalls(rosterMembers); // 参加中なら新規相手へ発呼
+        startCalls(rosterMembers);
         updateVoiceUI();
-        // 参加時にも音解禁を試す
+        // 参加時に自動再生解除も試す
         await tryPlayAllAudios();
         await resumeAudioContext();
       }catch(e){
@@ -472,6 +474,7 @@
       // OFF（退出）
       for (const id of Array.from(peers.keys())) cleanupPeer(id);
       if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+      stopStt(); // 自動字幕も停止
       updateVoiceUI();
     }
     maybeShowEnableButton();
@@ -542,7 +545,6 @@
     if (!isMobile) return;
     enableBtn.style.display = '';
     enableBtn.onclick = enableSound;
-    // タップ/クリックのたびに試す（UXを損ねない範囲で）
     const retry = async ()=>{ await enableSound(); };
     document.addEventListener('touchend', retry);
     document.addEventListener('click',     retry);
@@ -551,6 +553,76 @@
     });
   }
   setupMobileAudioGate();
+
+  // ====== 音声→テキスト（自動字幕; 自分の発話のみ） ======
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const sttBtn = document.getElementById('sttToggle');
+  let sttOn = false;
+  let recog = null;
+
+  function sttSupported(){
+    // iOS Safariは未対応なため非表示
+    return !!SR && !/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  }
+
+  function updateSttUI(){
+    if (!sttSupported()) {
+      sttBtn.style.display = 'none';
+      return;
+    }
+    sttBtn.style.display = '';
+    sttBtn.textContent = sttOn ? '自動字幕ON' : '自動字幕OFF';
+  }
+
+  function stopStt(){
+    try { recog && recog.stop(); } catch {}
+    sttOn = false;
+    updateSttUI();
+  }
+
+  function startStt(){
+    if (!sttSupported()) return;
+    if (!localStream){ alert('先に「音声ON」にしてください'); return; }
+
+    recog = new SR();
+    recog.lang = 'ja-JP';         // 必要に応じて変更
+    recog.interimResults = true;
+    recog.continuous = true;
+
+    recog.onresult = (e) => {
+      let finalText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        if (res.isFinal) finalText += res[0].transcript;
+      }
+      if (finalText.trim() && ws && ws.readyState===1) {
+        ws.send(`（自動字幕）${finalText.trim()}`);
+      }
+    };
+
+    // 一部環境では一定時間でendが来る → 連続再開
+    recog.onend = () => { if (sttOn && localStream) { try { recog.start(); } catch {} } };
+
+    recog.onerror = (ev) => {
+      console.warn('[STT]', ev.error);
+      if (['not-allowed','service-not-allowed','bad-grammar','audio-capture'].includes(ev.error)) {
+        stopStt();
+        alert('自動字幕が利用できません（ブラウザや端末の制限）');
+      }
+    };
+
+    try { recog.start(); } catch (e) {
+      console.error(e);
+      alert('自動字幕の起動に失敗しました');
+      return;
+    }
+    sttOn = true;
+    updateSttUI();
+  }
+
+  sttBtn.onclick = () => { if (!sttOn) startStt(); else stopStt(); };
+  window.addEventListener('beforeunload', stopStt);
+  updateSttUI();
   // ===================================
   </script>
 </body>
