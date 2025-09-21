@@ -88,11 +88,8 @@
             <button id="sttHold" class="btn ghost" type="button" style="display:none"
               title="長押しで字幕（モバイル推奨）">長押しで字幕</button>
           </div>
-
-          <!-- VUメーター（簡易） -->
-          <div id="vu" class="status" style="margin-top:6px">🎙️ マイク入力レベル：□□□□□</div>
-
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
+
           <button id="enableSound" class="btn ghost" type="button" style="display:none;margin-top:6px">
             スマホで音を有効化
           </button>
@@ -398,7 +395,7 @@
     pc.oniceconnectionstatechange = ()=> console.info("[ICE]", peerId, pc.iceConnectionState);
     pc.onconnectionstatechange = ()=> console.info("[PC]", peerId, pc.connectionState);
 
-    // 自分が送信していなくても受信用 m=audio を確保
+    // ★自分が送信していなくても受信用 m=audio を確保
     if (localStream && localStream.getAudioTracks().length){
       for (const track of localStream.getAudioTracks()) pc.addTrack(track, localStream);
     } else {
@@ -468,6 +465,7 @@
     }
   }
 
+  // ★ 追加: マイク有効判定（STT制御でも使用）
   function isMicEnabled(){
     if (!localStream) return false;
     const t = localStream.getAudioTracks()[0];
@@ -485,23 +483,19 @@
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
         startCalls(rosterMembers);
-        await attachLocalToAllPeers();   // 既存PCへ送信トラックを後付け＆再交渉
         updateVoiceUI();
-        updateSttUI();
+        updateSttUI();  // 表示可否/disabledを更新
         await tryPlayAllAudios();
         await resumeAudioContext();
-        startVuMeter(); // VUメーター開始
       }catch(e){
         alert('マイク権限を許可してください'); console.error(e);
       }
     } else {
       // OFF（退出）
-      detachLocalFromAllPeers(); // 送信トラックを外す
       for (const id of Array.from(peers.keys())) cleanupPeer(id);
       if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
       stopStt();          // 音声OFF時は必ず字幕も停止
-      sttPreMuteOn=false; // 記憶をクリア
-      stopVuMeter();      // VUメーター停止
+      sttPreMuteOn=false; // 参加終了時は記憶をクリア
       updateVoiceUI();
       updateSttUI();
     }
@@ -518,17 +512,18 @@
     updateVoiceUI();
 
     if (!t.enabled){
-      // ミュートへ：現在のSTT状態を記憶し、必ず停止
+      // ★ ミュートへ：現在のSTT状態を記憶し、必ず停止
       sttPreMuteOn = sttOn;
       if (sttOn) stopStt();
     }else{
-      // ミュート解除：ミュート前にONだったなら自動復帰
+      // ★ ミュート解除：ミュート前にONだったなら自動復帰
       if (sttPreMuteOn){
         startStt({ continuous: !isMobile }); // PCはcontinuous、モバイルは非連続
       }
       sttPreMuteOn = false;
     }
 
+    // STTボタンの有効/無効を更新
     updateSttUI();
   };
 
@@ -597,42 +592,6 @@
   }
   setupMobileAudioGate();
 
-  // ---- VUメーター（簡易） ----
-  let vuTimer = null, analyser = null, vuData = null;
-  function startVuMeter(){
-    try{
-      if (!localStream) return;
-      const ctx = getAudioCtx();
-      if (!ctx) return;
-      const src = ctx.createMediaStreamSource(localStream);
-      analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      src.connect(analyser);
-      vuData = new Uint8Array(analyser.frequencyBinCount);
-      if (vuTimer) cancelAnimationFrame(vuTimer);
-      const vuEl = document.getElementById('vu');
-      const loop = ()=>{
-        analyser.getByteTimeDomainData(vuData);
-        // 振幅（0-1）の簡易推定
-        let maxDev = 0;
-        for (let i=0;i<vuData.length;i++){
-          const d = Math.abs(vuData[i]-128)/128;
-          if (d>maxDev) maxDev=d;
-        }
-        const bars = Math.min(5, Math.floor(maxDev*8)); // 0-5段階
-        vuEl.textContent = '🎙️ マイク入力レベル：' + '■'.repeat(bars) + '□'.repeat(5-bars);
-        vuTimer = requestAnimationFrame(loop);
-      };
-      loop();
-    }catch(_){}
-  }
-  function stopVuMeter(){
-    if (vuTimer) cancelAnimationFrame(vuTimer);
-    vuTimer = null; analyser=null; vuData=null;
-    const vuEl = document.getElementById('vu');
-    if (vuEl) vuEl.textContent = '🎙️ マイク入力レベル：□□□□□';
-  }
-
   // ====== 音声→テキスト（自動字幕; 自分の発話のみ） ======
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const sttBtn  = document.getElementById('sttToggle'); // PC向けトグル
@@ -640,35 +599,11 @@
   let sttOn = false;
   let recog = null;
 
-  function sttSupportedDesktop(){ return !!(window.SpeechRecognition || window.webkitSpeechRecognition) && !isMobile; }
-  function sttSupportedMobile(){  return !!(window.SpeechRecognition || window.webkitSpeechRecognition) &&  isMobile; }
+  function sttSupportedDesktop(){ return !!SR && !isMobile; }
+  function sttSupportedMobile(){  return !!SR &&  isMobile; }
 
-  // STT対応可否も踏まえた表示・活性制御
   function updateSttUI(){
-    const SRAvail = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
     const voiceOn = !!localStream;
-
-    // STT非対応端末 → ボタン非表示＋注意文表示
-    if (!SRAvail){
-      sttBtn.style.display  = 'none';
-      sttHold.style.display = 'none';
-      let warn = document.getElementById('sttWarn');
-      if (!warn){
-        warn = document.createElement('div');
-        warn.id = 'sttWarn';
-        warn.className = 'status';
-        warn.style.color = '#b00020';
-        warn.style.marginTop = '6px';
-        warn.textContent = 'この端末・ブラウザでは自動字幕（音声認識）は利用できません。';
-        const hintAfter = document.getElementById('voiceHint');
-        hintAfter.insertAdjacentElement('afterend', warn);
-      }
-      return;
-    }else{
-      const warn = document.getElementById('sttWarn');
-      if (warn) warn.remove();
-    }
-
     const showDesktop = sttSupportedDesktop() && voiceOn;
     const showMobile  = sttSupportedMobile()  && voiceOn;
 
@@ -678,7 +613,7 @@
     sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
     sttBtn.classList.toggle('ghost', !sttOn);
 
-    // ミュート中は開始不可
+    // ★ ミュート中はボタン無効化（クリック/長押し不可）
     const micOk = isMicEnabled();
     sttBtn.disabled  = !micOk;
     sttHold.disabled = !micOk;
@@ -695,8 +630,7 @@
   }
 
   function startStt({continuous}){
-    const SRClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SRClass){ alert('このブラウザは音声認識に未対応です'); return; }
+    if (!SR){ alert('このブラウザは音声認識に未対応です'); return; }
     if (!localStream){ alert('先に「音声ON」にしてください'); return; }
 
     // ミュート中は開始不可
@@ -706,13 +640,15 @@
       return;
     }
 
-    recog = new SRClass();
+    recog = new SR();
     recog.lang = 'ja-JP';
     recog.interimResults = true;
     recog.continuous = !!continuous; // PCはtrue、モバイルPTTはfalse
 
     recog.onresult = (e) => {
-      if (!isMicEnabled()) return; // 途中でミュートされたら送信しない
+      // 途中でミュートされたら送信しない
+      if (!isMicEnabled()) return;
+
       let finalText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
@@ -756,45 +692,6 @@
   ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev =>
     sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (sttOn) stopStt(); })
   );
-
-  // ======== 送信トラックの後付け & 再交渉 ========
-  async function attachLocalToAllPeers(){
-    if (!localStream) return;
-    const track = localStream.getAudioTracks()[0];
-    if (!track) return;
-
-    for (const [peerId, pc] of peers.entries()){
-      // 既にSenderがあれば差し替え、無ければaddTrack
-      let sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
-      if (sender) {
-        try { await sender.replaceTrack(track); } catch(e){ console.warn('[replaceTrack]', peerId, e); }
-      } else {
-        try { sender = pc.addTrack(track, localStream); } catch(e){ console.warn('[addTrack]', peerId, e); }
-      }
-
-      // 重要：後付け後に再交渉
-      try{
-        const offer = await pc.createOffer({ offerToReceiveAudio: true });
-        await pc.setLocalDescription(offer);
-        wsSend({ rtc: { to: peerId, type: "offer", data: offer }});
-        console.info('[renegotiate] sent offer to', peerId);
-      }catch(e){
-        console.warn('[renegotiate]', peerId, e);
-      }
-    }
-  }
-
-  function detachLocalFromAllPeers(){
-    for (const [, pc] of peers.entries()){
-      try{
-        pc.getSenders()?.forEach(s => {
-          if (s.track && s.track.kind === 'audio') {
-            try { s.replaceTrack(null); } catch {}
-          }
-        });
-      }catch{}
-    }
-  }
 
   window.addEventListener('beforeunload', stopStt);
   updateSttUI();
