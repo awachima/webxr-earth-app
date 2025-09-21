@@ -83,14 +83,7 @@
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
-            <!-- ▼ 音声ONの時だけ表示：ミュートの右に配置 -->
-            <button id="sttVoice" class="btn ghost" type="button" style="display:none" title="自分の発話を自動で文字起こしして送信">
-              音声入力ON
-            </button>
           </div>
-          <!-- ▼ ボタンの下に状態を表示 -->
-          <div id="sttState" class="status" style="margin-top:6px">音声入力してない状態</div>
-
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
 
           <!-- モバイル向け：成功するまで消えない有効化ボタン -->
@@ -105,9 +98,12 @@
             <div class="chat-input">
               <input id="chatInput" placeholder="メッセージを入力…" maxlength="2000">
               <button id="chatSend" class="btn" type="button">送信</button>
-              <!-- 旧：自動字幕ボタン（チャット入力側）は非表示化 -->
-              <button id="sttToggle" class="btn ghost" type="button" style="display:none">自動字幕OFF</button>
-              <button id="sttHold" class="btn ghost" type="button" style="display:none">長押しで字幕</button>
+              <!-- 自動字幕（PC:トグル / モバイル:長押し） -->
+              <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信（PC向け）">
+                自動字幕OFF
+              </button>
+              <button id="sttHold" class="btn ghost" type="button" style="display:none"
+                title="長押しで字幕（モバイル推奨）">長押しで字幕</button>
             </div>
           </div>
           <div class="status" id="chatStatus" style="margin-top:8px;color:#0a7f3f">接続していません</div>
@@ -456,15 +452,10 @@
   const micToggleBtn  = document.getElementById('micToggle');
   const voiceHint     = document.getElementById('voiceHint');
 
-  // ▼ 追加：音声入力（自動字幕）ボタン＆状態
-  const sttVoiceBtn = document.getElementById('sttVoice');
-  const sttStateEl  = document.getElementById('sttState');
-
   function updateVoiceUI(){
     const on = !!localStream;
     voicePowerBtn.textContent = on ? '音声OFF' : '音声ON';
     micToggleBtn.style.display = on ? '' : 'none';
-    sttVoiceBtn.style.display  = on ? '' : 'none'; // 音声ON時のみ表示
     if (on){
       const t = localStream.getAudioTracks()[0];
       micToggleBtn.textContent = (t && t.enabled) ? 'ミュート' : 'ミュート解除';
@@ -473,8 +464,6 @@
       micToggleBtn.textContent = 'ミュート';
       voiceHint.textContent = '音声: 未参加';
     }
-    // STTボタンの表記は別関数で更新
-    updateSttUI();
   }
 
   voicePowerBtn.onclick = async ()=>{
@@ -486,6 +475,7 @@
         });
         startCalls(rosterMembers);
         updateVoiceUI();
+        // 参加時に自動再生解除も試す
         await tryPlayAllAudios();
         await resumeAudioContext();
       }catch(e){
@@ -495,7 +485,7 @@
       // OFF（退出）
       for (const id of Array.from(peers.keys())) cleanupPeer(id);
       if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
-      stopStt(); // 音声OFFで入力も停止
+      stopStt(); // 自動字幕も停止し、リモート音を復帰
       updateVoiceUI();
     }
     maybeShowEnableButton();
@@ -574,20 +564,20 @@
   }
   setupMobileAudioGate();
 
-  // ====== 音声→テキスト（音声入力; 自分の発話のみ） ======
+  // ====== 音声→テキスト（自動字幕; 自分の発話のみ） ======
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  // 旧ボタンは非表示のまま保持（互換）
-  const sttBtn  = document.getElementById('sttToggle'); // unused (hidden)
-  const sttHold = document.getElementById('sttHold');   // unused (hidden)
+  const sttBtn  = document.getElementById('sttToggle'); // PC向けトグル
+  const sttHold = document.getElementById('sttHold');   // モバイル向け長押し
   let sttOn = false;
   let recog = null;
 
-  function sttSupported(){ return !!SR; }
+  function sttSupportedDesktop(){ return !!SR && !isMobile; }
+  function sttSupportedMobile(){  return !!SR &&  isMobile; }
 
   function updateSttUI(){
-    // 「音声入力ON/OFF」表記
-    sttVoiceBtn.textContent = sttOn ? '音声入力OFF' : '音声入力ON';
-    sttStateEl.textContent  = sttOn ? '音声入力してる状態' : '音声入力してない状態';
+    sttBtn.style.display  = sttSupportedDesktop() ? '' : 'none';
+    sttHold.style.display = sttSupportedMobile()  ? '' : 'none';
+    sttBtn.textContent = sttOn ? '自動字幕ON' : '自動字幕OFF';
   }
 
   function stopStt(){
@@ -599,13 +589,13 @@
   }
 
   function startStt({continuous}){
-    if (!sttSupported()){ alert('このブラウザは音声認識に未対応です'); return; }
+    if (!SR){ alert('このブラウザは音声認識に未対応です'); return; }
     if (!localStream){ alert('先に「音声ON」にしてください'); return; }
 
     recog = new SR();
     recog.lang = 'ja-JP';
     recog.interimResults = true;
-    recog.continuous = !!continuous;
+    recog.continuous = !!continuous; // PCはtrue、モバイルPTTはfalse
 
     recog.onresult = (e) => {
       let finalText = '';
@@ -614,11 +604,11 @@
         if (res.isFinal) finalText += res[0].transcript;
       }
       if (finalText.trim() && ws && ws.readyState===1) {
-        // ★タグを「（音声）」に変更
-        ws.send(`（音声）${finalText.trim()}`);
+        ws.send(`（自動字幕）${finalText.trim()}`);
       }
     };
 
+    // 連続モード（PC）のみ自動再開。モバイルPTTは再開しない＝ビープ回避
     recog.onend = () => {
       if (sttOn && !isMobile) {
         try { recog.start(); } catch {}
@@ -631,18 +621,26 @@
     };
 
     try { recog.start(); } catch (e) {
-      console.error(e); alert('音声入力の起動に失敗しました'); return;
+      console.error(e); alert('自動字幕の起動に失敗しました'); return;
     }
     sttOn = true;
     setRemoteMuted(true); // 自分が話す間は相手の音をミュート（ループ/ビープ抑制）
     updateSttUI();
   }
 
-  // 音声入力ON/OFF（PC想定：continuous = true）
-  sttVoiceBtn.onclick = () => {
+  // PC：従来どおりON/OFFトグル（continuous = true）
+  sttBtn.onclick = () => {
     if (!sttOn) startStt({ continuous: true });
     else stopStt();
   };
+
+  // モバイル：長押しで録音 → 離すと停止（continuous = false）
+  ['mousedown','touchstart'].forEach(ev =>
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (!sttOn) startStt({ continuous:false }); })
+  );
+  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev =>
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (sttOn) stopStt(); })
+  );
 
   window.addEventListener('beforeunload', stopStt);
   updateSttUI();
