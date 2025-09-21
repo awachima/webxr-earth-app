@@ -23,8 +23,6 @@
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
     .sep{height:1px;background:#eee;margin:16px 0}
     .copy{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font:14px system-ui}
-
-    /* chat */
     .chat{display:flex;flex-direction:column;height:520px}
     .chat-log{flex:1;border:1px solid #eee;border-radius:12px;padding:10px;overflow:auto;background:#fafafa}
     .msg{margin:6px 0;padding:8px 10px;border-radius:10px;max-width:85%;word-break:break-word;font-size:14px}
@@ -33,8 +31,6 @@
     .msg.sys{background:#f3f4f6;border:1px dashed #ddd;color:#555;font-size:12px;text-align:center}
     .chat-input{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
     .chat-input input{flex:1;min-width:200px;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px}
-
-    /* members */
     .members{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto;margin-top:8px}
     .member{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid #eee;border-radius:9999px;background:#fafafa;font-size:14px}
     .badge{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:9999px;background:#111;color:#fff;font-size:12px;font-weight:700}
@@ -62,11 +58,9 @@
           <div class="label">カウントダウン</div>
           <div class="count" id="count">--:--:--</div>
           <div class="status" id="status">開始までお待ちください。</div>
-
           <div class="row">
             <a id="enter" class="btn" target="_top" rel="noopener">ツアーに行く</a>
           </div>
-
           <div class="sep"></div>
           <div class="row">
             <button id="copy" class="btn" type="button">この待合室のURLをコピー</button>
@@ -82,12 +76,8 @@
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
-            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">
-              自動字幕ON
-            </button>
-            <!-- 長押しボタンは実装は残すが常時非表示に変更 -->
-            <button id="sttHold" class="btn ghost" type="button" style="display:none"
-              title="長押しで字幕（旧モバイル方式・現在は非表示）">長押しで字幕</button>
+            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">自動字幕ON</button>
+            <button id="sttHold" class="btn ghost" type="button" style="display:none" title="長押しで字幕（旧方式）">長押しで字幕</button>
           </div>
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
 
@@ -115,7 +105,7 @@
   <footer style="color:#888;font-size:12px;text-align:center;padding:18px">© DokodemoDoors</footer>
 
   <script>
-  // ===== 既存ロジック（開始→消滅まで後XX分→自動削除） =====
+  // ===== 既存: ルーム自動消滅等 =====
   const NEGATIVE_LIMIT_MS = 20*60*1000;
   const S='meetups-store', O='meetups-owners';
   const readStore=()=>JSON.parse(localStorage.getItem(S)||'[]');
@@ -150,7 +140,7 @@
     $('#limitPill').replaceWith(pill);
   }
 
-  // 「ツアーに行く」
+  // 入室リンク
   const enterBtn = $('#enter');
   const validTarget = /^https?:\/\//i.test(target);
   if (validTarget) { enterBtn.href = target; } else { enterBtn.style.display = 'none'; }
@@ -185,16 +175,13 @@
   }
   requestAnimationFrame(tick);
 
-  // コピー（この待合室のURL）
+  // コピー
   $('#copy').onclick=async()=>{
     const url = location.href;
-    try{
-      await navigator.clipboard.writeText(url);
+    try{ await navigator.clipboard.writeText(url);
       $('#copy').textContent = 'コピーしました';
       setTimeout(()=>$('#copy').textContent='この待合室のURLをコピー', 1200);
-    }catch(e){
-      prompt('手動コピー：', url);
-    }
+    }catch(e){ prompt('手動コピー：', url); }
   };
 
   $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user},null,2);
@@ -264,7 +251,7 @@
   window.addEventListener('blur', ()=> focused=false);
 
   let myId = null;
-  let rosterMembers = []; // [{name,id}]
+  let rosterMembers = [];
 
   function connect(){
     try{
@@ -276,10 +263,8 @@
         try{
           const data = JSON.parse(ev.data);
 
-          // ① WebRTC シグナリング
           if (data.rtc) { onRtcSignal(data); return; }
 
-          // ② システム
           if (data.sys){
             if (data.type === 'welcome'){ myId = data.id; }
             else if (data.type === 'history' && Array.isArray(data.messages)){
@@ -292,7 +277,7 @@
             } else if (data.type === 'roster'){
               rosterMembers = Array.isArray(data.members) ? data.members : [];
               renderMembers(rosterMembers);
-              if (localStream) startCalls(rosterMembers); // 参加中なら新規相手へ発呼
+              if (localStream) startCalls(rosterMembers);
             } else if (data.type === 'join'){
               addSys(`${data.name} が参加しました（合計 ${data.count} 名）`);
             } else if (data.type === 'leave'){
@@ -302,13 +287,10 @@
             return;
           }
 
-          // ③ テキスト
           const obj = data;
           const klass = (obj.name===user)?'me':'other';
           addMsg(klass, `${obj.name}: ${obj.text}`);
-        }catch{
-          // 非JSONは無視
-        }
+        }catch{ /* 非JSONは無視 */ }
       };
     }catch(e){
       chatStatus.textContent='接続に失敗しました';
@@ -328,7 +310,6 @@
   });
 
   // ========= WebRTC (voice) =========
-  // STUNのみ（無料）。厳しいNATでは失敗する場合あり
   const iceServers = [{ urls: [
     "stun:stun.l.google.com:19302",
     "stun:stun1.l.google.com:19302"
@@ -336,10 +317,9 @@
   const pcConfig = { iceServers };
 
   let localStream = null;
-  const peers = new Map();  // id -> RTCPeerConnection
-  const audios = new Map(); // id -> <audio>
+  const peers = new Map();
+  const audios = new Map();
 
-  // === WebAudio Bridge ===
   let audioCtx = null;
   function getAudioCtx(){
     try{
@@ -370,33 +350,23 @@
     const pc = new RTCPeerConnection(pcConfig);
 
     pc.ontrack = (ev) => {
-      // 1) <audio> 再生
       let el = audios.get(peerId);
       if (!el) {
         el = document.createElement('audio');
-        el.autoplay = true;
-        el.playsInline = true;
-        el.muted = false;
-        el.volume = 1;
+        el.autoplay = true; el.playsInline = true; el.muted = false; el.volume = 1;
         audios.set(peerId, el);
         document.body.appendChild(el);
       }
       el.srcObject = ev.streams[0];
       try { el.play(); } catch (e) {}
-
-      // 2) WebAudioにも接続
       bindRemoteToAudioCtx(ev.streams[0]);
-
       maybeShowEnableButton();
     };
 
-    pc.onicecandidate = (ev) => {
-      if (ev.candidate) wsSend({ rtc: { to: peerId, type: "candidate", data: ev.candidate }});
-    };
+    pc.onicecandidate = (ev) => { if (ev.candidate) wsSend({ rtc: { to: peerId, type: "candidate", data: ev.candidate }}); };
     pc.oniceconnectionstatechange = ()=> console.info("[ICE]", peerId, pc.iceConnectionState);
     pc.onconnectionstatechange = ()=> console.info("[PC]", peerId, pc.connectionState);
 
-    // ★自分が送信していなくても受信用 m=audio を確保
     if (localStream && localStream.getAudioTracks().length){
       for (const track of localStream.getAudioTracks()) pc.addTrack(track, localStream);
     } else {
@@ -409,7 +379,7 @@
 
   async function callPeer(peerId){
     const pc = createPeer(peerId);
-    const offer = await pc.createOffer(); // transceiverでm=audioが立つ
+    const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     wsSend({ rtc: { to: peerId, type: "offer", data: offer }});
   }
@@ -445,7 +415,6 @@
     }
   }
 
-  // ===== 音声ON/OFFトグル＋ミュート表示制御 =====
   const voicePowerBtn = document.getElementById('voicePower');
   const micToggleBtn  = document.getElementById('micToggle');
   const voiceHint     = document.getElementById('voiceHint');
@@ -453,7 +422,7 @@
   function updateVoiceUI(){
     const on = !!localStream;
     voicePowerBtn.textContent = on ? '音声OFF' : '音声ON';
-    voicePowerBtn.classList.toggle('ghost', !on); // OFF中は白ボタン
+    voicePowerBtn.classList.toggle('ghost', !on);
 
     micToggleBtn.style.display = on ? '' : 'none';
     if (on){
@@ -466,37 +435,33 @@
     }
   }
 
-  // ★ 追加: マイク有効判定（STT制御でも使用）
   function isMicEnabled(){
     if (!localStream) return false;
     const t = localStream.getAudioTracks()[0];
     return !!(t && t.enabled);
   }
 
-  // ====== 自動字幕の前回状態を記憶（ミュート復帰用） ======
   let sttPreMuteOn = false;
 
   voicePowerBtn.onclick = async ()=>{
     if (!localStream){
-      // ON（参加）
       try{
         localStream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
         startCalls(rosterMembers);
         updateVoiceUI();
-        updateSttUI();  // 表示可否/disabledを更新
+        updateSttUI();
         await tryPlayAllAudios();
         await resumeAudioContext();
       }catch(e){
         alert('マイク権限を許可してください'); console.error(e);
       }
     } else {
-      // OFF（退出）
       for (const id of Array.from(peers.keys())) cleanupPeer(id);
       if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
-      stopStt();          // 音声OFF時は必ず字幕も停止
-      sttPreMuteOn=false; // 参加終了時は記憶をクリア
+      stopStt();
+      sttPreMuteOn=false;
       updateVoiceUI();
       updateSttUI();
     }
@@ -508,29 +473,23 @@
     const t = localStream.getAudioTracks()[0];
     if (!t) return;
 
-    // ミュート切替
     t.enabled = !t.enabled;
     updateVoiceUI();
 
     if (!t.enabled){
-      // ★ ミュートへ：現在のSTT状態を記憶し、必ず停止
       sttPreMuteOn = sttOn;
       if (sttOn) stopStt();
     }else{
-      // ★ ミュート解除：ミュート前にONだったなら自動復帰
       if (sttPreMuteOn){
-        startStt({ continuous: !isMobile }); // PCはcontinuous、モバイルは非連続
+        startStt({ continuous: !isMobile });
       }
       sttPreMuteOn = false;
     }
-
-    // STTボタンの有効/無効を更新
     updateSttUI();
   };
 
   updateVoiceUI();
 
-  // ===== モバイル自動再生対策 =====
   const enableBtn = document.getElementById('enableSound');
 
   function anyAudioPlaying(){
@@ -593,105 +552,153 @@
   }
   setupMobileAudioGate();
 
-  // ====== 音声→テキスト（自動字幕; 自分の発話のみ） ======
+  // ====== 音声→テキスト（自動字幕; 改良版） ======
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const sttBtn  = document.getElementById('sttToggle'); // ← PC/モバイル共通トグルに統一
-  const sttHold = document.getElementById('sttHold');   // ← 非表示のまま
+  const sttBtn  = document.getElementById('sttToggle');
+  const sttHold = document.getElementById('sttHold');
   let sttOn = false;
   let recog = null;
+  let sttBuffer = "";        // ★ 追加：暫定テキストのバッファ
+  let sttCycleId = 0;        // ★ 再作成用の世代管理
 
-  // ※サポート判定は存在チェックのみ（端末別で分岐しない）
   function sttAvailable(){ return !!SR; }
 
   function updateSttUI(){
     const voiceOn = !!localStream;
     const canUse = sttAvailable() && voiceOn;
 
-    // 端末に関係なくトグルを出す（音声ON時のみ）
     sttBtn.style.display  = canUse ? '' : 'none';
-    // 長押しUIは廃止（最小差分として常時非表示）
     sttHold.style.display = 'none';
 
     sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
     sttBtn.classList.toggle('ghost', !sttOn);
 
-    // ★ ミュート中は無効化
     const micOk = isMicEnabled();
     sttBtn.disabled  = !micOk;
     sttBtn.title  = micOk ? '自分の発話を自動で文字起こしして送信' : 'マイクがミュート中は自動字幕を使用できません';
+  }
+
+  function sendChatLine(text){
+    if (!text || !ws || ws.readyState!==1) return;
+    ws.send(`（自動字幕）${text}`);
   }
 
   function stopStt(){
     try { recog && recog.stop(); } catch {}
     recog = null;
     sttOn = false;
-    setRemoteMuted(false); // リモート音を復帰
+    sttBuffer = "";
+    setRemoteMuted(false);
     updateSttUI();
+  }
+
+  // ★ iOS向け：セッションごとに新規インスタンスを作るヘルパ
+  function newRecognizer(){
+    const r = new SR();
+    r.lang = 'ja-JP';
+    r.interimResults = true;
+    r.maxAlternatives = 1;
+    r.continuous = !isMobile; // PC:true / モバイル:false
+    return r;
   }
 
   function startStt({continuous}){
     if (!SR){ alert('このブラウザは音声認識に未対応です'); return; }
     if (!localStream){ alert('先に「音声ON」にしてください'); return; }
-
-    // ミュート中は開始不可
     if (!isMicEnabled()){
       alert('マイクがミュートです。ミュート解除後に自動字幕を開始してください。');
-      updateSttUI();
-      return;
+      updateSttUI(); return;
     }
 
-    recog = new SR();
-    recog.lang = 'ja-JP';
-    recog.interimResults = true;
+    sttCycleId++;
+    const myCycle = sttCycleId;
 
-    // PCはcontinuous=true、モバイルはfalse（iOS制約）だが onend で再開して実質トグル運用
-    const isPC = !isMobile;
-    recog.continuous = isPC ? true : false;
+    // 新インスタンスで開始
+    recog = newRecognizer();
+    recog.continuous = !!continuous;
+
+    sttBuffer = "";
+    setRemoteMuted(true);
 
     recog.onresult = (e) => {
       if (!isMicEnabled()) return;
       let finalText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
-        if (res.isFinal) finalText += res[0].transcript;
+        const t = res[0].transcript || '';
+        if (res.isFinal) {
+          finalText += t;
+        } else {
+          // ★ 最終でない場合はバッファに保持
+          if (t.trim()) sttBuffer = t.trim();
+        }
       }
-      if (finalText.trim() && ws && ws.readyState===1) {
-        ws.send(`（自動字幕）${finalText.trim()}`);
+      // 最終結果があれば即送信＆バッファクリア
+      if (finalText.trim()) {
+        sendChatLine(finalText.trim());
+        sttBuffer = "";
       }
     };
 
-    // ★ PC/モバイル共通：トグルONの間は自動再開（ミュート中は再開しない）
+    // ★ 話し終わりイベントで、バッファ分を救済送信
+    recog.onspeechend = () => {
+      if (sttBuffer.trim()) {
+        sendChatLine(sttBuffer.trim());
+        sttBuffer = "";
+      }
+      try { recog.stop(); } catch {}
+    };
+
     recog.onend = () => {
+      if (myCycle !== sttCycleId) return; // 古いセッションは無視
+      // 終了時に残っていれば送る（iOSでfinalが付かない対策）
+      if (sttBuffer.trim()) {
+        sendChatLine(sttBuffer.trim());
+        sttBuffer = "";
+      }
       if (sttOn && isMicEnabled()){
-        try { setTimeout(()=>{ try{ recog && recog.start(); }catch{} }, 150); } catch {}
+        // ★ インスタンス再作成での再開（iOSのinvalid-state回避）
+        try {
+          setTimeout(()=>{ if (sttOn && myCycle===sttCycleId) startStt({ continuous: !isMobile }); }, 120);
+        } catch {}
       }
     };
 
     recog.onerror = (ev) => {
-      console.warn('[STT]', ev.error);
-      stopStt();
+      console.warn('[STT:error]', ev.error);
+      const dbg = document.getElementById('debug');
+      dbg.textContent += `\n[STT:error] ${ev.error || ''}`;
+      // 権限/未対応などは停止
+      if (['not-allowed','service-not-allowed','no-speech','audio-capture','aborted'].includes(ev.error)){
+        stopStt();
+        alert('自動字幕が利用できません（端末の音声入力/ディクテーション設定や権限をご確認ください）');
+      }
     };
 
-    try { recog.start(); } catch (e) {
-      console.error(e); alert('自動字幕の起動に失敗しました'); return;
+    try { recog.start(); }
+    catch (e) {
+      console.error(e);
+      const dbg = document.getElementById('debug');
+      dbg.textContent += `\n[STT:start-failed] ${e.message||e}`;
+      alert('自動字幕の起動に失敗しました');
+      setRemoteMuted(false);
+      return;
     }
+
     sttOn = true;
-    setRemoteMuted(true); // 自分が話す間は相手の音をミュート（ループ/ビープ抑制）
     updateSttUI();
   }
 
-  // トグル（PC/モバイル共通）
   sttBtn.onclick = () => {
     if (!sttOn) startStt({ continuous: !isMobile });
     else stopStt();
   };
 
-  // 旧：モバイル長押しは封印（イベントは残しておくがdisplay:none）
   ['mousedown','touchstart'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); /* 非表示運用 */ })
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); })
   );
   ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev =>
-    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); /* 非表示運用 */ })
+    sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); })
   );
 
   window.addEventListener('beforeunload', stopStt);
