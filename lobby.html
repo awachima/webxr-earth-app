@@ -80,13 +80,18 @@
 
           <div class="sep"></div>
           <div class="label">ボイスチャット</div>
-          <!-- ▼▼ ここを単一ボタン化（音声ON/音声OFF）＋ ミュートは音声ON時のみ表示 ▼▼ -->
+
+          <!-- 単一ボタン化（音声ON/音声OFF）＋ ミュートは音声ON時のみ表示 -->
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
           </div>
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
-          <!-- ▲▲ ここまで変更 ▲▲ -->
+
+          <!-- スマホ向け：自動再生制限を解除するための明示ボタン（モバイルのみ表示） -->
+          <button id="enableSound" class="btn ghost" type="button" style="display:none;margin-top:6px">
+            スマホで音を有効化
+          </button>
 
           <div class="sep"></div>
           <div class="label">テキストチャット</div>
@@ -108,7 +113,7 @@
   <footer style="color:#888;font-size:12px;text-align:center;padding:18px">© DokodemoDoors</footer>
 
   <script>
-  // ===== 既存ロジック（開始→消滅まで後XX分→自動削除）
+  // ===== 既存ロジック（開始→消滅まで後XX分→自動削除） =====
   const NEGATIVE_LIMIT_MS = 20*60*1000;
   const S='meetups-store', O='meetups-owners';
   const readStore=()=>JSON.parse(localStorage.getItem(S)||'[]');
@@ -345,6 +350,8 @@
         document.body.appendChild(el);
       }
       el.srcObject = ev.streams[0];
+      // ★ 追加：iOS/Androidの自動再生対策として、トラック受信直後に明示再生を試みる
+      try { el.play(); } catch (e) {}
     };
     pc.onicecandidate = (ev) => {
       if (ev.candidate) wsSend({ rtc: { to: peerId, type: "candidate", data: ev.candidate }});
@@ -395,7 +402,7 @@
     }
   }
 
-  // ===== ▼ 新：音声ON/OFFトグル＋ミュート表示制御 ▼ =====
+  // ===== 新：音声ON/OFFトグル＋ミュート表示制御 =====
   const voicePowerBtn = document.getElementById('voicePower');
   const micToggleBtn  = document.getElementById('micToggle');
   const voiceHint     = document.getElementById('voiceHint');
@@ -441,7 +448,42 @@
   };
 
   updateVoiceUI();
-  // ===== ▲ 新ロジックここまで ▲ =====
+
+  // ===== モバイル自動再生対策（音を有効化ボタン） =====
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const enableBtn = document.getElementById('enableSound');
+
+  async function tryPlayAllAudios(){
+    for (const el of audios.values()){
+      try { await el.play(); } catch (e) {}
+    }
+    document.querySelectorAll('audio').forEach(async (el)=>{
+      try { await el.play(); } catch (e) {}
+    });
+  }
+
+  async function enableSound(){
+    await tryPlayAllAudios();
+    enableBtn.style.display = 'none';
+  }
+
+  function setupMobileAudioGate(){
+    if (!isMobile) return;
+    enableBtn.style.display = '';
+    enableBtn.onclick = enableSound;
+
+    // 一度でもタップ/クリックがあれば再生を試みる（ワンショット）
+    let tried = false;
+    const oneShot = async ()=>{
+      if (tried) return;
+      tried = true;
+      await tryPlayAllAudios();
+    };
+    document.addEventListener('touchend', oneShot, { once: true });
+    document.addEventListener('click',     oneShot, { once: true });
+  }
+  setupMobileAudioGate();
+  // ===================================
   </script>
 </body>
 </html>
