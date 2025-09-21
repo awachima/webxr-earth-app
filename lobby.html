@@ -472,6 +472,9 @@
     return !!(t && t.enabled);
   }
 
+  // ====== 自動字幕の前回状態を記憶（ミュート復帰用） ======
+  let sttPreMuteOn = false;
+
   voicePowerBtn.onclick = async ()=>{
     if (!localStream){
       // ON（参加）
@@ -482,7 +485,6 @@
         startCalls(rosterMembers);
         updateVoiceUI();
         updateSttUI();  // 表示可否/disabledを更新
-        // 参加時に自動再生解除も試す
         await tryPlayAllAudios();
         await resumeAudioContext();
       }catch(e){
@@ -492,7 +494,8 @@
       // OFF（退出）
       for (const id of Array.from(peers.keys())) cleanupPeer(id);
       if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
-      stopStt(); // ★ 音声OFF時は必ず字幕も停止
+      stopStt();          // 音声OFF時は必ず字幕も停止
+      sttPreMuteOn=false; // 参加終了時は記憶をクリア
       updateVoiceUI();
       updateSttUI();
     }
@@ -503,11 +506,24 @@
     if (!localStream) return;
     const t = localStream.getAudioTracks()[0];
     if (!t) return;
+
+    // ミュート切替
     t.enabled = !t.enabled;
     updateVoiceUI();
-    // ★ 追加: ミュートした瞬間に字幕を停止（再開は手動）
-    if (!t.enabled && sttOn) stopStt();
-    // ★ 追加: STTボタンの有効/無効を更新
+
+    if (!t.enabled){
+      // ★ ミュートへ：現在のSTT状態を記憶し、必ず停止
+      sttPreMuteOn = sttOn;
+      if (sttOn) stopStt();
+    }else{
+      // ★ ミュート解除：ミュート前にONだったなら自動復帰
+      if (sttPreMuteOn){
+        startStt({ continuous: !isMobile }); // PCはcontinuous、モバイルは非連続
+      }
+      sttPreMuteOn = false;
+    }
+
+    // STTボタンの有効/無効を更新
     updateSttUI();
   };
 
@@ -597,7 +613,7 @@
     sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
     sttBtn.classList.toggle('ghost', !sttOn);
 
-    // ★ 追加: ミュート中はボタン無効化（クリック/長押し不可）
+    // ★ ミュート中はボタン無効化（クリック/長押し不可）
     const micOk = isMicEnabled();
     sttBtn.disabled  = !micOk;
     sttHold.disabled = !micOk;
@@ -617,7 +633,7 @@
     if (!SR){ alert('このブラウザは音声認識に未対応です'); return; }
     if (!localStream){ alert('先に「音声ON」にしてください'); return; }
 
-    // ★ 追加: ミュート中は開始不可
+    // ミュート中は開始不可
     if (!isMicEnabled()){
       alert('マイクがミュートです。ミュート解除後に自動字幕を開始してください。');
       updateSttUI();
@@ -630,7 +646,7 @@
     recog.continuous = !!continuous; // PCはtrue、モバイルPTTはfalse
 
     recog.onresult = (e) => {
-      // ★ 念のため: 途中でミュートされたら送信しない
+      // 途中でミュートされたら送信しない
       if (!isMicEnabled()) return;
 
       let finalText = '';
@@ -643,7 +659,7 @@
       }
     };
 
-    // 連続モード（PC）のみ自動再開。★ ただしミュート中は再開しない
+    // 連続モード（PC）のみ自動再開。ただしミュート中は再開しない
     recog.onend = () => {
       if (sttOn && !isMobile && isMicEnabled()) {
         try { recog.start(); } catch {}
@@ -663,7 +679,7 @@
     updateSttUI();
   }
 
-  // PC：従来どおりON/OFFトグル（continuous = true）
+  // PC：ON/OFFトグル（continuous = true）
   sttBtn.onclick = () => {
     if (!sttOn) startStt({ continuous: true });
     else stopStt();
