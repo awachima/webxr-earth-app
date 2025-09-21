@@ -81,6 +81,7 @@
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
+            <!-- ▼ 初期は OFF なので ghost（白背景）。ON に切り替え時は JS で ghost を外す -->
             <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">自動字幕ON</button>
           </div>
           <div id="mobileModeRow" class="row" style="display:none">
@@ -324,8 +325,18 @@
     sttBtn.style.display = audioOn ? 'inline-flex' : 'none';
     voiceHint.textContent = audioOn ? (micMuted?'ミュート中':'音声有効') : '未参加';
   }
+
+  // ★ ここを要件どおりに変更：
+  //   ON = 黒背景／白文字（.btn）、表示テキスト「自動字幕OFF」
+  //   OFF = 白背景／黒文字（.btn.ghost）、表示テキスト「自動字幕ON」
   function updateSttUI(){
-    sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
+    if (sttOn) {
+      sttBtn.className = 'btn';         // 黒背景・白文字
+      sttBtn.textContent = '自動字幕OFF';
+    } else {
+      sttBtn.className = 'btn ghost';   // 白背景・黒文字
+      sttBtn.textContent = '自動字幕ON';
+    }
   }
 
   voicePower.onclick=()=>{ audioOn=!audioOn; updateVoiceUI(); };
