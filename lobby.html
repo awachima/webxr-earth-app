@@ -57,7 +57,6 @@
       </div>
 
       <div class="grid">
-        <!-- 左：カウントダウン & 操作 -->
         <div class="panel">
           <div class="label">カウントダウン</div>
           <div class="count" id="count">--:--:--</div>
@@ -73,22 +72,23 @@
           </div>
         </div>
 
-        <!-- 右：参加者一覧 + チャット + 音声 -->
         <div class="panel">
           <div class="label">参加者</div>
           <div id="members" class="members"></div>
 
           <div class="sep"></div>
           <div class="label">ボイスチャット</div>
-          <!-- ★最小差分：この行に id="voiceRow" を付与（配置制御用） -->
-          <div class="row" id="voiceRow">
+          <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
-            <!-- STTボタンはJSで音声ON時のみここへ移動して表示 -->
+            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信（PC向け）">
+              自動字幕OFF
+            </button>
+            <button id="sttHold" class="btn ghost" type="button" style="display:none"
+              title="長押しで字幕（モバイル推奨）">長押しで字幕</button>
           </div>
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
 
-          <!-- モバイル向け：成功するまで消えない有効化ボタン -->
           <button id="enableSound" class="btn ghost" type="button" style="display:none;margin-top:6px">
             スマホで音を有効化
           </button>
@@ -100,13 +100,6 @@
             <div class="chat-input">
               <input id="chatInput" placeholder="メッセージを入力…" maxlength="2000">
               <button id="chatSend" class="btn" type="button">送信</button>
-              <!-- 自動字幕（PC:トグル / モバイル:長押し） -->
-              <!-- 位置は保持（最小差分のためDOMは残す）が、音声ON時にJSでvoiceRowへ移動して表示します -->
-              <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信（PC向け）" style="display:none">
-                自動字幕OFF
-              </button>
-              <button id="sttHold" class="btn ghost" type="button" style="display:none"
-                title="長押しで字幕（モバイル推奨）">長押しで字幕</button>
             </div>
           </div>
           <div class="status" id="chatStatus" style="margin-top:8px;color:#0a7f3f">接続していません</div>
@@ -454,7 +447,6 @@
   const voicePowerBtn = document.getElementById('voicePower');
   const micToggleBtn  = document.getElementById('micToggle');
   const voiceHint     = document.getElementById('voiceHint');
-  const voiceRow      = document.getElementById('voiceRow');
 
   function updateVoiceUI(){
     const on = !!localStream;
@@ -468,19 +460,18 @@
       micToggleBtn.textContent = 'ミュート';
       voiceHint.textContent = '音声: 未参加';
     }
-    // ★音声状態に応じてSTTボタンの配置・表示を制御
-    placeSttButtons();
   }
 
   voicePowerBtn.onclick = async ()=>{
     if (!localStream){
-      // ON（参加）
+      // ON（参加）— エコー抑制系Constraintを有効化
       try{
         localStream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
         startCalls(rosterMembers);
         updateVoiceUI();
+        // 参加時に自動再生解除も試す
         await tryPlayAllAudios();
         await resumeAudioContext();
       }catch(e){
@@ -580,7 +571,8 @@
   function sttSupportedMobile(){  return !!SR &&  isMobile; }
 
   function updateSttUI(){
-    // 表示判断は placeSttButtons() 側で集約するため、ここでは文言のみ更新
+    sttBtn.style.display  = sttSupportedDesktop() ? '' : 'none';
+    sttHold.style.display = sttSupportedMobile()  ? '' : 'none';
     sttBtn.textContent = sttOn ? '自動字幕ON' : '自動字幕OFF';
   }
 
@@ -590,7 +582,6 @@
     sttOn = false;
     setRemoteMuted(false); // リモート音を復帰
     updateSttUI();
-    placeSttButtons(); // 状態反映
   }
 
   function startStt({continuous}){
@@ -633,13 +624,13 @@
     updateSttUI();
   }
 
-  // PC：ON/OFFトグル
+  // PC：従来どおりON/OFFトグル（continuous = true）
   sttBtn.onclick = () => {
     if (!sttOn) startStt({ continuous: true });
     else stopStt();
   };
 
-  // モバイル：長押しで録音 → 離すと停止
+  // モバイル：長押しで録音 → 離すと停止（continuous = false）
   ['mousedown','touchstart'].forEach(ev =>
     sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); if (!sttOn) startStt({ continuous:false }); })
   );
@@ -648,36 +639,7 @@
   );
 
   window.addEventListener('beforeunload', stopStt);
-
-  // ★追加：STTボタンを「音声ON」の時だけミュートの右に表示
-  function placeSttButtons(){
-    const on = !!localStream;
-    if (!on){
-      // 音声OFF時は非表示
-      sttBtn.style.display = 'none';
-      sttHold.style.display = 'none';
-      return;
-    }
-    // 音声ON時：サポート状況に応じて表示し、voiceRow（ミュートの右）に配置
-    if (sttSupportedDesktop()){
-      sttBtn.style.display = '';
-      // ミュートの右側に移動
-      micToggleBtn.after(sttBtn);
-    }else{
-      sttBtn.style.display = 'none';
-    }
-
-    if (sttSupportedMobile()){
-      sttHold.style.display = '';
-      // さらに右側に配置
-      (sttSupportedDesktop() ? sttBtn : micToggleBtn).after(sttHold);
-    }else{
-      sttHold.style.display = 'none';
-    }
-  }
-
   updateSttUI();
-  placeSttButtons();
   // ===================================
   </script>
 </body>
