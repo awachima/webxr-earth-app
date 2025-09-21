@@ -80,15 +80,13 @@
 
           <div class="sep"></div>
           <div class="label">ボイスチャット</div>
-
-          <!-- 単一ボタン化（音声ON/音声OFF）＋ ミュートは音声ON時のみ表示 -->
           <div class="row">
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
           </div>
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
 
-          <!-- スマホ向け：自動再生制限を解除するための明示ボタン（モバイルのみ表示） -->
+          <!-- モバイル向け：成功するまで消えない -->
           <button id="enableSound" class="btn ghost" type="button" style="display:none;margin-top:6px">
             スマホで音を有効化
           </button>
@@ -334,6 +332,23 @@
   const audios = new Map(); // id -> <audio>
   const pcConfig = { iceServers };
 
+  // === WebAudio Bridge ===
+  let audioCtx = null;
+  function getAudioCtx(){
+    try{
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }catch(_){ return null; }
+  }
+  function bindRemoteToAudioCtx(stream){
+    try{
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      const src = ctx.createMediaStreamSource(stream);
+      src.connect(ctx.destination);
+    }catch(e){ /* 失敗しても無視 */ }
+  }
+
   function wsSend(obj){
     try { ws?.readyState===1 && ws.send(JSON.stringify(obj)); } catch {}
   }
@@ -341,17 +356,25 @@
   function createPeer(peerId){
     const pc = new RTCPeerConnection(pcConfig);
     pc.ontrack = (ev) => {
+      // 1) <audio> での再生も継続
       let el = audios.get(peerId);
       if (!el) {
         el = document.createElement('audio');
         el.autoplay = true;
         el.playsInline = true;
+        el.muted = false;
+        el.volume = 1;
         audios.set(peerId, el);
         document.body.appendChild(el);
       }
       el.srcObject = ev.streams[0];
-      // ★ 追加：iOS/Androidの自動再生対策として、トラック受信直後に明示再生を試みる
       try { el.play(); } catch (e) {}
+
+      // 2) WebAudio にもブリッジ（自動再生制限を迂回しやすい）
+      bindRemoteToAudioCtx(ev.streams[0]);
+
+      // 3) 失敗している場合は「音を有効化」を再提示
+      maybeShowEnableButton();
     };
     pc.onicecandidate = (ev) => {
       if (ev.candidate) wsSend({ rtc: { to: peerId, type: "candidate", data: ev.candidate }});
@@ -402,7 +425,7 @@
     }
   }
 
-  // ===== 新：音声ON/OFFトグル＋ミュート表示制御 =====
+  // ===== 音声ON/OFFトグル＋ミュート表示制御 =====
   const voicePowerBtn = document.getElementById('voicePower');
   const micToggleBtn  = document.getElementById('micToggle');
   const voiceHint     = document.getElementById('voiceHint');
@@ -428,6 +451,9 @@
         localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
         startCalls(rosterMembers); // 参加中なら新規相手へ発呼
         updateVoiceUI();
+        // 参加時にも音解禁を試す（モバイルで効きやすい）
+        await tryPlayAllAudios();
+        await resumeAudioContext();
       }catch(e){
         alert('マイク権限を許可してください'); console.error(e);
       }
@@ -437,6 +463,7 @@
       if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
       updateVoiceUI();
     }
+    maybeShowEnableButton();
   };
 
   micToggleBtn.onclick = ()=>{
@@ -449,22 +476,60 @@
 
   updateVoiceUI();
 
-  // ===== モバイル自動再生対策（音を有効化ボタン） =====
+  // ===== モバイル自動再生対策（成功まで消さない） =====
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   const enableBtn = document.getElementById('enableSound');
 
+  function anyAudioPlaying(){
+    let ok = false;
+    audios.forEach(el => { if (!el.paused) ok = true; });
+    return ok;
+  }
+
   async function tryPlayAllAudios(){
+    // 既存Map
     for (const el of audios.values()){
-      try { await el.play(); } catch (e) {}
+      try { el.volume = 1; el.muted = false; await el.play(); } catch (e) {}
     }
+    // 念のためDOM上すべて
     document.querySelectorAll('audio').forEach(async (el)=>{
-      try { await el.play(); } catch (e) {}
+      try { el.volume = 1; el.muted = false; await el.play(); } catch (e) {}
     });
   }
 
+  async function resumeAudioContext(){
+    try{
+      const ctx = getAudioCtx();
+      if (!ctx) return false;
+      if (ctx.state !== 'running'){
+        await ctx.resume();
+      }
+      return ctx.state === 'running';
+    }catch(_){ return false; }
+  }
+
   async function enableSound(){
+    // ユーザー操作内で両輪を実行
+    const r1 = await resumeAudioContext();
     await tryPlayAllAudios();
-    enableBtn.style.display = 'none';
+    // 成功判定：AudioContextがrunning もしくは何かが再生中
+    if (r1 || anyAudioPlaying()){
+      enableBtn.style.display = 'none';
+    }else{
+      enableBtn.textContent = '音が出ない？もう一度有効化';
+      enableBtn.style.display = '';
+    }
+  }
+
+  function maybeShowEnableButton(){
+    if (!isMobile) return;
+    // 成功済みなら隠す。未成功なら表示して再試行を促す。
+    const ctxOk = audioCtx && audioCtx.state === 'running';
+    if (ctxOk || anyAudioPlaying()){
+      enableBtn.style.display = 'none';
+    }else{
+      enableBtn.style.display = '';
+    }
   }
 
   function setupMobileAudioGate(){
@@ -472,15 +537,17 @@
     enableBtn.style.display = '';
     enableBtn.onclick = enableSound;
 
-    // 一度でもタップ/クリックがあれば再生を試みる（ワンショット）
-    let tried = false;
+    // 一度でもタップ/クリックがあれば再生を試みる（毎回試すがUXに影響しない）
     const oneShot = async ()=>{
-      if (tried) return;
-      tried = true;
-      await tryPlayAllAudios();
+      await enableSound();
     };
-    document.addEventListener('touchend', oneShot, { once: true });
-    document.addEventListener('click',     oneShot, { once: true });
+    document.addEventListener('touchend', oneShot);
+    document.addEventListener('click',     oneShot);
+
+    // ページが再表示されたときにも試す
+    document.addEventListener('visibilitychange', ()=>{
+      if (!document.hidden) maybeShowEnableButton();
+    });
   }
   setupMobileAudioGate();
   // ===================================
