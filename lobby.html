@@ -425,9 +425,9 @@
   function newRecognizer(){
     const r = new SR();
     r.lang = 'ja-JP';
-    r.interimResults = true; // 中間結果を受け取る
+    r.interimResults = true;
     r.maxAlternatives = 1;
-    r.continuous = false; // Androidでの不安定性を避けるため、連続モードを無効化
+    r.continuous = isMobile ? false : true; // 修正：環境に合わせて連続モードを切り替え
     return r;
   }
 
@@ -452,21 +452,32 @@
     };
 
     recog.onresult = (e) => {
-      // 最終結果を待たず、中間結果を即座に送信する
-      const lastResultIndex = e.results.length - 1;
-      const t = e.results[lastResultIndex][0].transcript || '';
-      
-      // バッファに溜まっている内容と異なるときだけ送信
-      if (t.trim() && t.trim() !== sttBuffer.trim()) {
-        sendChatLine(t.trim());
-        sttBuffer = t;
+      // 修正：PCとモバイルでロジックを切り替える
+      const res = e.results[e.results.length - 1]; // 最新の結果を取得
+      const t = res[0].transcript || '';
+
+      if (isMobile) {
+        // モバイルの場合：最終結果を待たず、中間結果を即座に送信
+        if (t.trim() && t.trim() !== sttBuffer.trim()) {
+          sendChatLine(t.trim());
+          sttBuffer = t; // バッファに中間結果を保存
+        }
+      } else {
+        // PCの場合：最終結果（isFinal）のみを送信
+        if (res.isFinal) {
+          sendChatLine(t.trim());
+          sttBuffer = ''; // 確定したらバッファをクリア
+        }
       }
     };
 
     recog.onend = ()=>{
       setRemoteMuted(false);
-      // セッションが終了したら、必ずバッファをクリア
-      sttBuffer = '';
+      // 最終結果が確定しなかった場合にバッファを送信
+      if (sttBuffer.trim()) {
+        sendChatLine(sttBuffer.trim());
+        sttBuffer = '';
+      }
       
       // ユーザーがOFFにしていなければ、自動的に再開
       if (sttOn && myCycle === sttCycleId){
