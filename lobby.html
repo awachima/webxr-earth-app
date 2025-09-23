@@ -407,7 +407,7 @@
   let recog = null;
   let sttBuffer = '';
   let sttCycleId = 0;
-  let sttTimeoutTimer = null;
+  let sttErrorOccurred = false; // 修正：エラーフラグを追加
 
   function sttAvailable(){ return !!SR; }
 
@@ -441,60 +441,60 @@
     const myCycle = sttCycleId;
     recog = newRecognizer();
     sttBuffer = '';
+    sttErrorOccurred = false; // 修正：エラーフラグをリセット
     setRemoteMuted(true);
 
     recog.onstart = ()=>{
       addSys('音声認識を開始しました。話してください...');
-      clearTimeout(sttTimeoutTimer);
-      sttTimeoutTimer = null;
     };
 
     recog.onspeechend = ()=>{
+      // 話し終わったら明示的に停止
       try { recog.stop(); } catch {}
     };
 
     recog.onresult = (e) => {
-      clearTimeout(sttTimeoutTimer);
-      sttTimeoutTimer = setTimeout(() => {
-        try { recog.stop(); } catch {}
-      }, 2000);
-
-      const res = e.results[e.results.length - 1];
+      const res = e.results[e.results.length - 1]; // 最新の結果を取得
       const t = res[0].transcript || '';
 
       if (isMobile) {
+        // モバイルの場合：最終結果を待たず、中間結果を即座に送信
         if (t.trim() && t.trim() !== sttBuffer.trim()) {
           sendChatLine(t.trim());
-          sttBuffer = t;
+          sttBuffer = t; // バッファに中間結果を保存
         }
       } else {
+        // PCの場合：最終結果（isFinal）のみを送信
         if (res.isFinal) {
           sendChatLine(t.trim());
-          sttBuffer = '';
+          sttBuffer = ''; // 確定したらバッファをクリア
         }
       }
     };
 
     recog.onend = ()=>{
       setRemoteMuted(false);
-      clearTimeout(sttTimeoutTimer);
-      sttTimeoutTimer = null;
-
+      // 最終結果が確定しなかった場合にバッファを送信
       if (sttBuffer.trim()) {
         sendChatLine(sttBuffer.trim());
         sttBuffer = '';
       }
       
-      if (sttOn && myCycle === sttCycleId){
+      // 修正：エラーがなければ再起動
+      if (sttOn && myCycle === sttCycleId && !sttErrorOccurred){
         setTimeout(()=>{
           if (sttOn && myCycle === sttCycleId) startStt();
-        }, 100);
+        }, 200); // 修正：再起動までの遅延を短くする
+      } else if (sttErrorOccurred) {
+        stopStt();
+        addSys('自動字幕が停止しました。再度お試しください。');
       }
     };
 
     recog.onerror = (ev)=>{
       addDebug(`[SR:error] ${ev.error||''}`);
       addSys(`字幕エラー: ${ev.error}`);
+      sttErrorOccurred = true; // 修正：エラーフラグを立てる
     };
     
     try {
@@ -512,7 +512,7 @@
   }
 
   function stopStt(){
-    sttCycleId++;
+    sttCycleId++; // 再開ループを停止させる
     if (recog) {
       try { recog.stop(); } catch {}
     }
@@ -522,6 +522,7 @@
     updateSttUI();
   }
 
+  // --- sttToggle ボタンにクリックイベントを追加 ---
   sttBtn.onclick = () => {
     if (sttOn) {
       stopStt();
@@ -529,9 +530,11 @@
       startStt();
     }
   };
+  // --------------------------------------------------------
 
   window.addEventListener('beforeunload', stopStt);
 
+  // 初期UI反映
   updateVoiceUI();
   updateSttUI();
   </script>
