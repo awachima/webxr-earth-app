@@ -62,13 +62,11 @@
 <body>
   <div class="wrap">
     <header>
-      <!-- 右上の「＋ 待ち合わせを作る」は削除 -->
       <div>Dokodemo Doors ファンサイト</div>
     </header>
 
     <div class="stage">
       <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="ロゴ">
-      <!-- ▼ 最小差分（scrolling="no" を付与） -->
       <iframe id="webxr-iframe" title="WebXR Earth" src="./earth.html" allow="xr-spatial-tracking; fullscreen" scrolling="no"></iframe>
     </div>
 
@@ -80,13 +78,11 @@
     </section>
   </div>
 
-  <!-- ▼ 右下の FAB（テキスト付き） -->
   <div class="fab" id="fab">
     <span class="fab-icon">＋</span>
     <span class="fab-label">待ち合わせ部屋を作る</span>
   </div>
 
-  <!-- 作成/編集モーダル -->
   <div class="backdrop" id="backdrop">
     <div class="modal">
       <header><div id="modalTitle">待ち合わせを作成</div><div class="close" id="close">×</div></header>
@@ -288,10 +284,11 @@
     async function postRegistry(item){
       try{
         const owner = localStorage.getItem('nickname') || null;
+        const ownerKey = readOwners()[item.roomId] || null;
         await fetch(REGISTRY_API, {
           method: "POST",
           headers: {"content-type":"application/json"},
-          body: JSON.stringify({ roomId: item.roomId, title: item.title, start: item.start, limit: item.limit, target: item.target, owner })
+          body: JSON.stringify({ roomId: item.roomId, title: item.title, start: item.start, limit: item.limit, target: item.target, owner, ownerKey })
         });
       }catch(e){ console.warn('[registry]', e); }
     }
@@ -348,11 +345,31 @@
       alert('複製しました（目的URLは元と同じです）');
     }
 
-    function onDelete(){
+    async function onDelete(){
       if(!editingRoomId) return;
+      try {
+        const ownerKey = readOwners()[editingRoomId];
+        if (!ownerKey) {
+          alert("この端末にオーナー情報がないため、削除できません。");
+          return;
+        }
+        const res = await fetch(REGISTRY_API, {
+          method: "DELETE",
+          headers: {"content-type":"application/json"},
+          body: JSON.stringify({ roomId: editingRoomId, ownerKey: ownerKey })
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(`削除に失敗しました: ${data.error || res.statusText}`);
+          return;
+        }
+      } catch (e) {
+        alert("サーバーへの接続中にエラーが発生しました。");
+        console.warn('[registry DELETE]', e);
+        return;
+      }
       autoDeleteRoom(editingRoomId);
       closeModal();
-      // ※ 共有レジストリ側は「開始+20分」で自動消滅。即時削除APIは最小差分のため未実装。
     }
 
     // bind
@@ -369,12 +386,20 @@
     $('#duplicate').onclick=onDuplicate;
     $('#delete').onclick=onDelete;
 
-    // ===== 共有レジストリから一覧を取得（起動時に1回） =====
+    // ===== 共有レジストリから一覧を取得（起動時に1回＆定期実行） =====
     async function loadShared(){
       try{
         const res = await fetch(REGISTRY_API);
         const j = await res.json();
         if (j && j.ok && Array.isArray(j.rooms)) {
+          const remoteRoomIds = new Set(j.rooms.map(r => r.roomId));
+          // サーバーに存在しないローカルのカードを削除
+          $$('#grid .card').forEach(card => {
+            const roomId = card.dataset.roomId;
+            if (roomId && !remoteRoomIds.has(roomId)) {
+              card.remove();
+            }
+          });
           j.rooms.forEach(upsertCard);
         }
       }catch(e){
@@ -382,6 +407,7 @@
       }
     }
     loadShared();
+    setInterval(loadShared, 30000);
 
     // ===== 隠し一括初期化 (Ctrl+Alt+X) =====
     const ADMIN_HASH = "REPLACE_WITH_SHA-256_HEX"; // ← あなたのパスフレーズの SHA-256(HEX) を設定
@@ -414,7 +440,6 @@
     });
   </script>
 
-  <!-- ▼ 最小差分：ホイール挙動の状況別抑止（iframe 上では親スクロール停止／外では親のみ） -->
   <script>
     (function(){
       var iframe = document.getElementById('webxr-iframe');

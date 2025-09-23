@@ -8,312 +8,576 @@
     body{margin:0;background:#f6f7fb;color:#111;font:16px system-ui}
     header{background:#111;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
     main{display:grid;place-items:center;padding:24px 16px}
-    .card{width:min(1100px,96vw);background:#fff;border:1px solid #e9e9ef;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.08);padding:20px}
+    .card{width:min(1100px,96vw);background:#fff;border:1px solid #ececf0;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.08);padding:20px}
     h1{font-size:20px;margin:4px 0 8px}
     .meta{color:#666;font-size:14px;margin-bottom:12px}
     .grid{display:grid;grid-template-columns:1fr 660px;gap:16px}
     @media(max-width:980px){.grid{grid-template-columns:1fr}}
     .panel{border:1px solid #eee;border-radius:12px;padding:14px;background:#fff}
     .label{color:#666;font-size:12px;font-weight:700;text-transform:uppercase}
-    .count{font-variant-numeric:tabular-nums;font-weight:700}
-    .pill{display:none;background:#111;color:#fff;font-size:12px;padding:4px 8px;border-radius:999px;margin-left:8px}
-    .controls{display:flex;gap:8px;flex-wrap:wrap}
-    .btn{border:1px solid #ddd;background:#fff;border-radius:10px;padding:10px 12px;cursor:pointer}
-    .btn.ghost{background:#f3f4f8;color:#333}
-    .btn.primary{background:#111;color:#fff;border-color:#111}
-    .row{display:flex;gap:8px;align-items:center}
-    .muted{color:#666;font-size:12px}
-    .chat{height:360px;overflow:auto;border:1px solid #eee;border-radius:12px;padding:10px;background:#fcfcff}
-    .msg{margin:0 0 8px}
-    .me{color:#111}
-    .sys{color:#888;font-style:italic}
-    .debug{white-space:pre-wrap;font-size:11px;color:#666;background:#fafafa;border:1px dashed #ccc;border-radius:8px;padding:8px;height:120px;overflow:auto}
-    .pillwarn{color:#b00;font-weight:700}
-    .spacer{flex:1}
+    .count{font-variant-numeric:tabular-nums;font-weight:800;font-size:36px;margin:6px 0 4px}
+    .status{font-size:13px;color:#666}
+    .btn{appearance:none;border:1px solid #111;background:#111;color:#fff;padding:10px 16px;border-radius:12px;cursor:pointer;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+    .btn.ghost{background:#fff;color:#111}
+    .btn[disabled]{opacity:.5;cursor:not-allowed}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+    .sep{height:1px;background:#eee;margin:16px 0}
+    .copy{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ddd;border-radius:10px}
+    /* chat */
+    .chat{display:flex;flex-direction:column;height:520px}
+    .chat-log{flex:1;border:1px solid #eee;border-radius:12px;padding:10px;overflow:auto;background:#fafafa}
+    .msg{margin:6px 0;padding:8px 10px;border-radius:10px;max-width:85%;word-break:break-word;font-size:14px}
+    .msg.me{background:#e6f3ff;margin-left:auto}
+    .msg.other{background:#fff;border:1px solid #eee}
+    .msg.sys{background:#f3f4f6;border:1px dashed #ddd;color:#555;font-size:12px;text-align:center}
+    .chat-input{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .chat-input input{flex:1;min-width:200px;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:14px}
+    /* members */
+    .members{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto;margin-top:8px}
+    .member{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid #eee;border-radius:9999px;background:#fafafa;font-size:14px}
+    .badge{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:9999px;background:#111;color:#fff;font-size:12px;font-weight:700}
+    /* switches */
+    .switch{display:inline-flex;align-items:center;gap:6px;font-size:13px}
+    .switch input{width:18px;height:18px}
   </style>
 </head>
 <body>
   <header>
-    <div class="row">
-      <strong id="title">待ち合わせロビー</strong>
-      <span id="limitPill" class="pill"></span>
-    </div>
-    <div class="row">
-      <button id="enter" class="btn primary">入室（新しいタブで開く）</button>
+    <div>待ち合わせロビー</div>
+    <div style="display:flex; gap:8px; align-items:center">
+      <button id="setName" class="btn ghost" type="button">ニックネーム</button>
+      <a class="btn ghost" href="./index.html">← 戻る</a>
     </div>
   </header>
 
   <main>
     <div class="card">
-      <div class="grid">
-        <section class="panel">
-          <div class="label">情報</div>
-          <div class="meta" id="meta">開始前です。</div>
-
-          <div class="controls" style="margin:8px 0 12px">
-            <button id="voiceOn"  class="btn">音声ON</button>
-            <button id="mute"     class="btn ghost">ミュート</button>
-            <button id="sttBtn"   class="btn ghost" title="音声ON時のみ表示">自動字幕ON</button>
-            <div id="sttHold" class="row muted" style="display:none">（長押しで一時的に字幕）</div>
-            <div class="spacer"></div>
-            <span class="muted">参加者：<span id="members">0</span>人</span>
-          </div>
-
-          <div class="chat" id="chat"></div>
-
-          <div class="row" style="margin-top:8px">
-            <input id="input" class="btn" style="flex:1" placeholder="メッセージ入力…" />
-            <button id="send" class="btn">送信</button>
-          </div>
-        </section>
-
-        <aside class="panel">
-          <div class="label">デバッグ</div>
-          <div id="debug" class="debug">(ログ)</div>
-        </aside>
+      <div>
+        <div class="pill" id="limitPill" style="display:none"></div>
+        <h1 id="title">（タイトル未設定）</h1>
+        <div class="meta" id="meta">開始時刻：—</div>
       </div>
+
+      <div class="grid">
+        <div class="panel">
+          <div class="label">カウントダウン</div>
+          <div class="count" id="count">--:--:--</div>
+          <div class="status" id="status">開始までお待ちください。</div>
+          <div class="row">
+            <a id="enter" class="btn" target="_top" rel="noopener">ツアーに行く</a>
+          </div>
+          <div class="sep"></div>
+          <div class="row">
+            <button id="copy" class="btn" type="button">この待合室のURLをコピー</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="label">参加者</div>
+          <div id="members" class="members"></div>
+
+          <div class="sep"></div>
+          <div class="label">ボイスチャット</div>
+          <div class="row">
+            <button id="voicePower" class="btn" type="button">音声ON</button>
+            <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
+            <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">自動字幕ON</button>
+            <button id="sttHold" class="btn ghost" type="button" style="display:none" title="長押しで字幕（旧方式）">長押しで字幕</button>
+          </div>
+          <!-- モバイル向け：認識中のみマイク送信を一時停止する安全モード（任意） -->
+          <div id="mobileModeRow" class="row" style="display:none">
+            <label class="switch" title="認識中のみ相手へのマイク送信を一時停止して字幕化します（同時利用が不安定な端末向け）">
+              <input type="checkbox" id="mobileCaptionMode">
+              <span>字幕優先モード（モバイル）</span>
+            </label>
+          </div>
+          <!-- 新規：サーバー字幕モード（Web Speech APIが無い端末向けの確実策） -->
+          <div id="serverModeRow" class="row" style="display:none">
+            <label class="switch" title="音声の短い塊をWebSocketでサーバーへ送り、サーバーで文字起こし（Whisper等）して返します。ブラウザ非対応を回避します。">
+              <input type="checkbox" id="serverSttMode">
+              <span>サーバー字幕モード</span>
+            </label>
+          </div>
+
+          <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
+          <button id="enableSound" class="btn ghost" type="button" style="display:none;margin-top:6px">スマホで音を有効化</button>
+
+          <div class="sep"></div>
+          <div class="label">テキストチャット</div>
+          <div class="chat">
+            <div id="chatLog" class="chat-log" aria-live="polite"></div>
+            <div class="chat-input">
+              <input id="chatInput" placeholder="メッセージを入力…" maxlength="2000">
+              <button id="chatSend" class="btn" type="button">送信</button>
+            </div>
+          </div>
+          <div class="status" id="chatStatus" style="margin-top:8px;color:#0a7f3f">接続していません</div>
+        </div>
+      </div>
+
+      <div class="sep"></div>
+      <pre id="debug" style="font:12px ui-monospace,monospace;color:#555;white-space:pre-wrap"></pre>
     </div>
   </main>
+  <footer style="color:#888;font-size:12px;text-align:center;padding:18px">© DokodemoDoors</footer>
 
   <script>
-  // 便宜上の util
-  const $ = (s)=>document.querySelector(s);
-  const addMsg = (who, text)=>{
-    const el = document.createElement('div');
-    el.className = 'msg ' + (who==='sys'?'sys':'me');
-    el.textContent = (who==='sys'?`[通知] `:'') + text;
-    $('#chat').appendChild(el);
-    $('#chat').scrollTop = $('#chat').scrollHeight;
-  };
-  const addDebug = (s)=>{
-    const el = $('#debug');
-    el.textContent += (el.textContent ? '\n' : '') + s;
-    el.scrollTop = el.scrollHeight;
-  };
+  // ===== 基本パラメータ =====
+  const NEGATIVE_LIMIT_MS = 20*60*1000;
+  const S='meetups-store', O='meetups-owners';
+  const readStore=()=>JSON.parse(localStorage.getItem(S)||'[]');
+  const writeStore=(arr)=>localStorage.setItem(S,JSON.stringify(arr));
+  const readOwners=()=>JSON.parse(localStorage.getItem(O)||'{}');
+  const writeOwners=(map)=>localStorage.setItem(O,JSON.stringify(map));
+  function autoDeleteRoom(roomId){
+    if(!roomId) return;
+    const remain = readStore().filter(x=>x.roomId!==roomId);
+    writeStore(remain);
+    const owners = readOwners(); delete owners[roomId]; writeOwners(owners);
+    console.info('[auto-delete - lobby]', roomId, 'を削除しました');
+  }
 
-  // URLパラメタ
-  const params = new URLSearchParams(location.search);
-  const title = params.get('title') || '待ち合わせロビー';
-  const limit = Number(params.get('limit') || '') || 0;
-
-  // 端末判定
-  const fmt = (n)=> String(n).padStart(2,'0');
+  const $=(s)=>document.querySelector(s);
+  const p=new URLSearchParams(location.search);
+  const title=p.get('title')||'待ち合わせ';
+  const start=p.get('start');
+  const limit=parseInt(p.get('limit')||'10',10);
+  const target=p.get('target')||'';
+  const roomId=p.get('roomId')||'';
+  const user=localStorage.getItem('nickname')||`Guest-${Math.random().toString(16).slice(2,6)}`;
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const isIOS    = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition; // Web Speech API（ローカル）
 
-  $('#title').textContent = title;
-  document.title = title + ' | 待ち合わせロビー';
-  if (Number.isFinite(limit) && limit > 0) {
-    const pill = document.createElement('div');
-    pill.className = 'pill';
-    pill.textContent = `参加上限 ${limit} 名`;
-    pill.style.display = 'inline-flex';
+  $('#title').textContent=title;
+  document.title=title+' | 待ち合わせロビー';
+  if(Number.isFinite(limit)&&limit>0){
+    const pill=document.createElement('div');
+    pill.className='pill';
+    pill.textContent=`参加上限 ${limit} 名`;
+    pill.style.display='inline-flex';
     $('#limitPill').replaceWith(pill);
   }
 
   const enterBtn = $('#enter');
+  const validTarget = /^https?:\/\//i.test(target);
+  if (validTarget) { enterBtn.href = target; } else { enterBtn.style.display = 'none'; }
 
-  // WebSocket 接続
-  const roomId = params.get('id') || 'default';
-  const ws = new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/${encodeURIComponent(roomId)}`);
-
-  ws.addEventListener('open', ()=> addDebug('[WS] open'));
-  ws.addEventListener('close',()=> addDebug('[WS] close'));
-  ws.addEventListener('error',()=> addDebug('[WS] error'));
-
-  function wsSend(objOrText){
-    try{
-      const s = (typeof objOrText === 'string') ? objOrText : JSON.stringify(objOrText);
-      ws.send(s);
-    }catch(e){ console.warn('[WS:send error]', e); }
-  }
-
-  // チャット受信
-  ws.onmessage = (ev)=>{
-    try{
-      const data = JSON.parse(ev.data);
-
-      // 受信: サーバーSTTの文字列（自分宛）
-      if (data.sttText && typeof data.sttText.text === 'string'){
-        addMsg('me', `（自動字幕）${data.sttText.text}`);
-        const dbg = document.getElementById('debug');
-        dbg.textContent += `\n[SSTT:recv seq=${data.sttText.seq}] ${data.sttText.text}`;
-        return;
-      }
-
-      // WebRTC シグナリングなど（必要に応じて既存の分岐をこの下に保持）
-      if (data.sys && data.type==='join'){
-        $('#members').textContent = String(data.count || 0);
-        addMsg('sys', `${data.name || '誰か'}さんが入室しました。`);
-        return;
-      }
-      if (data.sys && data.type==='leave'){
-        $('#members').textContent = String(data.count || 0);
-        addMsg('sys', `${data.name || '誰か'}さんが退室しました。`);
-        return;
-      }
-      if (data.sys && data.type==='roster'){
-        $('#members').textContent = String((data.members||[]).length);
-        return;
-      }
-
-      // 通常のチャット
-      if (data.name && typeof data.text === 'string'){
-        addMsg('me', `${data.name}: ${data.text}`);
-        return;
-      }
-    }catch{
-      // JSONでない: テキスト扱い
-      if (typeof ev.data === 'string' && ev.data.trim()) {
-        addMsg('me', ev.data.trim());
-      }
+  let startDate=null; if(start){ startDate=new Date(start); $('#meta').textContent='開始時刻：'+startDate.toLocaleString(); }
+  const pad=(n)=>String(n).padStart(2,'0');
+  function tick(){
+    if(!startDate){
+      $('#count').textContent='--:--:--';
+      $('#status').innerHTML='<span style="color:#b00020">開始時刻未設定</span>';
+      requestAnimationFrame(tick); return;
     }
+    const now = new Date(); const diff = startDate - now;
+    if (diff > 0){
+      const h=Math.floor(diff/3600000), m=Math.floor(diff/60000)%60, s=Math.floor(diff/1000)%60;
+      $('#count').textContent=`${pad(h)}:${pad(m)}:${pad(s)}`;
+      $('#status').textContent='開始までお待ちください。';
+      requestAnimationFrame(tick); return;
+    }
+    const expireAt = new Date(startDate.getTime() + NEGATIVE_LIMIT_MS);
+    const remainMs = expireAt - now;
+    if (remainMs > 0){
+      const remainMin = Math.ceil(remainMs / 60000);
+      $('#count').textContent = `消滅まで後${pad(remainMin)}分`;
+      $('#status').textContent='開始済み：入室できます（20分以内）';
+      requestAnimationFrame(tick);
+    } else {
+      autoDeleteRoom(roomId);
+      $('#count').textContent = '消滅しました';
+      $('#status').innerHTML = '<span style="color:#b00020">この待ち合わせは終了しました</span>';
+    }
+  }
+  requestAnimationFrame(tick);
+
+  $('#copy').onclick=async()=>{
+    const url = location.href;
+    try{ await navigator.clipboard.writeText(url);
+      $('#copy').textContent = 'コピーしました';
+      setTimeout(()=>$('#copy').textContent='この待合室のURLをコピー', 1200);
+    }catch(e){ prompt('手動コピー：', url); }
   };
 
-  // 入室
-  enterBtn.addEventListener('click', ()=>{
-    const url = params.get('target') || location.href;
-    window.open(url, '_top'); // target=_top（既存仕様を維持）
+  $('#debug').textContent=JSON.stringify({title,start,limit,target,roomId,user,isMobile,isIOS,hasSR:!!SR},null,2);
+
+  document.getElementById('setName').onclick = function setNickname(){
+    const current = localStorage.getItem('nickname') || user;
+    const name = prompt('ニックネームを入力してください：', current);
+    if (!name) return;
+    localStorage.setItem('nickname', name.trim().slice(0, 32));
+    alert('ニックネームを保存しました。ページを再読み込みすると反映されます。');
+  };
+
+  // ===== WebSocket（チャット + シグナリング + サーバーSTT） =====
+  const WS_BASE = 'wss://do-chat.awachima7.workers.dev';
+  const pageParams = new URLSearchParams(location.search);
+  pageParams.set('user', user);
+  const CHAT_URL = `${WS_BASE}/ws/${encodeURIComponent(roomId)}?${pageParams.toString()}`;
+
+  const chatLog = $('#chatLog');
+  const chatInput = $('#chatInput');
+  const chatSend = $('#chatSend');
+  const chatStatus = $('#chatStatus');
+
+  const membersEl = $('#members');
+  function renderMembers(list){
+    membersEl.innerHTML = '';
+    if (!list || list.length===0){
+      const empty = document.createElement('div');
+      empty.className = 'status';
+      empty.textContent = '参加者はいません。';
+      membersEl.appendChild(empty);
+      return;
+    }
+    list.forEach((m, idx)=>{
+      const row = document.createElement('div');
+      row.className = 'member';
+      const badge = document.createElement('div');
+      badge.className = 'badge';
+      badge.textContent = String(idx+1);
+      const label = document.createElement('div');
+      label.textContent = m.name + (m.id ? ` (${m.id.slice(0,6)})` : '');
+      row.appendChild(badge);
+      row.appendChild(label);
+      membersEl.appendChild(row);
+    });
+  }
+
+  function addMsg(elClass, text){
+    const div=document.createElement('div');
+    div.className='msg '+elClass;
+    div.textContent=text;
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+  function addSys(text){
+    const div=document.createElement('div');
+    div.className='msg sys';
+    div.textContent=text;
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  let ws, focused = true;
+  window.addEventListener('focus', ()=> focused=true);
+  window.addEventListener('blur', ()=> focused=false);
+
+  let myId = null;
+  let rosterMembers = [];
+
+  function connect(){
+    try{
+      ws = new WebSocket(CHAT_URL);
+      ws.onopen = ()=>{ chatStatus.textContent='接続しました'; };
+      ws.onclose = ()=>{ chatStatus.textContent='切断されました。再接続を試みます…'; setTimeout(connect, 1500); };
+      ws.onerror = ()=>{ chatStatus.textContent='エラーが発生しました'; };
+      ws.onmessage = (ev)=>{
+        try{
+          const data = JSON.parse(ev.data);
+
+          // 受信: サーバーSTTの文字列（自分宛）
+          if (data.sttText && typeof data.sttText.text === 'string'){
+            addMsg('me', `（自動字幕）${data.sttText.text}`);
+            const dbg = document.getElementById('debug');
+            dbg.textContent += `\n[SSTT:recv seq=${data.sttText.seq}] ${data.sttText.text}`;
+            return;
+          }
+
+          // WebRTC シグナリング
+          if (data.rtc) { onRtcSignal(data); return; }
+
+          // システム
+          if (data.sys){
+            if (data.type === 'welcome'){ myId = data.id; }
+            else if (data.type === 'history' && Array.isArray(data.messages)){
+              data.messages.forEach((line)=>{ try{
+                const obj = JSON.parse(line);
+                const klass = (obj.name===user)?'me':'other';
+                addMsg(klass, `${obj.name}: ${obj.text}`);
+              }catch{} });
+              addSys('— 過去のメッセージを読み込みました —');
+            } else if (data.type === 'roster'){
+              rosterMembers = Array.isArray(data.members) ? data.members : [];
+              renderMembers(rosterMembers);
+              if (localStream) startCalls(rosterMembers);
+            } else if (data.type === 'join'){
+              addSys(`${data.name} が参加しました（合計 ${data.count} 名）`);
+            } else if (data.type === 'leave'){
+              addSys(`${data.name} が退出しました（合計 ${data.count} 名）`);
+              if (data.id) cleanupPeer(data.id);
+            }
+            return;
+          }
+
+          // テキスト（通常チャット）
+          const obj = data;
+          const klass = (obj.name===user)?'me':'other';
+          addMsg(klass, `${obj.name}: ${obj.text}`);
+        }catch{ /* 非JSONは無視 */ }
+      };
+    }catch(e){ chatStatus.textContent='接続に失敗しました'; console.error(e); }
+  }
+  connect();
+
+  chatSend.onclick = ()=>{
+    const t = (chatInput.value||'').trim();
+    if(!t || !ws || ws.readyState!==1) return;
+    ws.send(t);
+    chatInput.value='';
+  };
+  chatInput.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); chatSend.click(); }
   });
 
-  // 入力・送信
-  $('#send').addEventListener('click', ()=>{
-    const v = $('#input').value.trim();
-    if (!v) return;
-    wsSend(v);
-    $('#input').value = '';
-  });
+  // ========= WebRTC (voice) =========
+  const iceServers = [{ urls: [
+    'stun:stun.l.google.com:19302',
+    'stun:stun1.l.google.com:19302'
+  ]}];
+  const pcConfig = { iceServers };
 
-  // ───── 音声入力（ローカルSTT ＆ サーバーSTT） ─────
   let localStream = null;
-  let rec = null;
-  let recSeq = 0;
-  const CHUNK_MS = 3200; // Android で安定しやすい既定
-  let sttOn = false;
+  const peers = new Map();
+  const audios = new Map();
 
-  const sttBtn  = $('#sttBtn');
-  const sttHold = $('#sttHold');
-  const voiceOn = $('#voiceOn');
-  const muteBtn = $('#mute');
+  let audioCtx = null;
+  function getAudioCtx(){ try{ if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }catch(_){ return null; } }
+  function bindRemoteToAudioCtx(stream){ try{ const ctx = getAudioCtx(); if (!ctx) return; const src = ctx.createMediaStreamSource(stream); src.connect(ctx.destination); }catch(e){}
+  }
+  function wsSend(obj){ try { ws?.readyState===1 && ws.send(JSON.stringify(obj)); } catch {}
+  }
+  function setRemoteMuted(muted){ audios.forEach(el => { try { el.muted = muted; el.volume = muted ? 0 : 1; } catch {} }); }
+
+  function createPeer(peerId){
+    const pc = new RTCPeerConnection(pcConfig);
+    pc.ontrack = (ev) => {
+      let el = audios.get(peerId);
+      if (!el) { el = document.createElement('audio'); el.autoplay = true; el.playsInline = true; el.muted = false; el.volume = 1; audios.set(peerId, el); document.body.appendChild(el); }
+      el.srcObject = ev.streams[0];
+      try { el.play(); } catch (e) {}
+      bindRemoteToAudioCtx(ev.streams[0]);
+      maybeShowEnableButton();
+    };
+    pc.onicecandidate = (ev) => { if (ev.candidate) wsSend({ rtc: { to: peerId, type: 'candidate', data: ev.candidate }}); };
+    pc.oniceconnectionstatechange = ()=> console.info('[ICE]', peerId, pc.iceConnectionState);
+    pc.onconnectionstatechange = ()=> console.info('[PC]', peerId, pc.connectionState);
+    if (localStream && localStream.getAudioTracks().length){ for (const track of localStream.getAudioTracks()) pc.addTrack(track, localStream); } else { try { pc.addTransceiver('audio', { direction: 'recvonly' }); } catch {} }
+    peers.set(peerId, pc); return pc;
+  }
+  async function callPeer(peerId){ const pc = createPeer(peerId); const offer = await pc.createOffer(); await pc.setLocalDescription(offer); wsSend({ rtc: { to: peerId, type: 'offer', data: offer }}); }
+  function startCalls(memberList){ if (!localStream) return; const others = (memberList||[]).filter(m => m.id && m.id !== myId); for (const m of others) if (!peers.has(m.id)) callPeer(m.id); }
+  function cleanupPeer(peerId){ const pc = peers.get(peerId); if (pc) { try { pc.close(); } catch{}; peers.delete(peerId); } const el = audios.get(peerId); if (el) { try { el.srcObject=null; el.remove(); } catch{}; audios.delete(peerId); } }
+  function onRtcSignal(msg){ const { from, type, data } = msg.rtc; if (!from || from === myId) return; let pc = peers.get(from); if (!pc) pc = createPeer(from); if (type === 'offer'){ pc.setRemoteDescription(new RTCSessionDescription(data)).then(()=> pc.createAnswer()).then(ans => pc.setLocalDescription(ans).then(()=> wsSend({ rtc:{ to: from, type:'answer', data: ans } }))).catch(console.error); } else if (type === 'answer'){ pc.setRemoteDescription(new RTCSessionDescription(data)).catch(console.error); } else if (type === 'candidate'){ pc.addIceCandidate(new RTCIceCandidate(data)).catch(console.error); } }
+
+  const voicePowerBtn = document.getElementById('voicePower');
+  const micToggleBtn  = document.getElementById('micToggle');
+  const voiceHint     = document.getElementById('voiceHint');
+
+  function updateVoiceUI(){
+    const on = !!localStream;
+    voicePowerBtn.textContent = on ? '音声OFF' : '音声ON';
+    voicePowerBtn.classList.toggle('ghost', !on);
+    micToggleBtn.style.display = on ? '' : 'none';
+    if (on){ const t = localStream.getAudioTracks()[0]; micToggleBtn.textContent = (t && t.enabled) ? 'ミュート' : 'ミュート解除'; voiceHint.textContent = `音声: 参加中（マイク${t && t.enabled ? 'ON' : 'OFF'}）`; }
+    else { micToggleBtn.textContent = 'ミュート'; voiceHint.textContent = '音声: 未参加'; }
+    document.getElementById('mobileModeRow').style.display = (on && isMobile) ? '' : 'none';
+    document.getElementById('serverModeRow').style.display = on ? '' : 'none';
+  }
+  function isMicEnabled(){ if (!localStream) return false; const t = localStream.getAudioTracks()[0]; return !!(t && t.enabled); }
+
+  const mobileCaptionModeEl = document.getElementById('mobileCaptionMode');
+  const mobileCaptionMode = () => !!(isMobile && mobileCaptionModeEl && mobileCaptionModeEl.checked);
+  const serverSttModeEl = document.getElementById('serverSttMode');
+  const serverSttMode = () => !!(serverSttModeEl && serverSttModeEl.checked);
+
+  let sttPreMuteOn = false;
+
+  voicePowerBtn.onclick = async ()=>{
+    if (!localStream){
+      try{
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        startCalls(rosterMembers);
+        updateVoiceUI(); updateSttUI();
+        await tryPlayAllAudios(); await resumeAudioContext();
+      }catch(e){ alert('マイク権限を許可してください'); console.error(e); }
+    } else {
+      for (const id of Array.from(peers.keys())) cleanupPeer(id);
+      if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+      stopStt(); sttPreMuteOn=false; updateVoiceUI(); updateSttUI();
+    }
+    maybeShowEnableButton();
+  };
+
+  micToggleBtn.onclick = ()=>{
+    if (!localStream) return;
+    const t = localStream.getAudioTracks()[0]; if (!t) return;
+    t.enabled = !t.enabled; updateVoiceUI();
+    if (!t.enabled){ sttPreMuteOn = sttOn; if (sttOn && !mobileCaptionMode()) stopStt(); }
+    else { if (sttPreMuteOn){ startStt({ continuous: !isMobile }); } sttPreMuteOn = false; }
+    updateSttUI();
+  };
+
+  // ===== モバイル音声再生ゲート =====
+  const enableBtn = document.getElementById('enableSound');
+  function anyAudioPlaying(){ let ok = false; audios.forEach(el => { if (!el.paused) ok = true; }); return ok; }
+  async function tryPlayAllAudios(){ for (const el of audios.values()){ try { el.volume = 1; el.muted = false; await el.play(); } catch (e) {} } document.querySelectorAll('audio').forEach(async (el)=>{ try { el.volume = 1; el.muted = false; await el.play(); } catch (e) {} }); }
+  async function resumeAudioContext(){ try{ const ctx = getAudioCtx(); if (!ctx) return false; if (ctx.state !== 'running'){ await ctx.resume(); } return ctx.state === 'running'; }catch(_){ return false; } }
+  async function enableSound(){ const r1 = await resumeAudioContext(); await tryPlayAllAudios(); if (r1 || anyAudioPlaying()){ enableBtn.style.display = 'none'; }else{ enableBtn.textContent = '音が出ない？もう一度有効化'; enableBtn.style.display = ''; } }
+  function maybeShowEnableButton(){ if (!isMobile) return; const ctxOk = audioCtx && audioCtx.state === 'running'; if (ctxOk || anyAudioPlaying()){ enableBtn.style.display = 'none'; }else{ enableBtn.style.display = ''; } }
+  function setupMobileAudioGate(){ if (!isMobile) return; enableBtn.style.display = ''; enableBtn.onclick = enableSound; const retry = async ()=>{ await enableSound(); }; document.addEventListener('touchend', retry); document.addEventListener('click', retry); document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) maybeShowEnableButton(); }); }
+  setupMobileAudioGate();
+
+  // ====== 自動字幕（ローカルSTT + サーバーSTT フォールバック） ======
+  const sttBtn  = document.getElementById('sttToggle');
+  const sttHold = document.getElementById('sttHold'); // 非表示のまま
+
+  let sttOn = false;
+  let recog = null;            // ローカルSTT用
+  let sttBuffer = '';
+  let sttCycleId = 0;
+
+  // サーバーSTT用
+  let rec = null;              // MediaRecorder
+  let recSeq = 0;              // 送信シーケンス
+  let recMime = '';
+  const CHUNK_MS = 3200;       // 3.2s くらいでチャンク化（コスト/遅延の妥協点）
+
+  function sttAvailable(){ return !!SR; }
 
   function updateSttUI(){
-    const voiceOk = !!localStream;
-    sttBtn.style.display = voiceOk ? '' : 'none';
+    const voiceOn = !!localStream;
+    const canUse = voiceOn;
+    sttBtn.style.display  = canUse ? '' : 'none';
+    sttHold.style.display = 'none';
+
     sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
     sttBtn.classList.toggle('ghost', !sttOn);
-  }
 
-  async function ensureMic(){
-    if (localStream) return true;
-    try{
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      addDebug('[MIC] granted');
-      return true;
-    }catch(e){
-      addDebug('[MIC] denied');
-      return false;
+    // ローカルSTTが無い場合はサーバーモードを自動推奨
+    if (!sttAvailable()){
+      sttBtn.title = 'サーバー字幕モードで動作します（このブラウザはWeb Speech API非対応）';
+      sttBtn.disabled = !voiceOn;
+      return;
     }
+
+    // ローカルSTTがある場合
+    const micOk = mobileCaptionMode() ? true : isMicEnabled();
+    sttBtn.disabled = !voiceOn || !micOk;
+    sttBtn.title  = serverSttMode()
+      ? 'サーバー字幕モードで動作します（ブラウザ非依存・安定）'
+      : (mobileCaptionMode() ? '（モバイル優先モード）認識中は相手送信を一時停止します' : '自分の発話を自動で文字起こしして送信');
   }
 
-  // ローカルSTT（Web Speech API）開始
-  let recog = null;
-  function startLocalStt(){
-    if (!SR) return false;
-    try{
-      recog = new SR();
-      recog.continuous = true;
-      recog.interimResults = true;
-      recog.lang = 'ja-JP';
-      recog.onresult = (ev)=>{
-        for (let i = ev.resultIndex; i < ev.results.length; i++){
-          const res = ev.results[i];
-          const text = res[0].transcript.trim();
-          if (text) {
-            addMsg('me', `（自動字幕）${text}`);
-          }
-        }
-      };
-      recog.onerror = (e)=> addDebug('[STT:local error] ' + (e?.error || ''));
-      recog.onend   = ()=> addDebug('[STT:local end]');
-      recog.start();
-      addDebug('[STT:local start]');
-      return true;
-    }catch(e){ addDebug('[STT:local fail]'); return false; }
-  }
+  function addDebug(line){ const dbg = document.getElementById('debug'); dbg.textContent += `\n${line}`; }
+  function sendChatLine(text){ if (!text || !ws || ws.readyState!==1) return; ws.send(`（自動字幕）${text}`); }
 
-  // サーバーSTT（MediaRecorder→WS）
+  // ---- サーバーSTT ----
+  function serverSttSupported(){ return !!window.MediaRecorder && !!localStream; }
+
   function startServerStt(){
-    if (!localStream) return false;
+    if (!serverSttSupported()){ alert('このブラウザはMediaRecorderに未対応か、音声がONになっていません'); return false; }
     try{
-      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus' : 'audio/webm';
-      rec = new MediaRecorder(localStream, { mimeType: mime, audioBitsPerSecond: 24000 });
-      const recMime = rec.mimeType;
+      const mimeCandidates = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/ogg'
+      ];
+      recMime = mimeCandidates.find(m => MediaRecorder.isTypeSupported?.(m));
+      if (!recMime){ recMime = ''; }
+      rec = new MediaRecorder(localStream, recMime ? { mimeType: recMime } : undefined);
+    }catch(e){ alert('録音の初期化に失敗しました'); console.error(e); return false; }
 
-      rec.ondataavailable = async (ev)=>{
-        try{
-          if (!ev.data || !ev.data.size) return;
-          const blob = ev.data;
-          const arrbuf = await blob.arrayBuffer();
-          const b64 = btoa(String.fromCharCode(...new Uint8Array(arrbuf)));
-          const payload = { sttAudio: { seq: ++recSeq, mime: recMime || blob.type || 'audio/webm', data: b64 } };
-          wsSend(payload);
-          addDebug(`[SSTT:send seq=${recSeq} size=${blob.size}]`);
-        }catch(err){ console.warn('[SSTT:error send]', err); }
-      };
-      rec.onstart = ()=> addDebug('[SSTT:start]');
-      rec.onstop  = ()=> addDebug('[SSTT:stop]');
-      rec.onerror = (e)=> { addDebug(`[SSTT:recorder error] ${e?.error||''}`); };
+    recSeq = 0;
+    rec.ondataavailable = async (ev)=>{
+      try{
+        if (!ev.data || !ev.data.size) return;
+        const blob = ev.data;
+        const arrbuf = await blob.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(arrbuf)));
+        const payload = { sttAudio: { seq: ++recSeq, mime: recMime || blob.type || 'audio/webm', data: b64 } };
+        wsSend(payload);
+        addDebug(`[SSTT:send seq=${recSeq} size=${blob.size}]`);
+      }catch(err){ console.warn('[SSTT:error send]', err); }
+    };
+    rec.onstart = ()=> addDebug('[SSTT:start]');
+    rec.onstop  = ()=> addDebug('[SSTT:stop]');
+    rec.onerror = (e)=> { addDebug(`[SSTT:recorder error] ${e.error?.name||e.name||''}`); };
 
-      rec.start(CHUNK_MS);
-      return true;
-    }catch(e){
-      addDebug('[SSTT:fail]');
-      return false;
-    }
+    try{ rec.start(CHUNK_MS); }catch(e){ alert('録音の開始に失敗しました'); console.error(e); return false; }
+    return true;
   }
 
-  async function startStt(){
-    if (sttOn) return;
-    const ok = await ensureMic();
-    if (!ok) return;
+  function stopServerStt(){ try{ rec && rec.state!=='inactive' && rec.stop(); }catch{} rec = null; }
 
-    // 1) まずローカルSTT（対応ブラウザのみ）
-    let localOk = false;
-    if (SR) {
-      localOk = startLocalStt();
+  // ---- ローカルSTT（Web Speech API） ----
+  function newRecognizer(){ const r = new SR(); r.lang = 'ja-JP'; r.interimResults = true; r.maxAlternatives = 1; r.continuous = !isMobile; return r; }
+
+  function startLocalStt({continuous}){
+    if (!sttAvailable()){ alert('このブラウザは音声認識に未対応です'); return false; }
+    if (!localStream){ alert('先に「音声ON」にしてください'); return false; }
+    if (!mobileCaptionMode() && !isMicEnabled()){ alert('マイクがミュートです。ミュート解除後に自動字幕を開始してください。'); return false; }
+
+    // モバイル優先モード：認識中は自分のマイク送信を停止
+    let micWasEnabledDuringMobile = null;
+    if (mobileCaptionMode()){
+      const t = localStream.getAudioTracks()[0];
+      if (t){ micWasEnabledDuringMobile = t.enabled; t.enabled = false; updateVoiceUI(); }
     }
 
-    // 2) さらにサーバーSTTも併用（Androidでの安定性向上）
-    const svrOk = startServerStt();
+    sttCycleId++; const myCycle = sttCycleId;
+    recog = newRecognizer(); recog.continuous = !!continuous; sttBuffer = ''; setRemoteMuted(true);
 
-    sttOn = (localOk || svrOk);
-    updateSttUI();
-  }
-  function stopStt(){
-    sttOn = false;
-    try{ if (rec && rec.state!=='inactive') rec.stop(); }catch{}
-    try{ if (recog) recog.stop(); }catch{}
-    updateSttUI();
-  }
+    recog.onresult = (e) => {
+      let finalText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i]; const t = res[0].transcript || '';
+        if (res.isFinal) finalText += t; else if (t.trim()) sttBuffer = t.trim();
+      }
+      if (finalText.trim()) { sendChatLine(finalText.trim()); sttBuffer = ''; }
+    };
+    recog.onspeechend = ()=>{ if (sttBuffer.trim()) { sendChatLine(sttBuffer.trim()); sttBuffer=''; } try{ recog.stop(); }catch{} };
+    recog.onend = ()=>{
+      // 復帰（モバイル優先モードで停止していたら戻す）
+      if (mobileCaptionMode() && localStream && micWasEnabledDuringMobile !== null){ const t = localStream.getAudioTracks()[0]; if (t){ t.enabled = micWasEnabledDuringMobile; } updateVoiceUI(); }
+      if (sttBuffer.trim()) { sendChatLine(sttBuffer.trim()); sttBuffer=''; }
+      if (sttOn && myCycle===sttCycleId){ setTimeout(()=>{ if (sttOn && myCycle===sttCycleId) startLocalStt({ continuous: !isMobile }); }, 120); } else { setRemoteMuted(false); }
+    };
+    recog.onerror = (ev)=>{ addDebug(`[SR:error] ${ev.error||''}`); stopLocalStt(); alert('自動字幕（ローカル）が利用できません。サーバー字幕モードをお試しください。'); };
 
-  // UI イベント
-  voiceOn.addEventListener('click', async ()=>{
-    const ok = await ensureMic();
-    if (ok) addDebug('[MIC] ready');
-    updateSttUI();
-  });
-  sttBtn.addEventListener('click', ()=>{
-    if (!sttOn) startStt();
-    else stopStt();
-  });
-  muteBtn.addEventListener('click', ()=>{
-    if (!localStream) return;
-    for (const track of localStream.getAudioTracks()){
-      track.enabled = !track.enabled;
+    try{ recog.start(); }catch(e){ console.error(e); addDebug(`[SR:start-failed] ${e.message||e}`); alert('自動字幕の起動に失敗しました'); setRemoteMuted(false); return false; }
+    return true;
+  }
+  function stopLocalStt(){ try{ recog && recog.stop(); }catch{} recog = null; setRemoteMuted(false); }
+
+  // ---- 共通トグル ----
+  function stopStt(){ stopLocalStt(); stopServerStt(); sttOn = false; updateSttUI(); }
+
+  function startStt({continuous}){
+    const useServer = serverSttMode() || !sttAvailable();
+    if (!localStream){ alert('先に「音声ON」にしてください'); return; }
+    if (useServer){
+      const ok = startServerStt();
+      if (!ok) return;
+      sttOn = true; updateSttUI(); return;
     }
-    muteBtn.textContent = (localStream.getAudioTracks().some(t=>t.enabled)) ? 'ミュート' : 'ミュート解除';
-  });
+    const ok = startLocalStt({continuous});
+    if (!ok) return; sttOn = true; updateSttUI();
+  }
 
+  sttBtn.onclick = ()=>{ if (!sttOn) startStt({ continuous: !isMobile }); else stopStt(); };
+
+  ['mousedown','touchstart'].forEach(ev => sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); }));
+  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev => sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); }));
+
+  function stopAll(){ stopStt(); }
+  window.addEventListener('beforeunload', stopAll);
+
+  // 初期UI反映
+  updateVoiceUI(); updateSttUI();
   </script>
 </body>
 </html>
