@@ -469,7 +469,7 @@
       }
     };
 
-    recog.onend = (event)=>{
+    recog.onend = ()=>{
       setRemoteMuted(false);
       
       if (sttBuffer.trim()) {
@@ -477,17 +477,10 @@
         sttBuffer = '';
       }
       
-      if (sttOn && myCycle === sttCycleId){
-        // 修正：タイムアウト系のエラー以外は再起動
-        if (event.error === 'no-speech' || event.error === 'audio-capture' || event.error === 'network'){
-          addSys('字幕が中断されました。再度お試しください。');
-          sttErrorOccurred = true;
-          stopStt();
-        } else if (!sttErrorOccurred) {
-          setTimeout(()=>{
-            if (sttOn && myCycle === sttCycleId) startStt();
-          }, 200);
-        }
+      if (sttOn && myCycle === sttCycleId && !sttErrorOccurred){
+        setTimeout(()=>{
+          if (sttOn && myCycle === sttCycleId) startStt();
+        }, 200);
       }
     };
 
