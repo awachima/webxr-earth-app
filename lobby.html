@@ -427,7 +427,7 @@
     r.lang = 'ja-JP';
     r.interimResults = true;
     r.maxAlternatives = 1;
-    r.continuous = false; // モバイルでの安定性のためfalseに変更
+    r.continuous = true; // 修正: モバイルでの安定性のためfalseに変更 -> true に
     return r;
   }
 
@@ -448,7 +448,7 @@
 
     recog.onspeechend = ()=>{
       // 話し終わったら明示的に停止し、onendで再開ループに入る
-      try { recog.stop(); } catch {}
+      // try { recog.stop(); } catch {} // 修正: onspeechend での明示的な stop() を削除
     };
 
     recog.onresult = (e) => {
@@ -513,14 +513,6 @@
     setRemoteMuted(false);
     updateSttUI();
   }
-
-  sttBtn.onclick = ()=>{
-    if (!sttOn) {
-      startStt();
-    } else {
-      stopStt();
-    }
-  };
 
   window.addEventListener('beforeunload', stopStt);
 
