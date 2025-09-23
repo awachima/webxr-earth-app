@@ -73,7 +73,7 @@
         </div>
 
         <div class="panel">
-          <div class="label">参加者</div>
+          <div class="label">ボイスチャット（2025/09/23 22:40）</div>
           <div id="members" class="members"></div>
 
           <div class="sep"></div>
@@ -353,6 +353,9 @@
   const micToggleBtn  = document.getElementById('micToggle');
   const voiceHint     = document.getElementById('voiceHint');
 
+  let retryCount = 0; // 修正：再試行回数を管理する変数
+  const MAX_RETRIES = 5; // 修正：最大再試行回数を設定
+
   function updateVoiceUI(){
     const on = !!localStream;
     voicePowerBtn.textContent = on ? '音声OFF' : '音声ON';
@@ -365,18 +368,41 @@
 
   let sttPreMuteOn = false;
 
+  async function startVoice() {
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      retryCount = 0; // 修正：成功したらリセット
+      startCalls(rosterMembers);
+      updateVoiceUI(); updateSttUI();
+      await tryPlayAllAudios(); await resumeAudioContext();
+    } catch(e) {
+      console.error(e);
+      if (retryCount < MAX_RETRIES) {
+        retryCount++;
+        voiceHint.textContent = `マイクアクセスに失敗しました。再試行中... (${retryCount}/${MAX_RETRIES})`;
+        setTimeout(startVoice, 500); // 修正：再試行までの遅延を設ける
+      } else {
+        voiceHint.textContent = 'マイクアクセスに失敗しました。権限を確認してください。';
+        alert('マイク権限を許可してください');
+        stopVoice();
+      }
+    }
+  }
+
+  function stopVoice() {
+    for (const id of Array.from(peers.keys())) cleanupPeer(id);
+    if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+    stopStt();
+    sttPreMuteOn=false;
+    updateVoiceUI();
+    updateSttUI();
+  }
+
   voicePowerBtn.onclick = async ()=>{
     if (!localStream){
-      try{
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-        startCalls(rosterMembers);
-        updateVoiceUI(); updateSttUI();
-        await tryPlayAllAudios(); await resumeAudioContext();
-      }catch(e){ alert('マイク権限を許可してください'); console.error(e); }
+      await startVoice();
     } else {
-      for (const id of Array.from(peers.keys())) cleanupPeer(id);
-      if (localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
-      stopStt(); sttPreMuteOn=false; updateVoiceUI(); updateSttUI();
+      stopVoice();
     }
     maybeShowEnableButton();
   };
