@@ -410,7 +410,7 @@
     setInterval(loadShared, 30000);
 
     // ===== 隠し一括初期化 (Ctrl+Alt+X) =====
-    const ADMIN_HASH = "REPLACE_WITH_SHA-256_HEX"; // ← あなたのパスフレーズの SHA-256(HEX) を設定
+  const ADMIN_HASH = "27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4"; // ← kerverous の SHA-256(HEX)
     function toHex(buf){ return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
     async function sha256(s){ const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return toHex(buf); }
     function subtleEqual(a,b){ if(a.length!==b.length) return false; let r=0; for(let i=0;i<a.length;i++) r |= a.charCodeAt(i)^b.charCodeAt(i); return r===0; }
