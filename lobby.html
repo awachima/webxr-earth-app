@@ -427,7 +427,7 @@
     r.lang = 'ja-JP';
     r.interimResults = true;
     r.maxAlternatives = 1;
-    r.continuous = false;
+    r.continuous = true; // 修正: Androidでも連続モードを試す
     return r;
   }
 
@@ -447,7 +447,7 @@
     };
 
     recog.onspeechend = ()=>{
-      // 修正：話し終わったら明示的に停止し、onendで再開ループに入る
+      // 修正: 話し終わったら明示的に停止し、onendで再開ループに入る
       try { recog.stop(); } catch {}
     };
 
@@ -462,6 +462,7 @@
           sttBuffer = t; // 途中結果を保持
         }
       }
+      // 修正: 最終結果が確定したらチャットに送信
       if (finalText.trim()) {
         sendChatLine(finalText.trim());
         sttBuffer = '';
@@ -470,7 +471,7 @@
 
     recog.onend = ()=>{
       setRemoteMuted(false);
-      // 最終的なバッファに残っているテキストも送信
+      // 修正: 最終的なバッファに残っているテキストも送信
       if (sttBuffer.trim()) {
         sendChatLine(sttBuffer.trim());
         sttBuffer = '';
