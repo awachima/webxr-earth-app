@@ -407,7 +407,7 @@
   let recog = null;
   let sttBuffer = '';
   let sttCycleId = 0;
-  let sttTimeoutTimer = null; // 修正：再起動用タイマーを追加
+  let sttTimeoutTimer = null;
 
   function sttAvailable(){ return !!SR; }
 
@@ -445,55 +445,46 @@
 
     recog.onstart = ()=>{
       addSys('音声認識を開始しました。話してください...');
-      // 修正：タイムアウトタイマーをリセット
       clearTimeout(sttTimeoutTimer);
       sttTimeoutTimer = null;
     };
 
     recog.onspeechend = ()=>{
-      // 話し終わったら明示的に停止
       try { recog.stop(); } catch {}
     };
 
     recog.onresult = (e) => {
-      // 修正：タイムアウトタイマーをリセット
       clearTimeout(sttTimeoutTimer);
       sttTimeoutTimer = setTimeout(() => {
-        // 2秒間結果がなかったら強制的に停止して再起動
         try { recog.stop(); } catch {}
       }, 2000);
 
-      const res = e.results[e.results.length - 1]; // 最新の結果を取得
+      const res = e.results[e.results.length - 1];
       const t = res[0].transcript || '';
 
       if (isMobile) {
-        // モバイルの場合：最終結果を待たず、中間結果を即座に送信
         if (t.trim() && t.trim() !== sttBuffer.trim()) {
           sendChatLine(t.trim());
-          sttBuffer = t; // バッファに中間結果を保存
+          sttBuffer = t;
         }
       } else {
-        // PCの場合：最終結果（isFinal）のみを送信
         if (res.isFinal) {
           sendChatLine(t.trim());
-          sttBuffer = ''; // 確定したらバッファをクリア
+          sttBuffer = '';
         }
       }
     };
 
     recog.onend = ()=>{
       setRemoteMuted(false);
-      // 修正：タイムアウトタイマーをクリア
       clearTimeout(sttTimeoutTimer);
       sttTimeoutTimer = null;
 
-      // 最終結果が確定しなかった場合にバッファを送信
       if (sttBuffer.trim()) {
         sendChatLine(sttBuffer.trim());
         sttBuffer = '';
       }
       
-      // ユーザーがOFFにしていなければ、自動的に再開
       if (sttOn && myCycle === sttCycleId){
         setTimeout(()=>{
           if (sttOn && myCycle === sttCycleId) startStt();
@@ -504,7 +495,6 @@
     recog.onerror = (ev)=>{
       addDebug(`[SR:error] ${ev.error||''}`);
       addSys(`字幕エラー: ${ev.error}`);
-      // onendが常に呼ばれるため、エラー時の個別stopSttは不要
     };
     
     try {
@@ -522,7 +512,7 @@
   }
 
   function stopStt(){
-    sttCycleId++; // 再開ループを停止させる
+    sttCycleId++;
     if (recog) {
       try { recog.stop(); } catch {}
     }
@@ -532,7 +522,6 @@
     updateSttUI();
   }
 
-  // --- sttToggle ボタンにクリックイベントを追加 ---
   sttBtn.onclick = () => {
     if (sttOn) {
       stopStt();
@@ -540,11 +529,9 @@
       startStt();
     }
   };
-  // --------------------------------------------------------
 
   window.addEventListener('beforeunload', stopStt);
 
-  // 初期UI反映
   updateVoiceUI();
   updateSttUI();
   </script>
