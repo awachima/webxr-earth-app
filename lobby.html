@@ -452,7 +452,7 @@
     };
 
     recog.onresult = (e) => {
-      // 修正：PCとモバイルでロジックを切り替える
+      // PCとモバイルでロジックを切り替える
       const res = e.results[e.results.length - 1]; // 最新の結果を取得
       const t = res[0].transcript || '';
 
