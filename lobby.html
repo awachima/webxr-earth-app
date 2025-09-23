@@ -339,7 +339,7 @@
       maybeShowEnableButton();
     };
     pc.onicecandidate = (ev) => { if (ev.candidate) wsSend({ rtc: { to: peerId, type: 'candidate', data: ev.candidate }}); };
-    pc.oniceconnectionstatechange = ()=> console.info('[ICE]', peerId, pc.iceConnectionState);
+    pc.oniceconnectionstatechange = ()=> console.info('[ICE]', peerId, pc.iceConnectionstate);
     pc.onconnectionstatechange = ()=> console.info('[PC]', peerId, pc.connectionState);
     if (localStream && localStream.getAudioTracks().length){ for (const track of localStream.getAudioTracks()) pc.addTrack(track, localStream); } else { try { pc.addTransceiver('audio', { direction: 'recvonly' }); } catch {} }
     peers.set(peerId, pc); return pc;
@@ -407,7 +407,7 @@
   let recog = null;
   let sttBuffer = '';
   let sttCycleId = 0;
-  let sttErrorOccurred = false;
+  let sttErrorOccurred = false; // エラーフラグを追加
 
   function sttAvailable(){ return !!SR; }
 
