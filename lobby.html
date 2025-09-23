@@ -353,9 +353,6 @@
   const micToggleBtn  = document.getElementById('micToggle');
   const voiceHint     = document.getElementById('voiceHint');
 
-  let retryCount = 0; // 修正：再試行回数を管理する変数
-  const MAX_RETRIES = 5; // 修正：最大再試行回数を設定
-
   function updateVoiceUI(){
     const on = !!localStream;
     voicePowerBtn.textContent = on ? '音声OFF' : '音声ON';
@@ -370,22 +367,30 @@
 
   async function startVoice() {
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      retryCount = 0; // 修正：成功したらリセット
-      startCalls(rosterMembers);
-      updateVoiceUI(); updateSttUI();
-      await tryPlayAllAudios(); await resumeAudioContext();
-    } catch(e) {
-      console.error(e);
-      if (retryCount < MAX_RETRIES) {
-        retryCount++;
-        voiceHint.textContent = `マイクアクセスに失敗しました。再試行中... (${retryCount}/${MAX_RETRIES})`;
-        setTimeout(startVoice, 500); // 修正：再試行までの遅延を設ける
-      } else {
-        voiceHint.textContent = 'マイクアクセスに失敗しました。権限を確認してください。';
-        alert('マイク権限を許可してください');
+      // 既存のストリームがあれば念のため停止させてから開始する
+      if (localStream) {
         stopVoice();
       }
+
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      
+      // === 修正点 ===
+      // ストリームが安定するまでわずかに待機する（Androidのタイミング問題対策）
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // 待機後に接続を開始する
+      startCalls(rosterMembers);
+      updateVoiceUI();
+      updateSttUI();
+      await tryPlayAllAudios();
+      await resumeAudioContext();
+
+    } catch(e) {
+      // 元々のリトライロジックは削除し、失敗した場合は明確にエラーを表示する
+      console.error('マイクの取得に失敗しました:', e);
+      voiceHint.textContent = 'マイクアクセスに失敗しました。権限を確認してください。';
+      alert('マイクへのアクセスを許可してください。ブラウザの設定を確認するか、ページを再読み込みしてください。');
+      stopVoice(); // 失敗した場合は状態をリセット
     }
   }
 
@@ -479,30 +484,34 @@
     };
 
     recog.onresult = (e) => {
+      // resは最新の結果のみを指すため、isFinalの判定には適切です
       const res = e.results[e.results.length - 1];
       const t = res[0].transcript || '';
 
-      if (isMobile) {
-        if (t.trim() && t.trim() !== sttBuffer.trim()) {
-          sendChatLine(t.trim());
-          sttBuffer = t;
+      // isFinalフラグを見て、最終的な認識結果のみを送信するように修正
+      if (res.isFinal) {
+        const finalText = t.trim();
+        if (finalText) { // 空の文字列は送信しない
+          sendChatLine(finalText);
         }
+        sttBuffer = ''; // 送信後はバッファをクリア
       } else {
-        if (res.isFinal) {
-          sendChatLine(t.trim());
-          sttBuffer = '';
-        }
+        // 確定前の途中結果はバッファに保持
+        sttBuffer = t;
       }
     };
 
     recog.onend = ()=>{
       setRemoteMuted(false);
       
+      // onresultでisFinalにならずに終了した場合のフォールバック
+      // バッファに確定しなかった最後のテキストが残っていれば送信する
       if (sttBuffer.trim()) {
         sendChatLine(sttBuffer.trim());
-        sttBuffer = '';
       }
+      sttBuffer = ''; // バッファをクリア
       
+      // 認識を継続するための再起動ロジック
       if (sttOn && myCycle === sttCycleId && !sttErrorOccurred){
         setTimeout(()=>{
           if (sttOn && myCycle === sttCycleId) startStt();
