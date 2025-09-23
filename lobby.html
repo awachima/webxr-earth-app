@@ -427,7 +427,7 @@
     r.lang = 'ja-JP';
     r.interimResults = true;
     r.maxAlternatives = 1;
-    r.continuous = false; // 修正: 再度 false に戻す
+    r.continuous = false;
     return r;
   }
 
@@ -447,7 +447,7 @@
     };
 
     recog.onspeechend = ()=>{
-      // 修正: 発話終了時にセッションを停止するロジックを再度追加
+      // 修正：話し終わったら明示的に停止し、onendで再開ループに入る
       try { recog.stop(); } catch {}
     };
 
