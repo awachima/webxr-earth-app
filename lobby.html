@@ -427,7 +427,7 @@
     r.lang = 'ja-JP';
     r.interimResults = true;
     r.maxAlternatives = 1;
-    r.continuous = true;
+    r.continuous = false; // モバイルでの安定性のためfalseに変更
     return r;
   }
 
@@ -441,6 +441,15 @@
     recog = newRecognizer();
     sttBuffer = '';
     setRemoteMuted(true);
+
+    recog.onstart = ()=>{
+      addSys('音声認識を開始しました。話してください...');
+    };
+
+    recog.onspeechend = ()=>{
+      // 話し終わったら明示的に停止し、onendで再開ループに入る
+      try { recog.stop(); } catch {}
+    };
 
     recog.onresult = (e) => {
       let finalText = '';
@@ -476,12 +485,8 @@
 
     recog.onerror = (ev)=>{
       addDebug(`[SR:error] ${ev.error||''}`);
-      if (ev.error === 'no-speech') {
-        // 無言の場合はエラーとせず、単に終了させる
-      } else {
-        alert(`自動字幕でエラーが発生しました: ${ev.error}`);
-        stopStt();
-      }
+      addSys(`字幕エラー: ${ev.error}`);
+      // onendが常に呼ばれるため、エラー時の個別stopSttは不要
     };
     
     try {
