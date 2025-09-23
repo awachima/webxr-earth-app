@@ -427,7 +427,7 @@
     r.lang = 'ja-JP';
     r.interimResults = true;
     r.maxAlternatives = 1;
-    r.continuous = true; // 修正: モバイルでの安定性のためfalseに変更 -> true に
+    r.continuous = true;
     return r;
   }
 
@@ -446,10 +446,7 @@
       addSys('音声認識を開始しました。話してください...');
     };
 
-    recog.onspeechend = ()=>{
-      // 話し終わったら明示的に停止し、onendで再開ループに入る
-      // try { recog.stop(); } catch {} // 修正: onspeechend での明示的な stop() を削除
-    };
+    recog.onspeechend = ()=>{};
 
     recog.onresult = (e) => {
       let finalText = '';
@@ -513,6 +510,16 @@
     setRemoteMuted(false);
     updateSttUI();
   }
+
+  // --- 修正箇所：sttToggle ボタンにクリックイベントを追加 ---
+  sttBtn.onclick = () => {
+    if (sttOn) {
+      stopStt();
+    } else {
+      startStt();
+    }
+  };
+  // --------------------------------------------------------
 
   window.addEventListener('beforeunload', stopStt);
 
