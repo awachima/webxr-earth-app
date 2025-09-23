@@ -82,21 +82,6 @@
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
             <button id="sttToggle" class="btn ghost" type="button" title="自分の発話を自動で文字起こしして送信">自動字幕ON</button>
-            <button id="sttHold" class="btn ghost" type="button" style="display:none" title="長押しで字幕（旧方式）">長押しで字幕</button>
-          </div>
-          <!-- モバイル向け：認識中のみマイク送信を一時停止する安全モード（任意） -->
-          <div id="mobileModeRow" class="row" style="display:none">
-            <label class="switch" title="認識中のみ相手へのマイク送信を一時停止して字幕化します（同時利用が不安定な端末向け）">
-              <input type="checkbox" id="mobileCaptionMode">
-              <span>字幕優先モード（モバイル）</span>
-            </label>
-          </div>
-          <!-- 新規：サーバー字幕モード（Web Speech APIが無い端末向けの確実策） -->
-          <div id="serverModeRow" class="row" style="display:none">
-            <label class="switch" title="音声の短い塊をWebSocketでサーバーへ送り、サーバーで文字起こし（Whisper等）して返します。ブラウザ非対応を回避します。">
-              <input type="checkbox" id="serverSttMode">
-              <span>サーバー字幕モード</span>
-            </label>
           </div>
 
           <div id="voiceHint" class="status" style="margin-top:6px">未参加</div>
@@ -211,7 +196,7 @@
     alert('ニックネームを保存しました。ページを再読み込みすると反映されます。');
   };
 
-  // ===== WebSocket（チャット + シグナリング + サーバーSTT） =====
+  // ===== WebSocket（チャット + シグナリング） =====
   const WS_BASE = 'wss://do-chat.awachima7.workers.dev';
   const pageParams = new URLSearchParams(location.search);
   pageParams.set('user', user);
@@ -277,14 +262,6 @@
       ws.onmessage = (ev)=>{
         try{
           const data = JSON.parse(ev.data);
-
-          // 受信: サーバーSTTの文字列（自分宛）
-          if (data.sttText && typeof data.sttText.text === 'string'){
-            addMsg('me', `（自動字幕）${data.sttText.text}`);
-            const dbg = document.getElementById('debug');
-            dbg.textContent += `\n[SSTT:recv seq=${data.sttText.seq}] ${data.sttText.text}`;
-            return;
-          }
 
           // WebRTC シグナリング
           if (data.rtc) { onRtcSignal(data); return; }
@@ -383,15 +360,8 @@
     micToggleBtn.style.display = on ? '' : 'none';
     if (on){ const t = localStream.getAudioTracks()[0]; micToggleBtn.textContent = (t && t.enabled) ? 'ミュート' : 'ミュート解除'; voiceHint.textContent = `音声: 参加中（マイク${t && t.enabled ? 'ON' : 'OFF'}）`; }
     else { micToggleBtn.textContent = 'ミュート'; voiceHint.textContent = '音声: 未参加'; }
-    document.getElementById('mobileModeRow').style.display = (on && isMobile) ? '' : 'none';
-    document.getElementById('serverModeRow').style.display = on ? '' : 'none';
   }
   function isMicEnabled(){ if (!localStream) return false; const t = localStream.getAudioTracks()[0]; return !!(t && t.enabled); }
-
-  const mobileCaptionModeEl = document.getElementById('mobileCaptionMode');
-  const mobileCaptionMode = () => !!(isMobile && mobileCaptionModeEl && mobileCaptionModeEl.checked);
-  const serverSttModeEl = document.getElementById('serverSttMode');
-  const serverSttMode = () => !!(serverSttModeEl && serverSttModeEl.checked);
 
   let sttPreMuteOn = false;
 
@@ -415,8 +385,8 @@
     if (!localStream) return;
     const t = localStream.getAudioTracks()[0]; if (!t) return;
     t.enabled = !t.enabled; updateVoiceUI();
-    if (!t.enabled){ sttPreMuteOn = sttOn; if (sttOn && !mobileCaptionMode()) stopStt(); }
-    else { if (sttPreMuteOn){ startStt({ continuous: !isMobile }); } sttPreMuteOn = false; }
+    if (!t.enabled){ sttPreMuteOn = sttOn; if (sttOn) stopStt(); }
+    else { if (sttPreMuteOn){ startStt(); } sttPreMuteOn = false; }
     updateSttUI();
   };
 
@@ -430,154 +400,128 @@
   function setupMobileAudioGate(){ if (!isMobile) return; enableBtn.style.display = ''; enableBtn.onclick = enableSound; const retry = async ()=>{ await enableSound(); }; document.addEventListener('touchend', retry); document.addEventListener('click', retry); document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) maybeShowEnableButton(); }); }
   setupMobileAudioGate();
 
-  // ====== 自動字幕（ローカルSTT + サーバーSTT フォールバック） ======
+  // ====== 自動字幕（Web Speech API） ======
   const sttBtn  = document.getElementById('sttToggle');
-  const sttHold = document.getElementById('sttHold'); // 非表示のまま
 
   let sttOn = false;
-  let recog = null;            // ローカルSTT用
+  let recog = null;
   let sttBuffer = '';
   let sttCycleId = 0;
-
-  // サーバーSTT用
-  let rec = null;              // MediaRecorder
-  let recSeq = 0;              // 送信シーケンス
-  let recMime = '';
-  const CHUNK_MS = 3200;       // 3.2s くらいでチャンク化（コスト/遅延の妥協点）
 
   function sttAvailable(){ return !!SR; }
 
   function updateSttUI(){
-    const voiceOn = !!localStream;
-    const canUse = voiceOn;
-    sttBtn.style.display  = canUse ? '' : 'none';
-    sttHold.style.display = 'none';
-
+    const canUse = !!localStream && sttAvailable();
+    sttBtn.style.display = (!!localStream) ? '' : 'none';
+    sttBtn.disabled = !canUse || !isMicEnabled();
     sttBtn.textContent = sttOn ? '自動字幕OFF' : '自動字幕ON';
     sttBtn.classList.toggle('ghost', !sttOn);
-
-    // ローカルSTTが無い場合はサーバーモードを自動推奨
-    if (!sttAvailable()){
-      sttBtn.title = 'サーバー字幕モードで動作します（このブラウザはWeb Speech API非対応）';
-      sttBtn.disabled = !voiceOn;
-      return;
-    }
-
-    // ローカルSTTがある場合
-    const micOk = mobileCaptionMode() ? true : isMicEnabled();
-    sttBtn.disabled = !voiceOn || !micOk;
-    sttBtn.title  = serverSttMode()
-      ? 'サーバー字幕モードで動作します（ブラウザ非依存・安定）'
-      : (mobileCaptionMode() ? '（モバイル優先モード）認識中は相手送信を一時停止します' : '自分の発話を自動で文字起こしして送信');
+    sttBtn.title = sttAvailable() ? '自分の発話を自動で文字起こしして送信' : 'お使いのブラウザは音声認識に非対応です';
   }
 
   function addDebug(line){ const dbg = document.getElementById('debug'); dbg.textContent += `\n${line}`; }
   function sendChatLine(text){ if (!text || !ws || ws.readyState!==1) return; ws.send(`（自動字幕）${text}`); }
 
-  // ---- サーバーSTT ----
-  function serverSttSupported(){ return !!window.MediaRecorder && !!localStream; }
-
-  function startServerStt(){
-    if (!serverSttSupported()){ alert('このブラウザはMediaRecorderに未対応か、音声がONになっていません'); return false; }
-    try{
-      const mimeCandidates = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/ogg;codecs=opus',
-        'audio/ogg'
-      ];
-      recMime = mimeCandidates.find(m => MediaRecorder.isTypeSupported?.(m));
-      if (!recMime){ recMime = ''; }
-      rec = new MediaRecorder(localStream, recMime ? { mimeType: recMime } : undefined);
-    }catch(e){ alert('録音の初期化に失敗しました'); console.error(e); return false; }
-
-    recSeq = 0;
-    rec.ondataavailable = async (ev)=>{
-      try{
-        if (!ev.data || !ev.data.size) return;
-        const blob = ev.data;
-        const arrbuf = await blob.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(arrbuf)));
-        const payload = { sttAudio: { seq: ++recSeq, mime: recMime || blob.type || 'audio/webm', data: b64 } };
-        wsSend(payload);
-        addDebug(`[SSTT:send seq=${recSeq} size=${blob.size}]`);
-      }catch(err){ console.warn('[SSTT:error send]', err); }
-    };
-    rec.onstart = ()=> addDebug('[SSTT:start]');
-    rec.onstop  = ()=> addDebug('[SSTT:stop]');
-    rec.onerror = (e)=> { addDebug(`[SSTT:recorder error] ${e.error?.name||e.name||''}`); };
-
-    try{ rec.start(CHUNK_MS); }catch(e){ alert('録音の開始に失敗しました'); console.error(e); return false; }
-    return true;
+  function newRecognizer(){
+    const r = new SR();
+    r.lang = 'ja-JP';
+    r.interimResults = true;
+    r.maxAlternatives = 1;
+    r.continuous = true;
+    return r;
   }
 
-  function stopServerStt(){ try{ rec && rec.state!=='inactive' && rec.stop(); }catch{} rec = null; }
+  function startStt(){
+    if (!sttAvailable()){ alert('お使いのブラウザは音声認識に非対応です'); return; }
+    if (!localStream){ alert('先に「音声ON」にしてください'); return; }
+    if (!isMicEnabled()){ alert('マイクがミュートです。ミュート解除後に自動字幕を開始してください。'); return; }
 
-  // ---- ローカルSTT（Web Speech API） ----
-  function newRecognizer(){ const r = new SR(); r.lang = 'ja-JP'; r.interimResults = true; r.maxAlternatives = 1; r.continuous = !isMobile; return r; }
-
-  function startLocalStt({continuous}){
-    if (!sttAvailable()){ alert('このブラウザは音声認識に未対応です'); return false; }
-    if (!localStream){ alert('先に「音声ON」にしてください'); return false; }
-    if (!mobileCaptionMode() && !isMicEnabled()){ alert('マイクがミュートです。ミュート解除後に自動字幕を開始してください。'); return false; }
-
-    // モバイル優先モード：認識中は自分のマイク送信を停止
-    let micWasEnabledDuringMobile = null;
-    if (mobileCaptionMode()){
-      const t = localStream.getAudioTracks()[0];
-      if (t){ micWasEnabledDuringMobile = t.enabled; t.enabled = false; updateVoiceUI(); }
-    }
-
-    sttCycleId++; const myCycle = sttCycleId;
-    recog = newRecognizer(); recog.continuous = !!continuous; sttBuffer = ''; setRemoteMuted(true);
+    sttCycleId++;
+    const myCycle = sttCycleId;
+    recog = newRecognizer();
+    sttBuffer = '';
+    setRemoteMuted(true);
 
     recog.onresult = (e) => {
       let finalText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const res = e.results[i]; const t = res[0].transcript || '';
-        if (res.isFinal) finalText += t; else if (t.trim()) sttBuffer = t.trim();
+        const res = e.results[i];
+        const t = res[0].transcript || '';
+        if (res.isFinal) {
+          finalText += t;
+        } else {
+          sttBuffer = t; // 途中結果を保持
+        }
       }
-      if (finalText.trim()) { sendChatLine(finalText.trim()); sttBuffer = ''; }
+      if (finalText.trim()) {
+        sendChatLine(finalText.trim());
+        sttBuffer = '';
+      }
     };
-    recog.onspeechend = ()=>{ if (sttBuffer.trim()) { sendChatLine(sttBuffer.trim()); sttBuffer=''; } try{ recog.stop(); }catch{} };
+
     recog.onend = ()=>{
-      // 復帰（モバイル優先モードで停止していたら戻す）
-      if (mobileCaptionMode() && localStream && micWasEnabledDuringMobile !== null){ const t = localStream.getAudioTracks()[0]; if (t){ t.enabled = micWasEnabledDuringMobile; } updateVoiceUI(); }
-      if (sttBuffer.trim()) { sendChatLine(sttBuffer.trim()); sttBuffer=''; }
-      if (sttOn && myCycle===sttCycleId){ setTimeout(()=>{ if (sttOn && myCycle===sttCycleId) startLocalStt({ continuous: !isMobile }); }, 120); } else { setRemoteMuted(false); }
+      setRemoteMuted(false);
+      // 最終的なバッファに残っているテキストも送信
+      if (sttBuffer.trim()) {
+        sendChatLine(sttBuffer.trim());
+        sttBuffer = '';
+      }
+      // ユーザーがOFFにしていなければ、自動的に再開
+      if (sttOn && myCycle === sttCycleId){
+        setTimeout(()=>{
+          if (sttOn && myCycle === sttCycleId) startStt();
+        }, 100);
+      }
     };
-    recog.onerror = (ev)=>{ addDebug(`[SR:error] ${ev.error||''}`); stopLocalStt(); alert('自動字幕（ローカル）が利用できません。サーバー字幕モードをお試しください。'); };
 
-    try{ recog.start(); }catch(e){ console.error(e); addDebug(`[SR:start-failed] ${e.message||e}`); alert('自動字幕の起動に失敗しました'); setRemoteMuted(false); return false; }
-    return true;
-  }
-  function stopLocalStt(){ try{ recog && recog.stop(); }catch{} recog = null; setRemoteMuted(false); }
-
-  // ---- 共通トグル ----
-  function stopStt(){ stopLocalStt(); stopServerStt(); sttOn = false; updateSttUI(); }
-
-  function startStt({continuous}){
-    const useServer = serverSttMode() || !sttAvailable();
-    if (!localStream){ alert('先に「音声ON」にしてください'); return; }
-    if (useServer){
-      const ok = startServerStt();
-      if (!ok) return;
-      sttOn = true; updateSttUI(); return;
+    recog.onerror = (ev)=>{
+      addDebug(`[SR:error] ${ev.error||''}`);
+      if (ev.error === 'no-speech') {
+        // 無言の場合はエラーとせず、単に終了させる
+      } else {
+        alert(`自動字幕でエラーが発生しました: ${ev.error}`);
+        stopStt();
+      }
+    };
+    
+    try {
+      sttOn = true;
+      recog.start();
+      updateSttUI();
+    } catch(e) {
+      sttOn = false;
+      console.error(e);
+      addDebug(`[SR:start-failed] ${e.message||e}`);
+      alert('自動字幕の起動に失敗しました');
+      setRemoteMuted(false);
+      updateSttUI();
     }
-    const ok = startLocalStt({continuous});
-    if (!ok) return; sttOn = true; updateSttUI();
   }
 
-  sttBtn.onclick = ()=>{ if (!sttOn) startStt({ continuous: !isMobile }); else stopStt(); };
+  function stopStt(){
+    sttCycleId++; // 再開ループを停止させる
+    if (recog) {
+      try { recog.stop(); } catch {}
+    }
+    recog = null;
+    sttOn = false;
+    setRemoteMuted(false);
+    updateSttUI();
+  }
 
-  ['mousedown','touchstart'].forEach(ev => sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); }));
-  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev => sttHold.addEventListener(ev, (e)=>{ e.preventDefault(); }));
+  sttBtn.onclick = ()=>{
+    if (!sttOn) {
+      startStt();
+    } else {
+      stopStt();
+    }
+  };
 
-  function stopAll(){ stopStt(); }
-  window.addEventListener('beforeunload', stopAll);
+  window.addEventListener('beforeunload', stopStt);
 
   // 初期UI反映
-  updateVoiceUI(); updateSttUI();
+  updateVoiceUI();
+  updateSttUI();
   </script>
 </body>
 </html>
