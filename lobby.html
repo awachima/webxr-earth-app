@@ -425,9 +425,9 @@
   function newRecognizer(){
     const r = new SR();
     r.lang = 'ja-JP';
-    r.interimResults = true;
+    r.interimResults = true; // 中間結果を受け取る
     r.maxAlternatives = 1;
-    r.continuous = true; // 修正: Androidでも連続モードを試す
+    r.continuous = false; // Androidでの不安定性を避けるため、連続モードを無効化
     return r;
   }
 
@@ -447,35 +447,27 @@
     };
 
     recog.onspeechend = ()=>{
-      // 修正: 話し終わったら明示的に停止し、onendで再開ループに入る
+      // 話し終わったら明示的に停止
       try { recog.stop(); } catch {}
     };
 
     recog.onresult = (e) => {
-      let finalText = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const res = e.results[i];
-        const t = res[0].transcript || '';
-        if (res.isFinal) {
-          finalText += t;
-        } else {
-          sttBuffer = t; // 途中結果を保持
-        }
-      }
-      // 修正: 最終結果が確定したらチャットに送信
-      if (finalText.trim()) {
-        sendChatLine(finalText.trim());
-        sttBuffer = '';
+      // 最終結果を待たず、中間結果を即座に送信する
+      const lastResultIndex = e.results.length - 1;
+      const t = e.results[lastResultIndex][0].transcript || '';
+      
+      // バッファに溜まっている内容と異なるときだけ送信
+      if (t.trim() && t.trim() !== sttBuffer.trim()) {
+        sendChatLine(t.trim());
+        sttBuffer = t;
       }
     };
 
     recog.onend = ()=>{
       setRemoteMuted(false);
-      // 修正: 最終的なバッファに残っているテキストも送信
-      if (sttBuffer.trim()) {
-        sendChatLine(sttBuffer.trim());
-        sttBuffer = '';
-      }
+      // セッションが終了したら、必ずバッファをクリア
+      sttBuffer = '';
+      
       // ユーザーがOFFにしていなければ、自動的に再開
       if (sttOn && myCycle === sttCycleId){
         setTimeout(()=>{
@@ -487,7 +479,6 @@
     recog.onerror = (ev)=>{
       addDebug(`[SR:error] ${ev.error||''}`);
       addSys(`字幕エラー: ${ev.error}`);
-      // onendが常に呼ばれるため、エラー時の個別stopSttは不要
     };
     
     try {
