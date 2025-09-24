@@ -73,7 +73,7 @@
         </div>
 
         <div class="panel">
-          <div class="label">ボイスチャット（2025/09/23 22:40）</div>
+          <div class="label">ボイスチャット（2025/09/24 20:03）</div>
           <div id="members" class="members"></div>
 
           <div class="sep"></div>
@@ -367,30 +367,21 @@
 
   async function startVoice() {
     try {
-      // 既存のストリームがあれば念のため停止させてから開始する
       if (localStream) {
         stopVoice();
       }
-
       localStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      
-      // === 修正点 ===
-      // ストリームが安定するまでわずかに待機する（Androidのタイミング問題対策）
       await new Promise(resolve => setTimeout(resolve, 300));
-
-      // 待機後に接続を開始する
       startCalls(rosterMembers);
       updateVoiceUI();
       updateSttUI();
       await tryPlayAllAudios();
       await resumeAudioContext();
-
     } catch(e) {
-      // 元々のリトライロジックは削除し、失敗した場合は明確にエラーを表示する
       console.error('マイクの取得に失敗しました:', e);
       voiceHint.textContent = 'マイクアクセスに失敗しました。権限を確認してください。';
       alert('マイクへのアクセスを許可してください。ブラウザの設定を確認するか、ページを再読み込みしてください。');
-      stopVoice(); // 失敗した場合は状態をリセット
+      stopVoice();
     }
   }
 
@@ -431,7 +422,7 @@
   function setupMobileAudioGate(){ if (!isMobile) return; enableBtn.style.display = ''; enableBtn.onclick = enableSound; const retry = async ()=>{ await enableSound(); }; document.addEventListener('touchend', retry); document.addEventListener('click', retry); document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) maybeShowEnableButton(); }); }
   setupMobileAudioGate();
 
-  // ====== 自動字幕（Web Speech API） ======
+  // ====== 自動字幕（Web Speech API）======
   const sttBtn  = document.getElementById('sttToggle');
 
   let sttOn = false;
@@ -457,9 +448,10 @@
   function newRecognizer(){
     const r = new SR();
     r.lang = 'ja-JP';
-    r.interimResults = true;
+    r.interimResults = true; // 途中結果も取得する
     r.maxAlternatives = 1;
-    r.continuous = isMobile ? false : true;
+    // ▼【修正点①】isMobileの分岐をなくし、常にcontinuous: trueに設定
+    r.continuous = true; 
     return r;
   }
 
@@ -479,48 +471,61 @@
       addSys('音声認識を開始しました。話してください...');
     };
 
+    // ▼【修正点②】発話終了時に stop() を呼ばないように変更
+    //   continuousモードの場合、無音が続くと自動で onend が発火するため不要
     recog.onspeechend = ()=>{
-      try { recog.stop(); } catch {}
+      // try { recog.stop(); } catch {} // この行をコメントアウトまたは削除
     };
 
     recog.onresult = (e) => {
-      // resは最新の結果のみを指すため、isFinalの判定には適切です
-      const res = e.results[e.results.length - 1];
-      const t = res[0].transcript || '';
-
-      // isFinalフラグを見て、最終的な認識結果のみを送信するように修正
-      if (res.isFinal) {
-        const finalText = t.trim();
-        if (finalText) { // 空の文字列は送信しない
-          sendChatLine(finalText);
+      let interimTranscript = '';
+      for (let i = e.resultIndex; i < e.results.length; ++i) {
+        if (e.results[i].isFinal) {
+          const finalText = (e.results[i][0].transcript || '').trim();
+          if (finalText) {
+            sendChatLine(finalText);
+          }
+          sttBuffer = ''; // 確定したのでバッファはクリア
+        } else {
+          interimTranscript += e.results[i][0].transcript;
         }
-        sttBuffer = ''; // 送信後はバッファをクリア
-      } else {
-        // 確定前の途中結果はバッファに保持
-        sttBuffer = t;
       }
+      // 確定前の途中結果をバッファに保持
+      sttBuffer = interimTranscript;
     };
 
     recog.onend = ()=>{
       setRemoteMuted(false);
       
       // onresultでisFinalにならずに終了した場合のフォールバック
-      // バッファに確定しなかった最後のテキストが残っていれば送信する
       if (sttBuffer.trim()) {
         sendChatLine(sttBuffer.trim());
       }
-      sttBuffer = ''; // バッファをクリア
+      sttBuffer = '';
       
-      // 認識を継続するための再起動ロジック
+      // ▼【修正点③】エラーでなければ、継続的に認識を再起動する
       if (sttOn && myCycle === sttCycleId && !sttErrorOccurred){
         setTimeout(()=>{
-          if (sttOn && myCycle === sttCycleId) startStt();
-        }, 200);
+          // 再起動する前にもう一度フラグを確認
+          if (sttOn && myCycle === sttCycleId) {
+            try {
+              recog.start();
+            } catch(e) {
+              console.error("STT restart failed:", e);
+              stopStt(); // 再起動に失敗した場合は完全に停止
+            }
+          }
+        }, 300); // 少し間隔を空けて再起動
       }
     };
 
     recog.onerror = (ev)=>{
       addDebug(`[SR:error] ${ev.error||''}`);
+      // 'no-speech' エラーは頻発するため、無視して再開させる
+      if (ev.error === 'no-speech' || ev.error === 'audio-capture') {
+        sttErrorOccurred = false; // これらは致命的なエラーではない
+        return;
+      }
       addSys(`字幕エラー: ${ev.error}`);
       sttErrorOccurred = true;
     };
@@ -540,9 +545,13 @@
   }
 
   function stopStt(){
-    sttCycleId++;
+    sttCycleId++; // サイクルIDを更新して、進行中の再起動ループを停止させる
     if (recog) {
-      try { recog.stop(); } catch {}
+      try {
+        // onendが呼ばれないようにイベントリスナをクリアしてから停止
+        recog.onend = null;
+        recog.stop();
+      } catch {}
     }
     recog = null;
     sttOn = false;
