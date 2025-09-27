@@ -518,18 +518,47 @@ AFRAME.registerComponent('marker-placer',{
     }catch(e){ console.error("データ取得エラー:",e); }
     this.updateClusters();
   },
+  // ★★★ 修正：1行目ヘッダー（name/latitude/longitude/url など）を確実にスキップ。タブ区切りにも対応。
   parseCsv:function(csvText){
-    var locations=[]; var lines=csvText.trim().split('\n');
-    var startIndex=lines[0].toLowerCase().includes('title')?1:0;
-    for(var i=startIndex;i<lines.length;i++){
-      var parts=lines[i].trim().split(',');
-      if(parts.length>=4){
-        let lat=parseFloat(parts[1]); let lon=parseFloat(parts[2]);
-        if(isNaN(lat)||isNaN(lon)){ 
-          lat = -90;   // 南極
-          lon = 0;     // 経度は任意だが 0 
+    var locations=[];
+    var lines = csvText.trim().split(/\r?\n/);
+
+    if (lines.length === 0) return locations;
+
+    // 区切り文字を推定（カンマ優先、無ければタブ）
+    var headerRaw = lines[0];
+    var delimiter = headerRaw.indexOf(',') >= 0 ? ',' : '\t';
+
+    // ヘッダー判定（name|title を含み、lat、lon|long、url を含む場合）
+    var header = headerRaw.trim().toLowerCase();
+    var isHeaderByTokens =
+      /^(name|title)\b/.test(header) &&
+      /lat/.test(header) &&
+      /(lon|long)/.test(header) &&
+      /url/.test(header);
+
+    // 先頭行の値で数値判定（lat/lon が数値でなければヘッダー扱い）
+    var firstParts = headerRaw.split(delimiter);
+    var latTry = parseFloat((firstParts[1] || '').replace(/"/g,''));
+    var lonTry = parseFloat((firstParts[2] || '').replace(/"/g,''));
+    var isHeaderByNaN = isNaN(latTry) || isNaN(lonTry);
+
+    var startIndex = (isHeaderByTokens || isHeaderByNaN) ? 1 : 0;
+
+    for (var i = startIndex; i < lines.length; i++) {
+      var parts = lines[i].trim().split(delimiter);
+      if (parts.length >= 4) {
+        var title = parts[0].replace(/"/g,'');
+        var lat = parseFloat(parts[1]);
+        var lon = parseFloat(parts[2]);
+        var url = parts[3].replace(/"/g,'');
+
+        if (isNaN(lat) || isNaN(lon)) {
+          // 緯度経度が欠損時は南極に退避（既存仕様を踏襲）
+          lat = -90;
+          lon = 0;
         }
-        locations.push({ title: parts[0].replace(/"/g,''), lat: lat, lon: lon, url: parts[3].replace(/"/g,'') });
+        locations.push({ title: title, lat: lat, lon: lon, url: url });
       }
     }
     return locations;
