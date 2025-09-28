@@ -233,6 +233,19 @@
     .actions .left{margin-right:auto;display:flex;gap:10px;align-items:center}
     .status{display:none;padding:12px 16px 16px;color:#0a7f3f;font:600 14px system-ui}
     .note{font:12px system-ui;color:#666;margin-top:6px}
+
+    /* === フッター（画像表示） === */
+    footer{
+      width:100%;
+      margin:0;
+      padding:0;
+      background:transparent;
+    }
+    .footer-image{
+      display:block;
+      width:100%;
+      height:auto;
+    }
   </style>
 </head>
 <body>
@@ -610,5 +623,11 @@
       window.addEventListener('beforeunload', unlockPageScroll);
     })();
   </script>
+
+  <!-- ▼▼ フッター画像 ▼▼ -->
+  <footer>
+    <img class="footer-image" src="./assets/footer.png" alt="フッター画像">
+  </footer>
+  <!-- ▲▲ フッター画像 ▲▲ -->
 </body>
 </html>
