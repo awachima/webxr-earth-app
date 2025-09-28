@@ -6,10 +6,11 @@
   <title>DokodemoDoors ファンサイト</title>
   <style>
     * { box-sizing: border-box; }
-    /* ▼ 2重スクロールバーの問題を修正 */
     html {
       height: 100%;
       overflow-y: scroll;
+      /* スクロールバー領域を常に確保して横ズレ防止 */
+      scrollbar-gutter: stable both-edges;
     }
     body {
       min-height: 100%;
@@ -18,7 +19,45 @@
       overflow-x: hidden;
     }
     .wrap{display:flex;flex-direction:column;align-items:center;min-height:100%}
-    header{position:relative;width:100%;padding:8px 12px;background:rgba(0,0,0,.6);color:#fff;text-align:center}
+
+    /* === ヘッダー：ロゴ画像＋最上部固定（グレー帯 高さ55px + 直下5px白帯） === */
+    header{
+      position: fixed;      /* 常時最上部に表示 */
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      width: 100%;
+      height: 55px;         /* 帯だけ 55px に固定 */
+      padding: 0 12px;      /* 垂直パディングはなし（高さを厳密に） */
+      background: rgba(0,0,0,.6);   /* グレー帯 */
+      color:#fff;
+      text-align:center;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      overflow: visible;    /* 下方向へロゴをはみ出させる */
+    }
+    /* 直下 5px の白帯（ロゴの背面に回す） */
+    header::after{
+      content:"";
+      position: fixed;
+      left: 0; right: 0; top: 55px;
+      height: 5px;
+      background: #fff;     /* 不透明の白帯 */
+      z-index: 0;           /* ← ロゴより背面にする */
+      pointer-events: none;
+    }
+
+    .brand-logo{
+      display:block;
+      width:auto;                         /* 原寸優先 */
+      height:auto;                        /* 原寸優先 */
+      max-width: calc(100% - 24px);       /* 画面より大きい時だけ縮小（横ズレ回避） */
+      margin: 0 auto -8px;                /* 下端から少しはみ出す */
+      object-fit: contain;
+      position: relative;
+      z-index: 2;                         /* ← 白帯より前面に表示 */
+      pointer-events:auto;
+    }
+
     .header-actions{position:absolute;right:8px;top:8px}
     .link{display:inline-block;padding:6px 10px;border:1px solid #eee;border-radius:10px;background:#fff;color:#111;font:600 12px system-ui;text-decoration:none}
 
@@ -29,38 +68,150 @@
       justify-content:center;
       padding-bottom:24px;
       background:url('./assets/background.jpg') center/cover no-repeat;
+      margin-top: 60px; /* 55px（グレー帯）+ 5px（白帯）= 60px の空き */
     }
     .site-logo{pointer-events:none;position:absolute;top:120px;left:50%;transform:translate(-50%,-50%);width:min(30vw,200px);opacity:.95;z-index:2}
-    #webxr-iframe{display:block;width:100%;height:80vh;border:none;margin-top:120px;border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.25);background:#000;overscroll-behavior:contain;overflow:hidden}
+    #webxr-iframe{
+      display:block;width:100%;height:80vh;border:none;margin-top:120px;border-radius:16px;
+      box-shadow:0 30px 80px rgba(0,0,0,.25);background:#000;overscroll-behavior:contain;overflow:hidden
+    }
     @media(min-width:1024px){#webxr-iframe{width:1024px;height:80vh}}
     @media(max-width:1023px){#webxr-iframe{width:100%;height:calc(80vw)}}
 
-    .meetups{width:min(1024px,100%);margin:0 auto 80px;padding:0 16px}
-    .meetups__head{display:flex;justify-content:space-between;align-items:center;font:700 18px system-ui;margin:12px 0 8px}
+    /* ====== 待ち合わせ一覧（案C：Paper Cards） ====== */
+    :root{
+      --paper-bg-1: #FBF6ED;
+      --paper-bg-2: #F2E7D8;
+      --ink-900:   #1e2430;
+      --ink-700:   #344054;
+      --ink-500:   #667085;
+      --ink-950:   #111827; /* ほとんど黒のグレー */
+      --accent:    #3B82F6;
+      --accent-ink:#ffffff;
+      --card-shadow-1: 0 4px 10px rgba(0,0,0,.06);
+      --card-shadow-2: 0 16px 30px rgba(0,0,0,.08);
+    }
 
+    /* クリーム色ボックス（内側に背景画像） */
+    .meetups{
+      width:min(1024px,100%);
+      margin:24px auto 80px;
+      padding:24px 16px 32px;
+      position:relative;
+      border-radius:18px;
+      background-image:
+        linear-gradient(180deg, rgba(251,246,237,0.92) 0%, rgba(242,231,216,0.92) 100%),
+        url('./assets/background2.jpg');
+      background-size: 100% 100%, cover;
+      background-position: center, center top;
+      background-repeat: no-repeat, no-repeat;
+      box-shadow: 0 18px 40px rgba(0,0,0,.08);
+      overflow:hidden;
+    }
+    .meetups::before{
+      content:""; position:absolute; inset:0;
+      background:
+        radial-gradient(1000px 400px at 10% -20%, rgba(255,255,255,.55), rgba(255,255,255,0)),
+        radial-gradient(800px 300px at 90% 120%, rgba(255,255,255,.45), rgba(255,255,255,0));
+      pointer-events:none;
+    }
+
+    /* 見出し：中央タイトル + 右に作成ボタン（Gridで中央厳密センター） */
+    .meetups__head{
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items:center;
+      gap:12px;
+      margin:0 0 16px;
+    }
+    .meetups__title{
+      grid-column:2; justify-self:center;
+      margin:0;
+      font-weight:900;
+      font-size: clamp(24px, 4.2vw, 36px);
+      line-height:1.2;
+      letter-spacing:.02em;
+      color: var(--ink-950);
+      text-align:center;
+    }
+
+    /* こげ茶ボタン（タイトル右） */
+    .meetups .head-create.btn{
+      grid-column:3; justify-self:end;
+      background:#3b2a1a; color:#fff; border:1px solid #3b2a1a;
+      height:44px; padding:0 18px; border-radius:12px;
+      font:700 14px/1 system-ui; white-space:nowrap;
+      box-shadow:0 6px 16px rgba(59,42,26,.25), inset 0 -2px 0 rgba(0,0,0,.15);
+      transition:transform .05s ease, box-shadow .15s ease, opacity .15s ease;
+    }
+    .meetups .head-create.btn:hover{ box-shadow:0 8px 20px rgba(59,42,26,.35), inset 0 -2px 0 rgba(0,0,0,.2); opacity:.98; }
+    .meetups .head-create.btn:active{ transform:translateY(1px); }
+
+    .grid{
+      display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:20px;
+    }
+
+    /* カード */
+    .card{
+      position:relative; border:none; border-radius:16px; padding:14px 14px 56px;
+      background:#fff; box-shadow: var(--card-shadow-1), var(--card-shadow-2);
+      transition: transform .15s ease, box-shadow .15s ease; overflow:hidden; isolation:isolate;
+    }
+    .card:hover{ transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.12); }
+
+    .title{font:700 17px/1.4 system-ui;margin:0 0 6px;color:var(--ink-900)}
+    .meta{color:var(--ink-500);font:12px/1.4 system-ui;margin:0 0 8px}
+
+    .tools{position:absolute;right:10px;top:10px;display:flex;gap:6px;z-index:2}
+    .icon{
+      width:28px;height:28px;padding:0;border-radius:8px;
+      display:inline-grid;place-items:center;background:#f6f7fb;border:1px solid #e6e8ef;color:#334155;
+    }
+
+    /* Enterボタン（カード内のみ） */
+    .meetups .card [data-enter].btn{
+      position:absolute; left:14px; right:14px; bottom:14px; height:44px;
+      display:flex; align-items:center; justify-content:center;
+      border:none; border-radius:12px; cursor:pointer;
+      font:700 14px/1 system-ui; letter-spacing:.02em;
+      background: var(--accent); color: var(--accent-ink);
+      box-shadow: 0 8px 18px rgba(59,130,246,.35), inset 0 -2px 0 rgba(0,0,0,.08);
+      transition: transform .05s ease, box-shadow .15s ease, opacity .15s ease;
+      text-decoration:none;
+    }
+    .meetups .card [data-enter].btn:hover{ box-shadow: 0 10px 22px rgba(59,130,246,.45), inset 0 -2px 0 rgba(0,0,0,.12); }
+    .meetups .card [data-enter].btn:active{ transform: translateY(1px); }
+
+    /* 汎用ボタン */
     .btn{appearance:none;border:1px solid #111;background:#111;color:#fff;padding:8px 12px;border-radius:10px;cursor:pointer;font:600 12px system-ui;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
     .btn.ghost{background:#fff;color:#111}
     .btn.danger{background:#b00020;border-color:#b00020}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-    .card{position:relative;border:1px solid #eee;border-radius:12px;padding:12px;background:#fff;box-shadow:0 10px 24px rgba(0,0,0,.05)}
-    .title{font:600 16px system-ui;margin:0 0 6px}
-    .meta{color:#666;font:12px system-ui;margin:0 0 8px}
-    .tools{position:absolute;right:8px;top:8px;display:flex;gap:6px}
-    .icon{width:28px;height:28px;padding:0;border-radius:8px;display:inline-grid;place-items:center}
 
-    .fab{
-      position:fixed; right:16px; bottom:16px;
-      height:48px; padding:0 16px; border-radius:9999px;
-      background:#111; color:#fff;
-      display:flex; gap:8px; align-items:center; justify-content:center;
-      font:600 14px system-ui;
-      box-shadow:0 8px 24px rgba(0,0,0,.25); cursor:pointer; z-index:10;
+    /* ===== カード 4 色ローテーション ===== */
+    #grid .card:nth-child(4n+1){ background:#0B3559; color:#fff; }
+    #grid .card:nth-child(4n+1) .title{ color:#fff; }
+    #grid .card:nth-child(4n+1) .meta{ color:rgba(255,255,255,.85); }
+
+    #grid .card:nth-child(4n+2){ background:#3270A6; color:#fff; }
+    #grid .card:nth-child(4n+2) .title{ color:#fff; }
+    #grid .card:nth-child(4n+2) .meta{ color:rgba(255,255,255,.9); }
+
+    #grid .card:nth-child(4n+3){ background:#4E7DA6; color:#1f2937; }
+    #grid .card:nth-child(4n+3) .title{ color:#1e2430; }
+    #grid .card:nth-child(4n+3) .meta{ color:#243041; }
+
+    #grid .card:nth-child(4n+4){ background:#736055; color:#fff; }
+    #grid .card:nth-child(4n+4) .title{ color:#fff; }
+    #grid .card:nth-child(4n+4) .meta{ color:rgba(255,255,255,.9); }
+
+    /* === モーダル === */
+    .backdrop{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.45);
+      display:none;                /* 既定は非表示 */
+      align-items:center; justify-content:center;
+      z-index:20;
     }
-    .fab-icon{ font:600 18px/1 system-ui; transform:translateY(-1px); }
-    .fab-label{ white-space:nowrap; }
-    @media (max-width: 360px){ .fab{ padding:0 12px; } .fab-label{ display:none; } }
-
-    .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:20}
     .modal{width:min(720px,92vw);background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden}
     .modal header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111;color:#fff;font:700 16px system-ui}
     .close{cursor:pointer;font-size:20px;line-height:1}
@@ -78,7 +229,7 @@
 <body>
   <div class="wrap">
     <header>
-      <div>Dokodemo Doors ファンサイト</div>
+      <img class="brand-logo" src="./assets/fansitelogo.png" alt="DokodemoDoors ファンサイト ロゴ">
     </header>
 
     <div class="stage">
@@ -86,19 +237,17 @@
       <iframe id="webxr-iframe" title="WebXR Earth" src="./earth.html" allow="xr-spatial-tracking; fullscreen" scrolling="no"></iframe>
     </div>
 
+    <!-- クリーム色ボックス -->
     <section class="meetups">
       <div class="meetups__head">
-        <span>待ち合わせ部屋の一覧</span>
+        <h2 class="meetups__title">待ち合わせ部屋の一覧</h2>
+        <button class="btn ghost head-create" id="openCreate">待ち合わせ部屋を作る</button>
       </div>
       <div id="grid" class="grid"></div>
     </section>
   </div>
 
-  <div class="fab" id="fab">
-    <span class="fab-icon">＋</span>
-    <span class="fab-label">待ち合わせ部屋を作る</span>
-  </div>
-
+  <!-- モーダル -->
   <div class="backdrop" id="backdrop">
     <div class="modal">
       <header><div id="modalTitle">待ち合わせを作成</div><div class="close" id="close">×</div></header>
@@ -143,13 +292,10 @@
     const writeOwners=(map)=>localStorage.setItem(O,JSON.stringify(map));
     const isOwner   =(roomId)=>Boolean(readOwners()[roomId]);
 
-    // 共有レジストリ API（DO 内 /api/rooms）
+    // 共有レジストリ API
     const REGISTRY_API = 'https://do-chat.awachima7.workers.dev/api/rooms';
+    const NEGATIVE_LIMIT_MS = 20*60*1000; // 開始後20分で自動削除
 
-    // 開始後20分で自動削除
-    const NEGATIVE_LIMIT_MS = 20*60*1000;
-
-    // ===== Auto delete =====
     function autoDeleteRoom(roomId){
       if (!roomId) return;
       const remain = readStore().filter(x=>x.roomId!==roomId);
@@ -160,7 +306,6 @@
       console.info('[auto-delete]', roomId, 'を削除しました（開始から20分経過）');
     }
 
-    // ===== Cards =====
     function initCountdown(card){
       const start = new Date(card.dataset.start);
       const el    = card.querySelector('[data-countdown]');
@@ -171,7 +316,6 @@
       const tick = ()=>{
         const now  = new Date();
         const diff = start - now;
-
         if (diff > 0){
           const h=Math.floor(diff/3600000), m=Math.floor(diff/60000)%60, s=Math.floor(diff/1000)%60;
           if (el) el.textContent = `${label}: ${pad(h)}:${pad(m)}:${pad(s)}`;
@@ -239,7 +383,7 @@
       card.dataset.start=item.start;
       card.dataset.url=item.target;
       card.dataset.limit=item.limit;
-      // 重複を避けるため prepend（新しいものが先頭）
+
       const gridEl = $('#grid');
       if (card.parentElement !== gridEl) gridEl.prepend(card);
       initCountdown(card);
@@ -264,6 +408,7 @@
     const mTitle=$('#mTitle'), mLimit=$('#mLimit'), mStart=$('#mStart'), mTarget=$('#mTarget');
     const statusMsg=$('#statusMsg');
     const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
+
     let mode='create', editingRoomId=null, editingTarget=null;
 
     function initStartInput(){
@@ -319,9 +464,7 @@
       if(mode==='create'){
         target=(mTarget.value||'').trim();
         if(!/^https?:\/\//i.test(target)){ alert('目的URL（https:// から）を入力してください。'); return; }
-        roomId=uuid();
-        owners[roomId]=randKey();
-        writeOwners(owners);
+        roomId=uuid(); owners[roomId]=randKey(); writeOwners(owners);
       }
       const item={
         roomId, title, start: toISO(mStart.value), limit: String(limit), target,
@@ -331,7 +474,6 @@
 
       upsertCard(item);
       persist(item);
-      // ★ 共有レジストリへ登録/更新（失敗しても無視）
       postRegistry(item);
 
       statusMsg.textContent = (mode==='create') ? '作成しました' : '更新しました';
@@ -341,9 +483,7 @@
     function onDuplicate(){
       if(!editingRoomId) return;
       const owners=readOwners();
-      const newId=uuid();
-      owners[newId]=randKey();
-      writeOwners(owners);
+      const newId=uuid(); owners[newId]=randKey(); writeOwners(owners);
       const item={
         roomId:newId,
         title:(mTitle.value||'待ち合わせ').trim(),
@@ -353,11 +493,7 @@
         updatedAt:new Date().toISOString(),
         createdAt:new Date().toISOString()
       };
-      upsertCard(item);
-      persist(item);
-      // ★ 複製も共有レジストリへ
-      postRegistry(item);
-
+      upsertCard(item); persist(item); postRegistry(item);
       alert('複製しました（目的URLは元と同じです）');
     }
 
@@ -365,10 +501,7 @@
       if(!editingRoomId) return;
       try {
         const ownerKey = readOwners()[editingRoomId];
-        if (!ownerKey) {
-          alert("この端末にオーナー情報がないため、削除できません。");
-          return;
-        }
+        if (!ownerKey) { alert("この端末にオーナー情報がないため、削除できません。"); return; }
         const res = await fetch(REGISTRY_API, {
           method: "DELETE",
           headers: {"content-type":"application/json"},
@@ -376,84 +509,50 @@
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          alert(`削除に失敗しました: ${data.error || res.statusText}`);
-          return;
+          alert(`削除に失敗しました: ${data.error || res.statusText}`); return;
         }
       } catch (e) {
-        alert("サーバーへの接続中にエラーが発生しました。");
-        console.warn('[registry DELETE]', e);
-        return;
+        alert("サーバーへの接続中にエラーが発生しました。"); console.warn('[registry DELETE]', e); return;
       }
-      autoDeleteRoom(editingRoomId);
-      closeModal();
+      autoDeleteRoom(editingRoomId); closeModal();
     }
 
-    // bind
+    // ===== 初期化 =====
     restore();
 
-    // 右上ボタンは削除済みなので安全にガード
+    // タイトル右の作成ボタン
     const oc = document.getElementById('openCreate');
     if (oc) oc.onclick = () => openModal('create');
 
-    $('#fab').onclick=()=>openModal('create');  // ← FAB でモーダル起動
-    $('#close').onclick=closeModal;
-    $('#close2').onclick=closeModal;
-    $('#submit').onclick=onSubmit;
-    $('#duplicate').onclick=onDuplicate;
-    $('#delete').onclick=onDelete;
+    // 読み込み直後は確実に非表示（チラ見え対策）
+    closeModal();
 
-    // ===== 共有レジストリから一覧を取得（起動時に1回＆定期実行） =====
+    document.getElementById('close').onclick=closeModal;
+    document.getElementById('close2').onclick=closeModal;
+    document.getElementById('submit').onclick=onSubmit;
+    document.getElementById('duplicate').onclick=onDuplicate;
+    document.getElementById('delete').onclick=onDelete;
+
     async function loadShared(){
       try{
         const res = await fetch(REGISTRY_API);
         const j = await res.json();
         if (j && j.ok && Array.isArray(j.rooms)) {
           const remoteRoomIds = new Set(j.rooms.map(r => r.roomId));
-          // サーバーに存在しないローカルのカードを削除
-          $$('#grid .card').forEach(card => {
+          document.querySelectorAll('#grid .card').forEach(card => {
             const roomId = card.dataset.roomId;
-            if (roomId && !remoteRoomIds.has(roomId)) {
-              card.remove();
-            }
+            if (roomId && !remoteRoomIds.has(roomId)) { card.remove(); }
           });
           j.rooms.forEach(upsertCard);
         }
-      }catch(e){
-        console.warn('[registry GET]', e);
-      }
+      }catch(e){ console.warn('[registry GET]', e); }
     }
-    loadShared();
-    setInterval(loadShared, 30000);
+    loadShared(); setInterval(loadShared, 30000);
 
-    // ===== 隠し一括初期化 (Ctrl+Alt+X) =====
-  const ADMIN_HASH = "27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4"; // ← kerverous の SHA-256(HEX)
+    const ADMIN_HASH = "27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
     function toHex(buf){ return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
     async function sha256(s){ const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return toHex(buf); }
     function subtleEqual(a,b){ if(a.length!==b.length) return false; let r=0; for(let i=0;i<a.length;i++) r |= a.charCodeAt(i)^b.charCodeAt(i); return r===0; }
-
-    window.addEventListener("keydown", async (e)=>{
-      if (e.ctrlKey && e.altKey && (e.key==='x' || e.key==='X')){
-        e.preventDefault();
-        const pass = prompt("管理パスフレーズを入力してください");
-        if (!pass) return;
-        try{
-          const hash = await sha256(pass);
-          if (subtleEqual(hash, ADMIN_HASH)){
-            if (confirm("この端末の待ち合わせをすべて初期化します。よろしいですか？")){
-              localStorage.removeItem(S);
-              localStorage.removeItem(O);
-              alert("初期化しました");
-              location.reload();
-            }
-          } else {
-            alert("パスフレーズが違います");
-          }
-        }catch(err){
-          console.error(err);
-          alert("初期化に失敗しました");
-        }
-      }
-    });
   </script>
 
   <script>
@@ -461,28 +560,16 @@
       var iframe = document.getElementById('webxr-iframe');
       if(!iframe) return;
 
-      var scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-      
-      var htmlOriginalPadding = document.documentElement.style.paddingRight || '';
-      var htmlOriginalOverflow = document.documentElement.style.overflowY || '';
-
+      // スクロール固定時も横ズレしない実装
       function lockPageScroll(){
         document.documentElement.style.overflowY = 'hidden';
-        
-        // <html> タグに「隙間」を追加します
-        document.documentElement.style.paddingRight = scrollbarWidth + 'px';
       }
-
       function unlockPageScroll(){
-        document.documentElement.style.overflowY = htmlOriginalOverflow;
-        
-        // <html> タグに追加した「隙間」を元に戻します
-        document.documentElement.style.paddingRight = htmlOriginalPadding;
+        document.documentElement.style.overflowY = '';
       }
 
       iframe.addEventListener('mouseenter', lockPageScroll);
       iframe.addEventListener('mouseleave', unlockPageScroll);
-
       window.addEventListener('blur', unlockPageScroll);
       window.addEventListener('beforeunload', unlockPageScroll);
     })();
