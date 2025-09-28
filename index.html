@@ -9,8 +9,7 @@
     html {
       height: 100%;
       overflow-y: scroll;
-      /* スクロールバー領域を常に確保して横ズレ防止 */
-      scrollbar-gutter: stable both-edges;
+      scrollbar-gutter: stable both-edges; /* 横ズレ防止 */
     }
     body {
       min-height: 100%;
@@ -20,20 +19,20 @@
     }
     .wrap{display:flex;flex-direction:column;align-items:center;min-height:100%}
 
-    /* === ヘッダー：ロゴ画像＋最上部固定（グレー帯 高さ55px + 直下5px白帯） === */
+    /* === ヘッダー：ロゴ画像＋最上部固定（グレー帯 55px + 直下5px白帯） === */
     header{
-      position: fixed;      /* 常時最上部に表示 */
+      position: fixed;
       top: 0; left: 0; right: 0;
       z-index: 1000;
       width: 100%;
-      height: 55px;         /* 帯だけ 55px に固定 */
-      padding: 0 12px;      /* 垂直パディングはなし（高さを厳密に） */
-      background: rgba(0,0,0,.6);   /* グレー帯 */
+      height: 55px;
+      padding: 0 12px;
+      background: rgba(0,0,0,.6);
       color:#fff;
       text-align:center;
       backdrop-filter: blur(4px);
       -webkit-backdrop-filter: blur(4px);
-      overflow: visible;    /* 下方向へロゴをはみ出させる */
+      overflow: visible;
     }
     /* 直下 5px の白帯（ロゴの背面に回す） */
     header::after{
@@ -41,20 +40,20 @@
       position: fixed;
       left: 0; right: 0; top: 55px;
       height: 5px;
-      background: #fff;     /* 不透明の白帯 */
-      z-index: 0;           /* ← ロゴより背面にする */
+      background: #fff;
+      z-index: 0;            /* ロゴより背面 */
       pointer-events: none;
     }
 
     .brand-logo{
       display:block;
-      width:auto;                         /* 原寸優先 */
-      height:auto;                        /* 原寸優先 */
-      max-width: calc(100% - 24px);       /* 画面より大きい時だけ縮小（横ズレ回避） */
-      margin: 0 auto -8px;                /* 下端から少しはみ出す */
+      width:auto;
+      height:auto;
+      max-width: calc(100% - 24px);
+      margin: 0 auto -8px;
       object-fit: contain;
       position: relative;
-      z-index: 2;                         /* ← 白帯より前面に表示 */
+      z-index: 2;            /* 白帯より前面 */
       pointer-events:auto;
     }
 
@@ -68,12 +67,22 @@
       justify-content:center;
       padding-bottom:24px;
       background:url('./assets/background.jpg') center/cover no-repeat;
-      margin-top: 60px; /* 55px（グレー帯）+ 5px（白帯）= 60px の空き */
+      margin-top: 60px; /* 55px+5px */
     }
     .site-logo{pointer-events:none;position:absolute;top:120px;left:50%;transform:translate(-50%,-50%);width:min(30vw,200px);opacity:.95;z-index:2}
     #webxr-iframe{
-      display:block;width:100%;height:80vh;border:none;margin-top:120px;border-radius:16px;
-      box-shadow:0 30px 80px rgba(0,0,0,.25);background:#000;overscroll-behavior:contain;overflow:hidden
+      display:block;
+      width:100%;
+      height:80vh;
+      border:none;
+      margin-top:120px;
+      border-radius:16px;
+      box-shadow:0 30px 80px rgba(0,0,0,.25);
+      background:#000;
+      overscroll-behavior:contain;
+      overflow:hidden;
+      /* ← 追加：白い不透明の枠線 */
+      border: 5px solid #ffffff;
     }
     @media(min-width:1024px){#webxr-iframe{width:1024px;height:80vh}}
     @media(max-width:1023px){#webxr-iframe{width:100%;height:calc(80vw)}}
@@ -204,11 +213,11 @@
     #grid .card:nth-child(4n+4) .title{ color:#fff; }
     #grid .card:nth-child(4n+4) .meta{ color:rgba(255,255,255,.9); }
 
-    /* === モーダル === */
+    /* === モーダル（共通） === */
     .backdrop{
       position:fixed; inset:0;
       background:rgba(0,0,0,.45);
-      display:none;                /* 既定は非表示 */
+      display:none;
       align-items:center; justify-content:center;
       z-index:20;
     }
@@ -247,7 +256,7 @@
     </section>
   </div>
 
-  <!-- モーダル -->
+  <!-- 作成/編集モーダル -->
   <div class="backdrop" id="backdrop">
     <div class="modal">
       <header><div id="modalTitle">待ち合わせを作成</div><div class="close" id="close">×</div></header>
@@ -258,7 +267,7 @@
           <div><label for="mStart">集合日時（JST）</label><input id="mStart" type="datetime-local"></div>
           <div>
             <label for="mTarget">目的URL（移動先）</label>
-            <input id="mTarget" placeholder="https://example.com/room">
+            <input id="mTarget" placeholder="https://dokodemodoors.com/...">
             <div class="note">※ 作成後は目的URLは固定です。変更したい場合は「複製」して新しい部屋を作ってください。</div>
           </div>
         </div>
@@ -272,6 +281,19 @@
         <button class="btn" id="submit">待ち合わせを作成</button>
       </div>
       <div class="status" id="statusMsg">作成しました</div>
+    </div>
+  </div>
+
+  <!-- カスタムアラート（目的URLの内容） -->
+  <div class="backdrop" id="alertBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
+      <header><div id="alertTitle">目的URLの内容</div><div class="close" id="alertClose" aria-label="閉じる">×</div></header>
+      <div class="body" id="alertBody">
+        目的URLには、どこでもドアのツアーまたはワールドを指定してください
+      </div>
+      <div class="actions">
+        <button class="btn" id="alertOk">OK</button>
+      </div>
     </div>
   </div>
 
@@ -442,6 +464,19 @@
     }
     function closeModal(){ backdrop.style.display='none'; }
 
+    // ===== カスタムアラート =====
+    const alertBackdrop = $('#alertBackdrop');
+    const alertClose = $('#alertClose');
+    const alertOk = $('#alertOk');
+    function showUrlAlert(){
+      if(alertBackdrop){ alertBackdrop.style.display='flex'; }
+    }
+    function hideUrlAlert(){
+      if(alertBackdrop){ alertBackdrop.style.display='none'; }
+    }
+    if(alertClose) alertClose.onclick = hideUrlAlert;
+    if(alertOk) alertOk.onclick = hideUrlAlert;
+
     async function postRegistry(item){
       try{
         const owner = localStorage.getItem('nickname') || null;
@@ -463,7 +498,13 @@
 
       if(mode==='create'){
         target=(mTarget.value||'').trim();
-        if(!/^https?:\/\//i.test(target)){ alert('目的URL（https:// から）を入力してください。'); return; }
+
+        /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
+        if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
+          showUrlAlert();
+          return;
+        }
+
         roomId=uuid(); owners[roomId]=randKey(); writeOwners(owners);
       }
       const item={
@@ -560,13 +601,8 @@
       var iframe = document.getElementById('webxr-iframe');
       if(!iframe) return;
 
-      // スクロール固定時も横ズレしない実装
-      function lockPageScroll(){
-        document.documentElement.style.overflowY = 'hidden';
-      }
-      function unlockPageScroll(){
-        document.documentElement.style.overflowY = '';
-      }
+      function lockPageScroll(){ document.documentElement.style.overflowY = 'hidden'; }
+      function unlockPageScroll(){ document.documentElement.style.overflowY = ''; }
 
       iframe.addEventListener('mouseenter', lockPageScroll);
       iframe.addEventListener('mouseleave', unlockPageScroll);
