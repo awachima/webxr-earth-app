@@ -269,11 +269,11 @@ AFRAME.registerComponent('ray-enforce-child', {
 // ===================================================================
 AFRAME.registerComponent('earth-controls',{
   // schemaにpinchScaleSpeedを追加
-  schema:{ 
-    rotationSpeed:{type:'number',default:2.0}, 
-    joystickRotationSpeed:{type:'number',default:1.0}, 
-    scaleSpeed:{type:'number',default:0.01}, 
-    mouseRotationSpeed:{type:'number',default:0.2}, 
+  schema:{
+    rotationSpeed:{type:'number',default:2.0},
+    joystickRotationSpeed:{type:'number',default:1.0},
+    scaleSpeed:{type:'number',default:0.01},
+    mouseRotationSpeed:{type:'number',default:0.2},
     wheelScaleSpeed:{type:'number',default:0.0005},
     pinchScaleSpeed:{type:'number', default:0.001} // ★ スマホのピンチ操作の感度
   },
@@ -281,9 +281,9 @@ AFRAME.registerComponent('earth-controls',{
     this.minScale=1.0; this.maxScale=3.0;
     this.currentXRotation=0; this.keys={};
     this.stickInput={ left:{x:0,y:0}, right:{x:0,y:0} };
-    
+
     // --- マウス・タッチ操作の状態管理 ---
-    this.isDragging=false; 
+    this.isDragging=false;
     this.previousPointerPosition={x:0,y:0}; // マウスと1本指タッチの座標
     this.previousPinchDistance = 0; // 2本指タッチの距離
 
@@ -456,14 +456,14 @@ AFRAME.registerComponent('earth-controls',{
         stickScale_raw = gp.left.y;
       }
     }
-    
+
     var rotY_k = (this.keys['ArrowLeft']?-1:0) + (this.keys['ArrowRight']?1:0);
     var rotX_k = (this.keys['ArrowUp']?-1:0) + (this.keys['ArrowDown']?1:0);
     var scale_k = (this.keys['w']||this.keys['W']?1:0) + (this.keys['s']||this.keys['S']?-1:0);
     var rotY_ui = (this.uiState.rotRight?1:0) + (this.uiState.rotLeft?-1:0);
     var rotX_ui = (this.uiState.rotDown?1:0) + (this.uiState.rotUp?-1:0);
     var scale_ui = (this.uiState.zoomIn?1:0) + (this.uiState.zoomOut?-1:0);
-    
+
     var s=this.el.object3D.scale.x; var t=(s-1.0)/(3.0-1.0); var mul=1-(t*(7/8));
     var finalRotY=(stickRotY_raw!==0? stickRotY_raw*this.data.joystickRotationSpeed : (rotY_ui!==0? rotY_ui*this.data.rotationSpeed : rotY_k*this.data.rotationSpeed))*mul;
     var finalRotX=(stickRotX_raw!==0? stickRotX_raw*this.data.joystickRotationSpeed : (rotX_ui!==0? rotX_ui*this.data.rotationSpeed : rotX_k*this.data.rotationSpeed))*mul;
@@ -496,7 +496,7 @@ AFRAME.registerComponent('hex-marker',{
   }
 });
 
-// ============ marker-placer ============
+// ============ marker-placer (修正版) ============
 AFRAME.registerComponent('marker-placer',{
   schema:{ maxMarkerMultiplier:{type:'number',default:20}, minWorldMultiplier:{type:'number',default:3.5} },
   init:async function(){
@@ -507,7 +507,7 @@ AFRAME.registerComponent('marker-placer',{
     this.el.sceneEl.addEventListener('panel-closed', () => {
       this.currentMarkers.forEach(marker => { var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('#FF7F8A'); });
     });
-    var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vSOToLaddWpng4D3j-FoN9rHXteriNlykqGJ5VJIUqhvxVKKdrTJ_dfEpgXxXC9hd-YcbfaodERb01x/pub?gid=0&single=true&output=csv";
+    var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=1429678482&single=true&output=csv";
     console.log('[marker-placer] fetching CSV:', sheetUrl);
     try{
       var res=await fetch(sheetUrl,{cache:'no-store'});
@@ -518,51 +518,73 @@ AFRAME.registerComponent('marker-placer',{
     }catch(e){ console.error("データ取得エラー:",e); }
     this.updateClusters();
   },
-  // ★★★ 修正：1行目ヘッダー（name/latitude/longitude/url など）を確実にスキップ。タブ区切りにも対応。
-  parseCsv:function(csvText){
-    var locations=[];
-    var lines = csvText.trim().split(/\r?\n/);
 
+  // ★★★ ここから修正されたparseCsv関数 ★★★
+  parseCsv:function(csvText){
+    const locations=[];
+
+    // 引用符内のコンマを無視して行を正しく分割する関数
+    const parseCsvLine = (line) => {
+      const parts = [];
+      let currentPart = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"' && (i === 0 || line[i-1] !== '"')) {
+            inQuotes = !inQuotes;
+            continue; // 引用符自体は含めない
+        }
+        if (char === ',' && !inQuotes) {
+            parts.push(currentPart);
+            currentPart = '';
+        } else {
+            currentPart += char;
+        }
+      }
+      parts.push(currentPart);
+      // Google Sheets CSVは先頭と末尾の引用符を保持するので除去
+      if (parts[0] && parts[0].startsWith('"')) parts[0] = parts[0].slice(1);
+      if (parts[0] && parts[0].endsWith('"')) parts[0] = parts[0].slice(0, -1);
+      return parts;
+    };
+
+    const lines = csvText.trim().split(/\r?\n/);
     if (lines.length === 0) return locations;
 
-    // 区切り文字を推定（カンマ優先、無ければタブ）
-    var headerRaw = lines[0];
-    var delimiter = headerRaw.indexOf(',') >= 0 ? ',' : '\t';
+    const cleanAndParseFloat = (str) => {
+      if (typeof str !== 'string') return NaN;
+      const cleanedStr = str.trim().replace(/[−–‐]/g, '-');
+      return parseFloat(cleanedStr);
+    };
 
-    // ヘッダー判定（name|title を含み、lat、lon|long、url を含む場合）
-    var header = headerRaw.trim().toLowerCase();
-    var isHeaderByTokens =
-      /^(name|title)\b/.test(header) &&
-      /lat/.test(header) &&
-      /(lon|long)/.test(header) &&
-      /url/.test(header);
+    // ヘッダー行かどうかの判定
+    const firstLineParts = parseCsvLine(lines[0]);
+    const latTry = cleanAndParseFloat(firstLineParts[1] || '');
+    const lonTry = cleanAndParseFloat(firstLineParts[2] || '');
+    const isHeader = isNaN(latTry) || isNaN(lonTry);
+    const startIndex = isHeader ? 1 : 0;
 
-    // 先頭行の値で数値判定（lat/lon が数値でなければヘッダー扱い）
-    var firstParts = headerRaw.split(delimiter);
-    var latTry = parseFloat((firstParts[1] || '').replace(/"/g,''));
-    var lonTry = parseFloat((firstParts[2] || '').replace(/"/g,''));
-    var isHeaderByNaN = isNaN(latTry) || isNaN(lonTry);
+    for (let i = startIndex; i < lines.length; i++) {
+      if (!lines[i]) continue;
+      const parts = parseCsvLine(lines[i]);
 
-    var startIndex = (isHeaderByTokens || isHeaderByNaN) ? 1 : 0;
-
-    for (var i = startIndex; i < lines.length; i++) {
-      var parts = lines[i].trim().split(delimiter);
       if (parts.length >= 4) {
-        var title = parts[0].replace(/"/g,'');
-        var lat = parseFloat(parts[1]);
-        var lon = parseFloat(parts[2]);
-        var url = parts[3].replace(/"/g,'');
+        const title = parts[0];
+        const lat = cleanAndParseFloat(parts[1]);
+        const lon = cleanAndParseFloat(parts[2]);
+        const url = parts[3];
 
         if (isNaN(lat) || isNaN(lon)) {
-          // 緯度経度が欠損時は南極に退避（既存仕様を踏襲）
-          lat = -90;
-          lon = 0;
+          locations.push({ title: title || '名称不明（座標なし）', lat: -90, lon: 0, url: url });
+        } else {
+          locations.push({ title: title, lat: lat, lon: lon, url: url });
         }
-        locations.push({ title: title, lat: lat, lon: lon, url: url });
       }
     }
     return locations;
   },
+  // ★★★ ここまでが修正されたparseCsv関数 ★★★
+
   computeThreshold:function(){ var s=this.el.object3D.scale.x; var t=(s-1)/(3-1); return 0.2 - t*(0.2-0.008); },
   updateClusters:function(){
     this.currentMarkers.forEach(m=>{ if(m && m.parentNode) m.parentNode.removeChild(m); }); this.currentMarkers=[];
@@ -615,13 +637,23 @@ AFRAME.registerComponent('marker-placer',{
       var marker=this.currentMarkers[i];
       var t = (s-1)/(3-1);
 var targetWorld = this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier - this.data.minWorldMultiplier);
-var markerScale = targetWorld / s; 
+var markerScale = targetWorld / s;
 marker.object3D.scale.set(markerScale, markerScale, markerScale);
       marker.object3D.scale.set(markerScale,markerScale,markerScale);
-      marker.object3D.getWorldPosition(this.markerPos);
-      var normal=this.markerPos.clone().sub(this.earthPos).normalize();
-      var camDir=this.markerPos.clone().sub(this.cameraPos).normalize();
-      var visible=(normal.dot(camDir)<0); marker.object3D.visible=visible; if(marker.textEl) marker.textEl.object3D.visible=visible;
+// ループの外（forの前）で1回だけ計算してもOK
+// var toEye = this.cameraPos.clone().sub(this.earthPos).normalize();
+
+marker.object3D.getWorldPosition(this.markerPos);
+var normal = this.markerPos.clone().sub(this.earthPos).normalize();
+
+// ここで「地球中心→カメラ」を使う（毎回計算するなら↓）
+var toEye = this.cameraPos.clone().sub(this.earthPos).normalize();
+
+// 境界のチラつきを避けたい場合は 0.0→0.001〜0.01 くらいのεを加える
+var visible = (normal.dot(toEye) > 0.001);
+
+marker.object3D.visible = visible;
+if (marker.textEl) marker.textEl.object3D.visible = visible;
     }
   },
   latLonTo3D:function(lat,lon,R){ var phi=(90-lat)*(Math.PI/180), theta=(lon+180)*(Math.PI/180);
@@ -708,7 +740,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
   </a-entity>
 
   <a-entity id="ui-panel" position="-0.025 1.599 -0.033" rotation="0 0 0" scale="0.03 0.03 0.03">
-    <a-entity rounded-panel="width: 0.6; height: 0.7; radius: 0.05; 
+    <a-entity rounded-panel="width: 0.6; height: 0.7; radius: 0.05;
                  color: #228; opacity: 0.6;
                  stroke: 0.01; strokeColor: #fff; strokeOpacity: 1"></a-entity>
     <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
@@ -1006,13 +1038,13 @@ AFRAME.registerComponent('panel-raf-proxy', {
   }
 
   function closePanel(){
-    const p=document.getElementById('vrPanel'); 
+    const p=document.getElementById('vrPanel');
     if(p && p.parentNode) p.parentNode.removeChild(p);
     if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
     isHoldingUp = false; isHoldingDown = false;
     scrollHandler = null;
     window.__panelTick = null; // ★ 停止
-    window.__panelOpen=false; 
+    window.__panelOpen=false;
     const scene = AFRAME.scenes[0];
     if(scene) scene.emit('panel-closed');
     setRaycasterTargets && setRaycasterTargets(false);
