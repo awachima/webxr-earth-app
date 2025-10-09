@@ -507,7 +507,7 @@ AFRAME.registerComponent('marker-placer',{
     this.el.sceneEl.addEventListener('panel-closed', () => {
       this.currentMarkers.forEach(marker => { var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('#FF7F8A'); });
     });
-    var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=1429678482&single=true&output=csv";
+    var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=692697890&single=true&output=csv";
     console.log('[marker-placer] fetching CSV:', sheetUrl);
     try{
       var res=await fetch(sheetUrl,{cache:'no-store'});
