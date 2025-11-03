@@ -116,9 +116,9 @@ AFRAME.registerComponent('rounded-panel', {
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
   <style>
-    @font-face{
-      font-family:"NotoSansJPLocal";
-      src:url("static/NotoSansJP-Regular.ttf") format("truetype");
+@font-face{
+      font-family:"NotoSansSC"; /* 名前も変えておくと分かりやすいです */
+      src:url("https://fonts.gstatic.com/s/notosanssc/v36/k3kXo8T-4Jsb0S-T-FsvO93Yydo.ttf") format("truetype"); /* Noto Sans SCのURLに変更 */
       font-weight:400; font-style:normal; font-display:swap;
     }
     html,body{ height:100%; margin:0; overflow:hidden; background:#eceff1; }
@@ -127,7 +127,7 @@ AFRAME.registerComponent('rounded-panel', {
 <body>
 
 <script>
-const FONT_URL = 'static/NotoSansJP-Regular.ttf';
+const FONT_URL = 'https://fonts.gstatic.com/s/notosanssc/v36/k3kXo8T-4Jsb0S-T-FsvO93Yydo.ttf';
 window.__panelOpen = false;
 window.__panelTick = null; // panel scroll step runner injected at openPanel
 
@@ -743,13 +743,12 @@ AFRAME.registerComponent('panel-raf-proxy', {
     <a-entity rounded-panel="width: 0.6; height: 0.7; radius: 0.05;
                  color: #228; opacity: 0.6;
                  stroke: 0.01; strokeColor: #fff; strokeOpacity: 1"></a-entity>
-    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.25 0.01"><a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.20 0 0.01"><a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.23 0 0.01"><a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.08 0.01"><a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.06 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
-  </a-entity>
+<a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://fonts.gstatic.com/s/notosanssc/v36/k3kXo8T-4Jsb0S-T-FsvO93Yydo.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.25 0.01"><a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://fonts.gstatic.com/s/notosanssc/v36/k3kXo8T-4Jsb0S-T-FsvO93Yydo.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.20 0 0.01"><a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://fonts.gstatic.com/s/notosanssc/v36/k3kXo8T-4Jsb0S-T-FsvO93Yydo.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.23 0 0.01"><a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://fonts.gstatic.com/s/notosanssc/v36/k3kXo8T-4Jsb0S-T-FsvO93Yydo.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.08 0.01"><a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: https://fonts.gstatic.com/s/notosanssc/v36/k3kXo8T-4Jsb0S-T-FsvO93Yydo.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.06 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: https://fonts.gstatic.com/s/notosanssc/v36/k3kXo8T-4Jsb0S-T-FsvO93Yydo.ttf;" position="0 0 0.01"></a-entity></a-entity>  </a-entity>
 
   <a-sky src="eartn_model/sky.jpg"></a-sky>
 
