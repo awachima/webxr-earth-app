@@ -117,8 +117,8 @@ AFRAME.registerComponent('rounded-panel', {
 
   <style>
     @font-face{
-      font-family:"NotoSansCJK";
-      src:url("https://cdn.jsdelivr.net/npm/noto-sans-cjk-jp-regular/NotoSansCJKjp-Regular.otf") format("opentype");
+      font-family:"NotoSansJPLocal";
+      src:url("static/NotoSansJP-Regular.ttf") format("truetype");
       font-weight:400; font-style:normal; font-display:swap;
     }
     html,body{ height:100%; margin:0; overflow:hidden; background:#eceff1; }
@@ -127,7 +127,7 @@ AFRAME.registerComponent('rounded-panel', {
 <body>
 
 <script>
-const FONT_URL = 'https://cdn.jsdelivr.net/npm/noto-sans-cjk-jp-regular/NotoSansCJKjp-Regular.otf';
+const FONT_URL = 'static/NotoSansJP-Regular.ttf';
 window.__panelOpen = false;
 window.__panelTick = null; // panel scroll step runner injected at openPanel
 
@@ -743,12 +743,12 @@ AFRAME.registerComponent('panel-raf-proxy', {
     <a-entity rounded-panel="width: 0.6; height: 0.7; radius: 0.05;
                  color: #228; opacity: 0.6;
                  stroke: 0.01; strokeColor: #fff; strokeOpacity: 1"></a-entity>
-    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://cdn.jsdelivr.net/npm/noto-sans-cjk-jp-regular/NotoSansCJKjp-Regular.otf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.25 0.01"><a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://cdn.jsdelivr.net/npm/noto-sans-cjk-jp-regular/NotoSansCJKjp-Regular.otf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.20 0 0.01"><a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://cdn.jsdelivr.net/npm/noto-sans-cjk-jp-regular/NotoSansCJKjp-Regular.otf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.23 0 0.01"><a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://cdn.jsdelivr.net/npm/noto-sans-cjk-jp-regular/NotoSansCJKjp-Regular.otf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.08 0.01"><a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: https://cdn.jsdelivr.net/npm/noto-sans-cjk-jp-regular/NotoSansCJKjp-Regular.otf;" position="0 0 0.01"></a-entity></a-entity>
-    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.06 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: https://cdn.jsdelivr.net/npm/noto-sans-cjk-jp-regular/NotoSansCJKjp-Regular.otf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.25 0.01"><a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.20 0 0.01"><a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.23 0 0.01"><a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.08 0.01"><a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.06 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
   </a-entity>
 
   <a-sky src="eartn_model/sky.jpg"></a-sky>
@@ -773,7 +773,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
                   CONTENT_TOP:0.48, CONTENT_BOTTOM:-0.45, SCROLL_MARGIN_R:0.035, SCROLL_TRACK_W:0.048, SCROLL_TRACK_H:0.78 };
   const HOVER_BG = '#23324A', ZEBRA_A='#262b31', ZEBRA_B='#21262c', EDGE_COL='#596273';
   const BTN_R=0.045, BTN_FS=0.06;
-  const PANEL_FONT_URL = (typeof FONT_URL!=='undefined')?FONT_URL:(window.FONT_URL||'https://cdn.jsdelivr.net/npm/noto-sans-cjk-jp-regular/NotoSansCJKjp-Regular.otf');
+  const PANEL_FONT_URL = (typeof FONT_URL!=='undefined')?FONT_URL:(window.FONT_URL||'static/NotoSansJP-Regular.ttf');
   const FONT_SIZE=0.035, LINE_HEIGHT=1.35, EXTRA=Math.max(0.006, FONT_SIZE*0.38);
   const FUDGE_FIXED=0.0035, FUDGE_PERLINE=0.0035, EST_COLS=19, EST_SCALE=1.08;
   const JOY_DEADZONE = 0.15;
