@@ -81,7 +81,7 @@
       background:#000;
       overscroll-behavior:contain;
       overflow:hidden;
-      /* ← 追加：白い不透明の枠線 */
+      /* ← 追加済み：白い不透明の枠線 */
       border: 5px solid #ffffff;
     }
     @media(min-width:1024px){#webxr-iframe{width:1024px;height:80vh}}
@@ -220,8 +220,15 @@
       display:none;
       align-items:center; justify-content:center;
       z-index:20;
+      touch-action: manipulation; /* Quest でのタップ反応性を改善 */
     }
-    .modal{width:min(720px,92vw);background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden}
+    .modal{
+      width:min(720px,92vw);
+      background:#fff;
+      border-radius:16px;
+      box-shadow:0 24px 60px rgba(0,0,0,.35);
+      overflow:visible; /* ← 重要：select ドロップダウンをクリップしない */
+    }
     .modal header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111;color:#fff;font:700 16px system-ui}
     .close{cursor:pointer;font-size:20px;line-height:1}
     .body{padding:16px}
@@ -229,22 +236,20 @@
     @media(max-width:640px){.form{grid-template-columns:1fr}}
     label{font:600 12px system-ui;color:#333}
     input,select{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font:14px system-ui;box-sizing:border-box}
+    select{position:relative;z-index:30;} /* Questでの重なり順の明示 */
+
     .actions{display:flex;gap:10px;justify-content:flex-end;padding:0 16px 16px;flex-wrap:wrap}
     .actions .left{margin-right:auto;display:flex;gap:10px;align-items:center}
     .status{display:none;padding:12px 16px 16px;color:#0a7f3f;font:600 14px system-ui}
     .note{font:12px system-ui;color:#666;margin-top:6px}
 
-    /* === フッター（画像表示） === */
+    /* === フッター（黒バー 60px） === */
     footer{
       width:100%;
+      height:60px;
       margin:0;
       padding:0;
-      background:transparent;
-    }
-    .footer-image{
-      display:block;
-      width:100%;
-      height:auto;
+      background:#000;
     }
   </style>
 </head>
@@ -275,12 +280,34 @@
       <header><div id="modalTitle">待ち合わせを作成</div><div class="close" id="close">×</div></header>
       <div class="body">
         <div class="form">
-          <div><label for="mTitle">タイトル</label><input id="mTitle" placeholder="例：〇〇ツアー集合"></div>
-          <div><label for="mLimit">参加上限</label><select id="mLimit"><option>10</option><option>9</option><option>8</option><option>7</option><option>6</option><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option></select></div>
-          <div><label for="mStart">集合日時（JST）</label><input id="mStart" type="datetime-local"></div>
+          <div>
+            <label for="mTitle">タイトル</label>
+            <input id="mTitle" placeholder="例：〇〇ツアー集合" inputmode="text" maxlength="60">
+          </div>
+
+          <div>
+            <label for="mLimit">参加上限</label>
+            <select id="mLimit" aria-label="参加上限を選択">
+              <option>10</option><option>9</option><option>8</option><option>7</option><option>6</option>
+              <option>5</option><option>4</option><option>3</option><option>2</option><option>1</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="mStart">集合日時（JST）</label>
+            <!-- 通常（対応ブラウザ向け） -->
+            <input id="mStart" type="datetime-local" inputmode="none">
+
+            <!-- フォールバック（Quest 等）：date + time の2入力 -->
+            <div id="mStartFallback" style="display:none; gap:8px">
+              <input id="mDate" type="date" aria-label="日付" />
+              <input id="mTime" type="time" step="60" aria-label="時刻（分単位）" />
+            </div>
+          </div>
+
           <div>
             <label for="mTarget">目的URL（移動先）</label>
-            <input id="mTarget" placeholder="https://dokodemodoors.com/...">
+            <input id="mTarget" placeholder="https://dokodemodoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
             <div class="note">※ 作成後は目的URLは固定です。変更したい場合は「複製」して新しい部屋を作ってください。</div>
           </div>
         </div>
@@ -441,14 +468,35 @@
     const backdrop=$('#backdrop');
     const modalTitle=$('#modalTitle');
     const mTitle=$('#mTitle'), mLimit=$('#mLimit'), mStart=$('#mStart'), mTarget=$('#mTarget');
+    const mStartFallback = $('#mStartFallback');
+    const mDate = $('#mDate'), mTime = $('#mTime');
     const statusMsg=$('#statusMsg');
     const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
 
-    let mode='create', editingRoomId=null, editingTarget=null;
+    // Quest / datetime-local 非対応検出
+    const isQuest = /\b(OculusBrowser|Meta Quest Browser|MetaQuestBrowser|Quest)\b/i.test(navigator.userAgent);
+    function supportsDateTimeLocal(){
+      const i=document.createElement('input');
+      i.setAttribute('type','datetime-local');
+      return i.type === 'datetime-local';
+    }
+    const useFallback = isQuest || !supportsDateTimeLocal();
 
     function initStartInput(){
       const now=new Date(); now.setMinutes(now.getMinutes()+30); now.setSeconds(0,0);
-      mStart.value=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      const yyyy=now.getFullYear(), mm=pad(now.getMonth()+1), dd=pad(now.getDate());
+      const hh=pad(now.getHours()), mi=pad(now.getMinutes());
+
+      if (useFallback){
+        mStart.style.display='none';
+        mStartFallback.style.display='grid';
+        mDate.value=`${yyyy}-${mm}-${dd}`;
+        mTime.value=`${hh}:${mi}`;
+      }else{
+        mStart.style.display='';
+        mStartFallback.style.display='none';
+        mStart.value=`${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+      }
     }
 
     function openModal(m='create', payload=null){
@@ -471,7 +519,19 @@
         mTarget.disabled=true;
         editingRoomId=payload.roomId; editingTarget=payload.target;
         mTitle.value=payload.title||''; mLimit.value=String(payload.limit||'10');
-        mStart.value=(payload.start||'').slice(0,16); mTarget.value=payload.target||'';
+
+        if (useFallback){
+          mStart.style.display='none';
+          mStartFallback.style.display='grid';
+          const d = new Date(payload.start||Date.now());
+          mDate.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+          mTime.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }else{
+          mStart.style.display='';
+          mStartFallback.style.display='none';
+          mStart.value=(payload.start||'').slice(0,16);
+        }
+        mTarget.value=payload.target||'';
       }
       backdrop.style.display='flex';
     }
@@ -502,12 +562,25 @@
       }catch(e){ console.warn('[registry]', e); }
     }
 
+    function composeStartISO(){
+      if (!useFallback){
+        return toISO(mStart.value);
+      } else {
+        const d = (mDate.value||'').trim();
+        const t = (mTime.value||'').trim();
+        if(!d || !t){ return ''; }
+        return toISO(`${d}T${t}`);
+      }
+    }
+
     async function onSubmit(){
       const owners=readOwners();
       let roomId=editingRoomId, target=editingTarget;
       const title=(mTitle.value||'待ち合わせ').trim();
       const limit=parseInt(mLimit.value,10)||10;
-      if(!mStart.value){ alert('集合日時を入力してください。'); return; }
+
+      const startISO = composeStartISO();
+      if(!startISO){ alert('集合日時を入力してください。'); return; }
 
       if(mode==='create'){
         target=(mTarget.value||'').trim();
@@ -521,7 +594,7 @@
         roomId=uuid(); owners[roomId]=randKey(); writeOwners(owners);
       }
       const item={
-        roomId, title, start: toISO(mStart.value), limit: String(limit), target,
+        roomId, title, start: startISO, limit: String(limit), target,
         updatedAt: new Date().toISOString(),
         createdAt: (readStore().find(x=>x.roomId===roomId)?.createdAt || new Date().toISOString())
       };
@@ -538,10 +611,13 @@
       if(!editingRoomId) return;
       const owners=readOwners();
       const newId=uuid(); owners[newId]=randKey(); writeOwners(owners);
+
+      const startISO = composeStartISO() || new Date().toISOString();
+
       const item={
         roomId:newId,
         title:(mTitle.value||'待ち合わせ').trim(),
-        start:toISO(mStart.value),
+        start:startISO,
         limit:String(parseInt(mLimit.value,10)||10),
         target:editingTarget,
         updatedAt:new Date().toISOString(),
@@ -624,10 +700,8 @@
     })();
   </script>
 
-  <!-- ▼▼ フッター画像 ▼▼ -->
-  <footer>
-    <img class="footer-image" src="./assets/footer.png" alt="フッター画像">
-  </footer>
-  <!-- ▲▲ フッター画像 ▲▲ -->
+  <!-- ▼▼ フッター（黒バー 60px） ▼▼ -->
+  <footer></footer>
+  <!-- ▲▲ フッター（黒バー 60px） ▲▲ -->
 </body>
 </html>
