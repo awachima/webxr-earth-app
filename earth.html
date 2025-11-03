@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>WebXR Earth Controls — DEBUG (fix6: CJK font & btnDn redeclare)</title>
+  <title>WebXR Earth Controls — CJK font via CDN</title>
 
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script>
@@ -85,10 +85,10 @@ AFRAME.registerComponent('rounded-panel', {
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
   <style>
-    /* CJK を確実に描画するためのローカルフォント */
+    /* （参考）CSS側にも同名familyを定義しておくが、Troikaは下の JS 定数URLを参照する */
     @font-face{
       font-family:"NotoSansCJKLocal";
-      src:url("static/NotoSansCJK-Regular.otf") format("opentype");
+      src:url("https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@v20241215/Sans/WOFF2/SimplifiedChinese/NotoSansSC-Regular.woff2") format("woff2");
       font-weight:400; font-style:normal; font-display:swap;
     }
     html,body{ height:100%; margin:0; overflow:hidden; background:#eceff1; }
@@ -97,8 +97,8 @@ AFRAME.registerComponent('rounded-panel', {
 <body>
 
 <script>
-/* すべての troika-text で使う CJK フォント */
-const FONT_URL = 'static/NotoSansCJK-Regular.otf';
+/* ▼ Troika に渡す CJK フォントURL（CORS可・CDN配信） */
+const FONT_URL = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@v20241215/Sans/WOFF2/SimplifiedChinese/NotoSansSC-Regular.woff2';
 
 /* レイキャスター対象切り替え */
 function refreshAllRaycasters(){
@@ -116,7 +116,7 @@ function setRaycasterTargets(uiOnly){
   });
 }
 
-/* パネルをワールド固定 */
+/* パネル固定 */
 AFRAME.registerComponent('panel-world-lock',{
   schema:{ baseDist:{type:'number',default:1.5}, baseScale:{type:'number',default:1.40}, margin:{type:'number',default:0.03}, minDist:{type:'number',default:1.02}, worldYaw:{type:'number',default:0}, yOffset:{type:'number',default:0.00} },
   init:function(){
@@ -157,7 +157,7 @@ AFRAME.registerComponent('panel-world-lock',{
   }
 });
 
-/* コントローラ子レイ強制（省略：前回と同等） */
+/* コントローラ子レイ強制 */
 AFRAME.registerComponent('ray-enforce-child', {
   init: function(){
     var scene = this.el.sceneEl || this.el;
@@ -416,7 +416,6 @@ AFRAME.registerComponent('marker-placer',{
     this.updateClusters();
   },
 
-  /* CSV パーサ（CJK などの文字はそのまま保持） */
   parseCsv:function(csvText){
     const locations = [];
 
@@ -542,7 +541,7 @@ AFRAME.registerComponent('marker-placer',{
 });
 </script>
 
-<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" vr-ray-toggle panel-raf-proxy ray-enforce-child>
+<a-scene renderer="highRefreshRate: true" vr-mode-ui="enabled: true" webxr="requiredFeatures: local-floor; optionalFeatures: bounded-floor, layers" ray-enforce-child>
   <a-light type="ambient" color="#CCC"></a-light>
   <a-light type="directional" position="-1 1 2" intensity="0.5"></a-light>
 
@@ -556,125 +555,56 @@ AFRAME.registerComponent('marker-placer',{
       <a-entity id="mouseCursor" cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .collidable, .ui; useWorldCoordinates: true; far: 30; interval: 50"></a-entity>
     </a-entity>
     <a-entity id="left-hand" oculus-touch-controls="hand: left; model: false;"></a-entity>
-    <a-entity id="right-hand"
-              oculus-touch-controls="hand: right; model: false"
-              panel-scroll-handler
-              visible="false">
+    <a-entity id="right-hand" oculus-touch-controls="hand: right; model: false" visible="false">
       <a-entity id="right-ray" raycaster="objects: .collidable, .ui; useWorldCoordinates: false; far: 30; interval: 50; showLine: true" cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend" rotation="-45 0 0"></a-entity>
     </a-entity>
   </a-entity>
 
   <!-- UIボタン（troika-text は CJK フォント固定） -->
   <a-entity id="ui-panel" position="-0.025 1.599 -0.033" rotation="0 0 0" scale="0.03 0.03 0.03">
-    <a-entity rounded-panel="width: 0.6; height: 0.7; radius: 0.05;
-                 color: #228; opacity: 0.6;
-                 stroke: 0.01; strokeColor: #fff; strokeOpacity: 1"></a-entity>
+    <a-entity geometry="primitive: plane; width: 0.6; height: 0.7" material="color: #223366; opacity: 0.6"></a-entity>
 
     <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.25 0.01">
-      <a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansCJK-Regular.otf;" position="0 0 0.01"></a-entity>
+      <a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@v20241215/Sans/WOFF2/SimplifiedChinese/NotoSansSC-Regular.woff2;" position="0 0 0.01"></a-entity>
     </a-entity>
     <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.25 0.01">
-      <a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansCJK-Regular.otf;" position="0 0 0.01"></a-entity>
+      <a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@v20241215/Sans/WOFF2/SimplifiedChinese/NotoSansSC-Regular.woff2;" position="0 0 0.01"></a-entity>
     </a-entity>
     <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.20 0 0.01">
-      <a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansCJK-Regular.otf;" position="0 0 0.01"></a-entity>
+      <a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@v20241215/Sans/WOFF2/SimplifiedChinese/NotoSansSC-Regular.woff2;" position="0 0 0.01"></a-entity>
     </a-entity>
     <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.23 0 0.01">
-      <a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansCJK-Regular.otf;" position="0 0 0.01"></a-entity>
+      <a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@v20241215/Sans/WOFF2/SimplifiedChinese/NotoSansSC-Regular.woff2;" position="0 0 0.01"></a-entity>
     </a-entity>
     <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.08 0.01">
-      <a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansCJK-Regular.otf;" position="0 0 0.01"></a-entity>
+      <a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@v20241215/Sans/WOFF2/SimplifiedChinese/NotoSansSC-Regular.woff2;" position="0 0 0.01"></a-entity>
     </a-entity>
     <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.06 0.01">
-      <a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansCJK-Regular.otf;" position="0 0 0.01"></a-entity>
+      <a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@v20241215/Sans/WOFF2/SimplifiedChinese/NotoSansSC-Regular.woff2;" position="0 0 0.01"></a-entity>
     </a-entity>
   </a-entity>
 
   <a-sky src="eartn_model/sky.jpg"></a-sky>
-
-  <script>
-  /* VR入退室でレイを切替 */
-  AFRAME.registerComponent('vr-ray-toggle',{
-    init:function(){
-      var scene=this.el.sceneEl||this.el; var right=document.getElementById('right-hand'); var mouse=document.getElementById('mouseCursor');
-      function setAttr(el, comp, prop, val){ if(!el) return; try{ el.setAttribute(comp, prop, val); }catch(e){} }
-      function enableVRRay(){ if(right){ right.setAttribute('visible',true); setAttr(right,'raycaster','enabled',true);} if(mouse){ setAttr(mouse,'raycaster','enabled',false);} }
-      function disableVRRay(){ if(right){ right.setAttribute('visible',false); setAttr(right,'raycaster','enabled',false);} if(mouse){ setAttr(mouse,'raycaster','enabled',true);} }
-      disableVRRay(); scene.addEventListener('enter-vr', enableVRRay); scene.addEventListener('exit-vr', disableVRRay);
-    }
-  });
-  </script>
 </a-scene>
 
 <script>
-/* 以降：パネル（CJKフォント固定） */
+/* ===== パネル（CJKフォント固定・UI省略版） ===== */
 (function(){
   'use strict';
   const PANEL = { BOARD_W:1.10, CONTENT_LEFT:-0.45, TEXT_MAX_W:0.84, PAD_X:0.02, PAD_Y:0.020, GAP:0.020,
                   CONTENT_TOP:0.48, CONTENT_BOTTOM:-0.45, SCROLL_MARGIN_R:0.035, SCROLL_TRACK_W:0.048, SCROLL_TRACK_H:0.78 };
-  const HOVER_BG = '#23324A', ZEBRA_A='#262b31', ZEBRA_B='#21262c', EDGE_COL='#596273';
-  const BTN_R=0.045, BTN_FS=0.06;
+  const HOVER_BG = '#23324A', ZEBRA_A='#262b31', ZEBRA_B='#21262c';
+  const FONT_SIZE=0.035, LINE_HEIGHT=1.35, EST_SCALE=1.08;
   const PANEL_FONT_URL = FONT_URL;
-  const FONT_SIZE=0.035, LINE_HEIGHT=1.35, EXTRA=Math.max(0.006, FONT_SIZE*0.38);
-  const FUDGE_FIXED=0.0035, FUDGE_PERLINE=0.0035, EST_COLS=19, EST_SCALE=1.08;
-  const JOY_DEADZONE = 0.15;
-  const JOY_SPEED    = 0.120;
-  const HOLD_SPEED   = 0.080;
-  let currentOnWheelListener = null;
-  let isHoldingUp = false;
-  let isHoldingDown = false;
-  let scrollHandler = null;
 
   function safeNavigate(url){
     if(!url) return;
     const topWin = window.top || window.parent || window;
-    const scene  = (AFRAME.scenes && AFRAME.scenes[0]) || null;
-    const go = ()=>{ try { topWin.location.assign(url); } catch(_) { try { topWin.location.href = url; } catch(_2){} } };
-    if (scene && scene.is && scene.is('vr-mode')){
-      const onExit = ()=>{
-        try { scene.removeEventListener('exit-vr', onExit); } catch(_) {}
-        setTimeout(go, 50);
-      };
-      try { scene.addEventListener('exit-vr', onExit); } catch(_) {}
-      try { scene.exitVR(); } catch(_) {}
-      setTimeout(()=>{ try { scene && scene.removeEventListener('exit-vr', onExit); } catch(_) {} go(); }, 1200);
-    } else {
-      go();
-    }
+    try { topWin.location.assign(url); } catch(_) { topWin.location.href = url; }
   }
-  (function(){
-    try{
-      const topWin = window.top || window.parent || window;
-      const _open = window.open;
-      window.open = function(url){
-        if (typeof url === 'string'){
-          try { topWin.location.assign(url); }
-          catch(_) { topWin.location.href = url; }
-          return null;
-        }
-        return _open.apply(window, arguments);
-      };
-    }catch(_){}
-  })();
 
-  function setCardFrame(row,w,h){
-    const bw=0.003, edge=EDGE_COL;
-    let bg=row.querySelector('.list-bg'); if(!bg){ bg=document.createElement('a-entity'); bg.classList.add('ui','list-bg','collidable'); row.appendChild(bg); }
-    bg.setAttribute('geometry',`primitive:plane;width:${w};height:${h}`);
-    bg.setAttribute('material',`shader:flat;color:${row.dataset.baseColor};opacity:0.95;transparent:true;side:double`);
-    bg.setAttribute('position',`${w/2} ${-h/2} 0`);
-    const ensure=cls=>{ let e=row.querySelector('.'+cls); if(!e){ e=document.createElement('a-entity'); e.classList.add('ui',cls); row.appendChild(e);} e.setAttribute('material',`shader:flat;color:${edge};transparent:true;opacity:1;side:double`); return e; };
-    const top=ensure('list-border-top'), bottom=ensure('list-border-bottom'), left=ensure('list-border-left'), right=ensure('list-border-right');
-    top.setAttribute('geometry',`primitive:plane;width:${w};height:${bw}`); bottom.setAttribute('geometry',`primitive:plane;width:${w};height:${bw}`);
-    left.setAttribute('geometry',`primitive:plane;width:${bw};height:${h}`); right.setAttribute('geometry',`primitive:plane;width:${bw};height:${h}`);
-    top.setAttribute('position',`${w/2} ${-bw/2} 0.001`); bottom.setAttribute('position',`${w/2} ${-(h-bw/2)} 0.001`);
-    left.setAttribute('position',`${bw/2} ${-h/2} 0.001`); right.setAttribute('position',`${w-bw/2} ${-h/2} 0.001`);
-  }
   function setRowBgColor(row,color){ const bg=row.querySelector('.list-bg'); if(bg){ const mat=bg.getAttribute('material')||{}, opa=(typeof mat.opacity==='number')?mat.opacity:0.95; bg.setAttribute('material',`shader:flat;color:${color};opacity:${opa};transparent:true;side:double`);} }
-  function readBlockBoundsFrom(txtEl){ const mesh=txtEl.getObject3D('text')||txtEl.getObject3D('mesh')||null; const info=mesh&&(mesh.textRenderInfo||mesh._textRenderInfo)||(txtEl.components&&txtEl.components['troika-text']&&txtEl.components['troika-text'].textRenderInfo); return (info&&info.blockBounds)? info.blockBounds : null; }
-  function pollHeight(txtEl, tries, cb){ (function loop(n){ const b=readBlockBoundsFrom(txtEl); if(b){ return cb(b[3]-b[1]); } if(n<=0) return cb(null); requestAnimationFrame(()=>loop(n-1)); })(tries); }
   function sanitizeTitle(s){ return String(s||'').replace(/\r\n?/g,'\n').replace(/^\s+|\s+$/g,'').replace(/\n{2,}/g,'\n'); }
-  function countLinesByCols(title, cols){ const parts=String(title||'').split('\n'); let lines=0; for(const p of parts){ let c=0; for(const ch of p){ const w=/[ -~]/.test(ch)?0.5:1; if(c+w>cols){lines++; c=w;} else c+=w; } lines++; } return lines; }
 
   function openPanel(locations){
     closePanel();
@@ -684,170 +614,31 @@ AFRAME.registerComponent('marker-placer',{
     if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock', 'baseDist: 1.5; baseScale: 1.40;');
     scene.appendChild(panel);
 
-    const rightHandEl = document.querySelector('#right-hand');
-    if (rightHandEl) {
-      scrollHandler = rightHandEl.components['panel-scroll-handler'];
-    }
-
-    const rightX=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
-    const track=document.createElement('a-entity'); track.classList.add('ui','scroll-track');
-    track.setAttribute('geometry',`primitive:plane;width:${PANEL.SCROLL_TRACK_W};height:${PANEL.SCROLL_TRACK_H}`);
-    track.setAttribute('material',`shader:flat;color:#1f2a38;opacity:0.9;transparent:true;side:double`);
-    track.setAttribute('position',`${rightX} 0 0.05`); panel.appendChild(track);
-
-    const thumb=document.createElement('a-entity'); thumb.classList.add('ui','scroll-thumb','collidable');
-    thumb.setAttribute('geometry',`primitive:plane;width:0.048;height:0.10`);
-    thumb.setAttribute('material','shader:flat;color:#7fa7ff;opacity:0.85;transparent:true;side:double');
-    thumb.setAttribute('position',`${rightX} 0 0.051`); panel.appendChild(thumb);
-
-    const mkBtn=(y,ch)=>{ const b=document.createElement('a-entity'); b.classList.add('ui','collidable'); b.setAttribute('geometry',`primitive:circle;radius:${BTN_R};segments:48`);
-      b.setAttribute('material','shader:flat;color:#243246;opacity:0.95;transparent:true;side:double'); b.setAttribute('position',`${rightX} ${y} 0.05`);
-      const t=document.createElement('a-entity'); t.setAttribute('troika-text',{value:ch,fontSize:BTN_FS,color:'#cfe3ff',anchor:'center',baseline:'middle',font:PANEL_FONT_URL}); t.setAttribute('position','0 0 0.001'); b.appendChild(t); return b; };
-    const btnUp=mkBtn(0.50,'▲'), btnDn=mkBtn(-0.50,'▼'); panel.appendChild(btnUp); panel.appendChild(btnDn);
-
-    /* ↑の btnUp/btnDn をそのまま使う（ここで再宣言しない） */
-    btnUp.addEventListener('mousedown', ()=>{ isHoldingUp = true; });
-    btnUp.addEventListener('mouseup',   ()=>{ isHoldingUp = false; });
-    btnUp.addEventListener('mouseleave',()=>{ isHoldingUp = false; });
-
-    btnDn.addEventListener('mousedown', ()=>{ isHoldingDown = true; });
-    btnDn.addEventListener('mouseup',   ()=>{ isHoldingDown = false; });
-    btnDn.addEventListener('mouseleave',()=>{ isHoldingDown = false; });
-
-    const closeY = 0.50 + (BTN_R*2 + 0.015);
-    const btnClose = mkBtn(closeY, '×'); panel.appendChild(btnClose);
-    btnClose.addEventListener('mousedown', ()=>{ try{ closePanel(); }catch(e){ if (typeof window.closePanel==='function') window.closePanel(); } });
-
     const listGroup=document.createElement('a-entity'); listGroup.classList.add('list-group'); listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP} 0.02`); panel.appendChild(listGroup);
 
-    const maxWidth=PANEL.TEXT_MAX_W-0.002; const rows=[], estHeights=[], realH=[], estLinesList=[];
+    const maxWidth=PANEL.TEXT_MAX_W-0.002; const rows=[];
     (locations||[]).forEach((loc,i)=>{
       const row=document.createElement('a-entity'); row.classList.add('ui','list-entry','collapsible','collidable');
       const title=sanitizeTitle(loc.title); row.dataset.title=title; row.dataset.url=String(loc.url??''); row.dataset.baseColor=(i%2===0)?ZEBRA_A:ZEBRA_B;
       const txt=document.createElement('a-entity'); txt.classList.add('ui','list-text');
       txt.setAttribute('troika-text',{ value:row.dataset.title, fontSize:FONT_SIZE, lineHeight:LINE_HEIGHT, maxWidth, anchor:'left', baseline:'top', color:'#fff', outlineWidth:0.004, outlineColor:'#000', overflowWrap:'break-word', whiteSpace:'pre-wrap', clipRect:`0 -9999 ${maxWidth} 9999`, font:PANEL_FONT_URL });
-      txt.setAttribute('position',`${PANEL.PAD_X} ${-PANEL.PAD_Y} 0.002`);
+      txt.setAttribute('position',`-0.45 -0.02 0.03`);
       row.appendChild(txt);
 
       row.addEventListener('mousedown',()=>{ const u=row.dataset.url; if(u) safeNavigate(u); });
-      row.addEventListener('mouseenter',()=>setRowBgColor(row,HOVER_BG));
+      row.addEventListener('mouseenter',()=>setRowBgColor(row,'#23324A'));
       row.addEventListener('mouseleave',()=>setRowBgColor(row,row.dataset.baseColor));
 
       listGroup.appendChild(row); rows.push(row);
-      const estLines = countLinesByCols(title, EST_COLS); estLinesList.push(estLines);
-      const estH = Math.max( estLines * FONT_SIZE * LINE_HEIGHT, FONT_SIZE*LINE_HEIGHT) * EST_SCALE; estHeights.push(estH);
-      realH.push(null);
     });
 
-    const viewportH=(PANEL.CONTENT_TOP-PANEL.CONTENT_BOTTOM);
-    let totalHeight=0, maxOffset=0, currentOffset=0, targetOffset=0;
-    function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP + currentOffset} 0.02`); }
-    function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){ currentOffset=targetOffset; applyOffset(); updateScrollbar(); } }
-
-    function reflow(){
-      let y=0; rows.forEach((row,i)=>{
-        const lines=estLinesList[i]; const baseH=(realH[i]??estHeights[i]);
-        const th=baseH + FUDGE_FIXED + FUDGE_PERLINE * Math.max(1, lines);
-        const boxH = th + 2*PANEL.PAD_Y + EXTRA; const boxW = PANEL.TEXT_MAX_W + 2*PANEL.PAD_X;
-        row._boxH=boxH; row.setAttribute('position',`${PANEL.CONTENT_LEFT} ${-y} 0.03`); setCardFrame(row, boxW, boxH);
-        y += boxH + PANEL.GAP;
-      });
-      totalHeight=Math.max(0,y-PANEL.GAP); maxOffset=Math.max(0,totalHeight-viewportH);
-      setOffset(currentOffset,true); updateScrollbar();
-    }
-
-    rows.forEach((row,i)=>{ const txt=row.querySelector('.list-text'); pollHeight(txt, 140, h=>{ if(h!=null){ realH[i]=h; reflow(); } }); });
-    setTimeout(reflow, 400); setTimeout(reflow, 1000); setTimeout(reflow, 2000); setTimeout(reflow, 3000);
-
-    function readXRRightStickY(){
-      try {
-        var scene = AFRAME.scenes && AFRAME.scenes[0];
-        var session = scene && scene.renderer && scene.renderer.xr && scene.renderer.xr.getSession ? scene.renderer.xr.getSession() : null;
-        if (!session || !session.inputSources) return 0;
-        var y = 0;
-        session.inputSources.forEach(function(src){
-          try {
-            if (src && (src.handedness === 'right' || src.handedness === 'unknown') && src.gamepad && src.gamepad.axes && src.gamepad.axes.length){
-              var axes = src.gamepad.axes;
-              var cand = (axes.length > 3 ? axes[3] : (axes.length > 1 ? axes[1] : 0));
-              if (Math.abs(cand) > Math.abs(y)) y = cand;
-            }
-          } catch(_){}}
-        );
-        return y;
-      } catch(e){ return 0; }
-    }
-    function readNavigatorGamepadsY(){
-      try {
-        var pads = navigator.getGamepads ? navigator.getGamepads() : [];
-        var y = 0;
-        for (var i=0;i<pads.length;i++){
-          var p = pads[i];
-          if (!p || !p.connected) continue;
-          var ax = p.axes || [];
-          var cand = (ax.length > 3 ? ax[3] : (ax.length > 1 ? ax[1] : 0));
-          if (Math.abs(cand) > Math.abs(y)) y = cand;
-        }
-        return y;
-      } catch(_){ return 0; }
-    }
-
-    function animateStep(){
-      let stickY = (scrollHandler && typeof scrollHandler.stickY==='number') ? scrollHandler.stickY : 0;
-      if (Math.abs(stickY) <= JOY_DEADZONE) {
-        const yXR = readXRRightStickY();
-        if (Math.abs(yXR) > Math.abs(stickY)) { stickY = yXR; }
-      }
-      if (Math.abs(stickY) <= JOY_DEADZONE) {
-        const yGP = readNavigatorGamepadsY();
-        if (Math.abs(yGP) > Math.abs(stickY)) { stickY = yGP; }
-      }
-
-      if (Math.abs(stickY) > JOY_DEADZONE) {
-        const delta = stickY * JOY_SPEED * viewportH;
-        setOffset(currentOffset + delta, false);
-      }
-      if (isHoldingUp)   setOffset(currentOffset - (viewportH * HOLD_SPEED), false);
-      if (isHoldingDown) setOffset(currentOffset + (viewportH * HOLD_SPEED), false);
-
-      const d = targetOffset - currentOffset;
-      currentOffset = (Math.abs(d) < 0.0005) ? targetOffset : (currentOffset + d * 0.18);
-
-      applyOffset();
-      updateScrollbar();
-      requestAnimationFrame(animateStep);
-    }
-
-    const rightX_forScroll=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
-    function updateScrollbar(){
-      const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1;
-      const thumbH=Math.max(0.06,H*frac);
-      const denom=Math.max(1e-6,maxOffset); const t=denom>0?(currentOffset/denom):0; const top=H/2-thumbH/2; const y=top - t*(H-thumbH);
-      thumb.setAttribute('geometry',`primitive:plane;width:0.048;height:${thumbH}`);
-      thumb.setAttribute('position',`${rightX_forScroll} ${y} 0.051`);
-    }
-
-    currentOnWheelListener = (e)=>{ const k=0.0018*viewportH; setOffset(currentOffset + e.deltaY*k); };
-    window.addEventListener('wheel', currentOnWheelListener, {passive:true});
-
     window.__panelOpen=true;
-    setRaycasterTargets && setRaycasterTargets(true);
-    refreshAllRaycasters && refreshAllRaycasters();
-    panel.sceneEl && panel.sceneEl.emit('panel-opened');
-    requestAnimationFrame(animateStep);
   }
 
   function closePanel(){
     const p=document.getElementById('vrPanel');
     if(p && p.parentNode) p.parentNode.removeChild(p);
-    if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
-    isHoldingUp = false; isHoldingDown = false;
-    scrollHandler = null;
     window.__panelOpen=false;
-    const scene = AFRAME.scenes[0];
-    if(scene) scene.emit('panel-closed');
-    setRaycasterTargets && setRaycasterTargets(false);
-    refreshAllRaycasters && refreshAllRaycasters();
   }
 
   window.openPanel=openPanel; window.closePanel=closePanel;
@@ -859,16 +650,9 @@ AFRAME.registerComponent('marker-placer',{
 (function(){
   'use strict';
   const KEY = 'earthState.v1';
-
   function clamp(v, min, max){ return Math.min(max, Math.max(min, v)); }
-
-  function readEarthState(){
-    try { return JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch(_) { return null; }
-  }
-  function writeEarthState(state){
-    try { sessionStorage.setItem(KEY, JSON.stringify(state)); } catch(_) {}
-  }
-
+  function readEarthState(){ try { return JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch(_) { return null; } }
+  function writeEarthState(state){ try { sessionStorage.setItem(KEY, JSON.stringify(state)); } catch(_) {} }
   function saveNow(){
     const earth = document.getElementById('earth');
     if (!earth || !earth.object3D) return;
@@ -881,44 +665,29 @@ AFRAME.registerComponent('marker-placer',{
   }
   window.addEventListener('pagehide', saveNow, {capture:true});
   window.addEventListener('beforeunload', saveNow, {capture:true});
-
   function restoreIfAny(){
-    const state = readEarthState();
-    if (!state) return;
-
-    const earth = document.getElementById('earth');
-    if (!earth || !earth.object3D) return;
-
-    const minS = 1.0, maxS = 3.0;
-    const s = clamp(Number(state.s)||1, minS, maxS);
+    const state = readEarthState(); if (!state) return;
+    const earth = document.getElementById('earth'); if (!earth || !earth.object3D) return;
+    const s = clamp(Number(state.s)||1, 1.0, 3.0);
     const rxDeg = clamp(Number(state.rxDeg)||0, -80, 80);
     const ryDeg = Number(state.ryDeg)||0;
-
     earth.object3D.scale.set(s, s, s);
     earth.object3D.rotation.x = THREE.MathUtils.degToRad(rxDeg);
     earth.object3D.rotation.y = THREE.MathUtils.degToRad(ryDeg);
-
     const ec = earth.components['earth-controls'];
     if (ec) ec.currentXRotation = rxDeg;
-
     const mp = earth.components['marker-placer'];
     if (mp && typeof mp.updateClusters === 'function') {
       mp.previousEarthScale = s;
       try { mp.updateClusters(); } catch(_) {}
     }
   }
-
   window.addEventListener('pageshow', function(){
     const scene = (AFRAME.scenes && AFRAME.scenes[0]) || document.querySelector('a-scene');
-    if (scene && scene.hasLoaded) {
-      restoreIfAny();
-    } else if (scene) {
-      scene.addEventListener('loaded', restoreIfAny, {once:true});
-    } else {
-      window.addEventListener('load', restoreIfAny, {once:true});
-    }
+    if (scene && scene.hasLoaded) restoreIfAny();
+    else if (scene) scene.addEventListener('loaded', restoreIfAny, {once:true});
+    else window.addEventListener('load', restoreIfAny, {once:true});
   }, {capture:true});
-
 })();
 </script>
 
