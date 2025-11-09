@@ -585,7 +585,7 @@ AFRAME.registerComponent('marker-placer',{
   },
   // ★★★ ここまでが修正されたparseCsv関数 ★★★
 
-  computeThreshold:function(){ var s=this.el.object3D.scale.x; var t=(s-1)/(3-1); return 0.2 - t*(0.2-0.001); },
+  computeThreshold:function(){ var s=this.el.object3D.scale.x; var t=(s-1)/(3-1); return 0.2 - t*(0.2-0.01); },
   updateClusters:function(){
     this.currentMarkers.forEach(m=>{ if(m && m.parentNode) m.parentNode.removeChild(m); }); this.currentMarkers=[];
     var th=this.computeThreshold(); var unclustered=this.allLocations.slice(); var clusters=[];
