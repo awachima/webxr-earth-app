@@ -293,12 +293,8 @@
           </div>
 
           <div>
-            <label for="mStart">集合日時（JST）</label>
-            <!-- 通常（対応ブラウザ向け） -->
-            <input id="mStart" type="datetime-local" inputmode="none">
-
-            <!-- フォールバック（Quest 等）：月/日/時/分のセレクト -->
-            <div id="mStartFallback" style="display:none; gap:8px; grid-template-columns: repeat(4, minmax(0, 1fr));">
+            <label>集合日時（JST）</label>
+            <div id="mStartFallback" style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px">
               <select id="mMonth" aria-label="月"></select>
               <select id="mDay" aria-label="日"></select>
               <select id="mHour" aria-label="時"></select>
@@ -489,23 +485,26 @@
     // ===== Modal =====
     const backdrop=$('#backdrop');
     const modalTitle=$('#modalTitle');
-    const mTitle=$('#mTitle'), mLimit=$('#mLimit'), mStart=$('#mStart'), mTarget=$('#mTarget');
-    const mStartFallback = $('#mStartFallback');
-    const mMonth = $('#mMonth'), mDay = $('#mDay'), mHour = $('#mHour'), mMinute = $('#mMinute');
+    const mTitle=$('#mTitle');
+    const mLimit=$('#mLimit');
+    const mTarget=$('#mTarget');
+    const mMonth=$('#mMonth');
+    const mDay=$('#mDay');
+    const mHour=$('#mHour');
+    const mMinute=$('#mMinute');
     const statusMsg=$('#statusMsg');
     const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
 
-    // フォールバック用：年は内部でのみ保持（UI 上は月/日のみ）
+    // 集合日時（セレクト）用ヘルパー
     let fallbackYear = new Date().getFullYear();
 
     function daysInMonth(year, month){
-      return new Date(year, month, 0).getDate(); // month は 1〜12
+      return new Date(year, month, 0).getDate(); // month: 1-12
     }
 
-    function populateFallbackOptions(){
+    function populateDateSelects(){
       if (!mMonth || !mDay || !mHour || !mMinute) return;
 
-      // 月: 1〜12
       if (!mMonth.options.length){
         for (let i = 1; i <= 12; i++){
           const opt = document.createElement('option');
@@ -515,22 +514,20 @@
         }
       }
 
-      // 時: 0〜23
       if (!mHour.options.length){
         for (let h = 0; h < 24; h++){
           const opt = document.createElement('option');
           opt.value = String(h);
-          opt.textContent = String(h).padStart(2, '0');
+          opt.textContent = pad(h);
           mHour.appendChild(opt);
         }
       }
 
-      // 分: 0,10,20,30,40,50
       if (!mMinute.options.length){
         for (let m = 0; m < 60; m += 10){
           const opt = document.createElement('option');
           opt.value = String(m);
-          opt.textContent = String(m).padStart(2, '0');
+          opt.textContent = pad(m);
           mMinute.appendChild(opt);
         }
       }
@@ -539,13 +536,11 @@
     function updateDayOptions(year, month, currentDay){
       if (!mDay) return;
       const maxDay = daysInMonth(year, month || 1);
-      const prev = currentDay || parseInt(mDay.value || "0", 10) || 1;
+      const prev = currentDay || parseInt(mDay.value || '1', 10) || 1;
 
-      // 一度全削除
       while (mDay.firstChild){
         mDay.removeChild(mDay.firstChild);
       }
-
       for (let d = 1; d <= maxDay; d++){
         const opt = document.createElement('option');
         opt.value = String(d);
@@ -557,43 +552,25 @@
       mDay.value = String(clamped);
     }
 
-    // Quest / datetime-local 非対応検出
-    const isQuest = /\b(OculusBrowser|Meta Quest Browser|MetaQuestBrowser|Quest)\b/i.test(navigator.userAgent);
-    function supportsDateTimeLocal(){
-      const i=document.createElement('input');
-      i.setAttribute('type','datetime-local');
-      return i.type === 'datetime-local';
-    }
-    const useFallback = isQuest || !supportsDateTimeLocal();
-
     function initStartInput(){
-      const now=new Date(); now.setMinutes(now.getMinutes()+30); now.setSeconds(0,0);
-      const yyyy=now.getFullYear(), mm=pad(now.getMonth()+1), dd=pad(now.getDate());
-      const hh=pad(now.getHours()), mi=pad(now.getMinutes());
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + 30);
+      now.setSeconds(0, 0);
 
-      if (useFallback){
-        mStart.style.display='none';
-        mStartFallback.style.display='grid';
+      fallbackYear = now.getFullYear();
+      populateDateSelects();
 
-        populateFallbackOptions();
-        fallbackYear = yyyy;
+      const monthNum = now.getMonth() + 1;
+      const dayNum   = now.getDate();
+      const hourNum  = now.getHours();
+      let minuteNum  = now.getMinutes();
+      minuteNum = Math.ceil(minuteNum / 10) * 10;
+      if (minuteNum >= 60) minuteNum = 50;
 
-        const monthNum  = now.getMonth() + 1;
-        const dayNum    = now.getDate();
-        const hourNum   = now.getHours();
-        let minuteNum   = now.getMinutes();
-        minuteNum = Math.floor(minuteNum / 10) * 10;
-        if (minuteNum >= 60) minuteNum = 50;
-
-        mMonth.value  = String(monthNum);
-        updateDayOptions(fallbackYear, monthNum, dayNum);
-        mHour.value   = String(hourNum);
-        mMinute.value = String(minuteNum);
-      }else{
-        mStart.style.display='';
-        mStartFallback.style.display='none';
-        mStart.value=`${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-      }
+      mMonth.value = String(monthNum);
+      updateDayOptions(fallbackYear, monthNum, dayNum);
+      mHour.value = String(hourNum);
+      mMinute.value = String(minuteNum);
     }
 
     let mode='create';
@@ -601,53 +578,54 @@
     let editingTarget=null;
 
     function openModal(m='create', payload=null){
-      mode=m; statusMsg.style.display='none'; statusMsg.textContent='';
-      if(m==='create'){
-        modalTitle.textContent='待ち合わせを作成';
-        submit.textContent='待ち合わせを作成';
-        duplicate.style.display='none';
-        delBtn.style.display='none';
-        mTarget.disabled=false;
-        mTitle.value=''; mLimit.value='10'; initStartInput(); mTarget.value='';
-        editingRoomId=null; editingTarget=null;
-      }else{
-        const owners=readOwners();
-        if(!payload || !owners[payload.roomId]){ alert('この端末には編集権限がありません'); return; }
-        modalTitle.textContent='待ち合わせを編集';
-        submit.textContent='更新する';
-        duplicate.style.display='inline-block';
-        delBtn.style.display='inline-block';
-        mTarget.disabled=true;
-        editingRoomId=payload.roomId; editingTarget=payload.target;
-        mTitle.value=payload.title||''; mLimit.value=String(payload.limit||'10');
-
-        if (useFallback){
-          mStart.style.display='none';
-          mStartFallback.style.display='grid';
-
-          populateFallbackOptions();
-          const d = new Date(payload.start||Date.now());
-          fallbackYear = d.getFullYear();
-
-          const monthNum  = d.getMonth() + 1;
-          const dayNum    = d.getDate();
-          const hourNum   = d.getHours();
-          let minuteNum   = d.getMinutes();
-          minuteNum = Math.floor(minuteNum / 10) * 10;
-          if (minuteNum >= 60) minuteNum = 50;
-
-          mMonth.value  = String(monthNum);
-          updateDayOptions(fallbackYear, monthNum, dayNum);
-          mHour.value   = String(hourNum);
-          mMinute.value = String(minuteNum);
-        }else{
-          mStart.style.display='';
-          mStartFallback.style.display='none';
-          mStart.value=(payload.start||'').slice(0,16);
+      mode = m;
+      statusMsg.style.display = 'none';
+      statusMsg.textContent = '';
+      if (m === 'create'){
+        modalTitle.textContent = '待ち合わせを作成';
+        submit.textContent = '待ち合わせを作成';
+        duplicate.style.display = 'none';
+        delBtn.style.display = 'none';
+        mTarget.disabled = false;
+        mTitle.value = '';
+        mLimit.value = '10';
+        mTarget.value = '';
+        editingRoomId = null;
+        editingTarget = null;
+        initStartInput();
+      } else {
+        const owners = readOwners();
+        if (!payload || !owners[payload.roomId]) {
+          alert('この端末には編集権限がありません');
+          return;
         }
-        mTarget.value=payload.target||'';
+        modalTitle.textContent = '待ち合わせを編集';
+        submit.textContent = '更新する';
+        duplicate.style.display = 'inline-block';
+        delBtn.style.display = 'inline-block';
+        mTarget.disabled = true;
+        editingRoomId = payload.roomId;
+        editingTarget = payload.target;
+        mTitle.value = payload.title || '';
+        mLimit.value = String(payload.limit || '10');
+
+        const d = new Date(payload.start || Date.now());
+        fallbackYear = d.getFullYear();
+        populateDateSelects();
+        const monthNum = d.getMonth() + 1;
+        const dayNum   = d.getDate();
+        const hourNum  = d.getHours();
+        let minuteNum  = d.getMinutes();
+        minuteNum = Math.floor(minuteNum / 10) * 10;
+        if (minuteNum >= 60) minuteNum = 50;
+
+        mMonth.value = String(monthNum);
+        updateDayOptions(fallbackYear, monthNum, dayNum);
+        mHour.value = String(hourNum);
+        mMinute.value = String(minuteNum);
+        mTarget.value = payload.target || '';
       }
-      backdrop.style.display='flex';
+      backdrop.style.display = 'flex';
     }
     function closeModal(){ backdrop.style.display='none'; }
 
@@ -677,25 +655,29 @@
     }
 
     function composeStartISO(){
-      if (!useFallback){
-        return toISO(mStart.value);
-      } else {
-        if (!mMonth || !mDay || !mHour || !mMinute) return '';
-        const year  = fallbackYear || new Date().getFullYear();
-        const month = parseInt(mMonth.value || '0', 10);
-        const day   = parseInt(mDay.value || '0', 10);
-        const hour  = parseInt(mHour.value || '0', 10);
-        const min   = parseInt(mMinute.value || '0', 10);
+      const year  = fallbackYear || new Date().getFullYear();
+      const month = parseInt(mMonth.value || '0', 10);
+      const day   = parseInt(mDay.value || '0', 10);
+      const hour  = parseInt(mHour.value || '0', 10);
+      const min   = parseInt(mMinute.value || '0', 10);
 
-        if (!month || !day || isNaN(hour) || isNaN(min)) return '';
-
-        const mm = pad(month);
-        const dd = pad(day);
-        const hh = pad(hour);
-        const mi = pad(min);
-
-        return toISO(`${year}-${mm}-${dd}T${hh}:${mi}`);
+      if (!month || !day || Number.isNaN(hour) || Number.isNaN(min)) {
+        alert('集合日時を入力してください。');
+        return '';
       }
+
+      const maxDay = daysInMonth(year, month);
+      if (day > maxDay){
+        alert('存在しない日付が選択されています。月・日付を確認してください。');
+        return '';
+      }
+
+      const mm = pad(month);
+      const dd = pad(day);
+      const hh = pad(hour);
+      const mi = pad(min);
+
+      return toISO(`${year}-${mm}-${dd}T${hh}:${mi}`);
     }
 
     async function onSubmit(){
@@ -710,6 +692,7 @@
       if(mode==='create'){
         target=(mTarget.value||'').trim();
 
+        /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
         if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
           showUrlAlert();
           return;
@@ -774,12 +757,12 @@
     // ===== 初期化 =====
     restore();
 
-    // フォールバック時：月が変わったら、その月の最終日までで自動調整
-    if (useFallback && mMonth && mDay){
+    // 月変更時に日付の上限をその月の最終日に合わせる
+    if (mMonth && mDay){
       mMonth.addEventListener('change', () => {
-        const monthNum = parseInt(mMonth.value || '1', 10) || 1;
-        const currentDay = parseInt(mDay.value || '1', 10) || 1;
         const year = fallbackYear || new Date().getFullYear();
+        const currentDay = parseInt(mDay.value || '1', 10) || 1;
+        const monthNum   = parseInt(mMonth.value || '1', 10) || 1;
         updateDayOptions(year, monthNum, currentDay);
       });
     }
