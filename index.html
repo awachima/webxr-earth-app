@@ -81,7 +81,6 @@
       background:#000;
       overscroll-behavior:contain;
       overflow:hidden;
-      /* ← 追加済み：白い不透明の枠線 */
       border: 5px solid #ffffff;
     }
     @media(min-width:1024px){#webxr-iframe{width:1024px;height:80vh}}
@@ -295,7 +294,6 @@
 
           <div>
             <label for="mDate">集合日時（JST）</label>
-            <!-- datetime-local は使わず、常に date + time 入力のみ使用 -->
             <div id="mStartFallback" style="display:grid; gap:8px">
               <input id="mDate" type="date" aria-label="日付" />
               <input id="mTime" type="time" step="60" aria-label="時刻（分単位）" />
@@ -339,9 +337,19 @@
     const $  = (s)=>document.querySelector(s);
     const $$ = (s)=>Array.from(document.querySelectorAll(s));
     const pad=(n)=>String(n).padStart(2,'0');
-    const toISO=(local)=>{ const d=new Date(local); const off=-d.getTimezoneOffset(); const sign=off>=0?'+':'-'; const a=Math.abs(off); return local+`${sign}${pad(Math.floor(a/60))}:${pad(a%60)}`; };
+    const toISO=(local)=>{
+      const d=new Date(local);
+      const off=-d.getTimezoneOffset();
+      const sign=off>=0?'+':'-';
+      const a=Math.abs(off);
+      return local+`${sign}${pad(Math.floor(a/60))}:${pad(a%60)}`;
+    };
     const uuid=()=> (crypto.randomUUID?.() || ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16)));
-    const randKey=(n=16)=>{ const a=new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(x=>x.toString(16).padStart(2,'0')).join(''); };
+    const randKey=(n=16)=>{
+      const a=new Uint8Array(n);
+      crypto.getRandomValues(a);
+      return [...a].map(x=>x.toString(16).padStart(2,'0')).join('');
+    };
 
     // ===== Storage =====
     const S='meetups-store', O='meetups-owners';
@@ -476,8 +484,8 @@
       now.setSeconds(0,0);
       const yyyy=now.getFullYear(), mm=pad(now.getMonth()+1), dd=pad(now.getDate());
       const hh=pad(now.getHours()), mi=pad(now.getMinutes());
-      if (mDate) mDate.value=`${yyyy}-${mm}-${dd}`;
-      if (mTime) mTime.value=`${hh}:${mi}`;
+      mDate.value=`${yyyy}-${mm}-${dd}`;
+      mTime.value=`${hh}:${mi}`;
     }
 
     let mode='create';
@@ -506,9 +514,8 @@
         mTitle.value=payload.title||''; mLimit.value=String(payload.limit||'10');
 
         const d = new Date(payload.start||Date.now());
-        if (mDate) mDate.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-        if (mTime) mTime.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
+        mDate.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        mTime.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
         mTarget.value=payload.target||'';
       }
       backdrop.style.display='flex';
@@ -559,7 +566,6 @@
       if(mode==='create'){
         target=(mTarget.value||'').trim();
 
-        /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
         if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
           showUrlAlert();
           return;
@@ -623,6 +629,17 @@
 
     // ===== 初期化 =====
     restore();
+
+    // Quest 等で日付/時刻入力の反応を確実にする
+    ;[mDate, mTime].forEach(function(el){
+      if(!el) return;
+      el.addEventListener('click', function(){
+        el.focus();
+        if (typeof el.showPicker === 'function') {
+          try { el.showPicker(); } catch(e){}
+        }
+      });
+    });
 
     // タイトル右の作成ボタン
     const oc = document.getElementById('openCreate');
