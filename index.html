@@ -34,31 +34,25 @@
       -webkit-backdrop-filter: blur(4px);
       overflow: visible;
     }
-    /* 直下 5px の白帯（ロゴの背面に回す） */
     header::after{
       content:"";
       position: fixed;
       left: 0; right: 0; top: 55px;
       height: 5px;
       background: #fff;
-      z-index: 0;            /* ロゴより背面 */
+      z-index: 0;
       pointer-events: none;
     }
 
     .brand-logo{
       display:block;
-      width:auto;
-      height:auto;
       max-width: calc(100% - 24px);
       margin: 0 auto -8px;
       object-fit: contain;
       position: relative;
-      z-index: 2;            /* 白帯より前面 */
+      z-index: 2;
       pointer-events:auto;
     }
-
-    .header-actions{position:absolute;right:8px;top:8px}
-    .link{display:inline-block;padding:6px 10px;border:1px solid #eee;border-radius:10px;background:#fff;color:#111;font:600 12px system-ui;text-decoration:none}
 
     .stage{
       position:relative;
@@ -69,7 +63,16 @@
       background:url('./assets/background.jpg') center/cover no-repeat;
       margin-top: 60px; /* 55px+5px */
     }
-    .site-logo{pointer-events:none;position:absolute;top:120px;left:50%;transform:translate(-50%,-50%);width:min(30vw,200px);opacity:.95;z-index:2}
+    .site-logo{
+      pointer-events:none;
+      position:absolute;
+      top:120px;
+      left:50%;
+      transform:translate(-50%,-50%);
+      width:min(30vw,200px);
+      opacity:.95;
+      z-index:2
+    }
     #webxr-iframe{
       display:block;
       width:100%;
@@ -83,24 +86,27 @@
       overflow:hidden;
       border: 5px solid #ffffff;
     }
-    @media(min-width:1024px){#webxr-iframe{width:1024px;height:80vh}}
-    @media(max-width:1023px){#webxr-iframe{width:100%;height:calc(80vw)}}
+    @media(min-width:1024px){
+      #webxr-iframe{width:1024px;height:80vh}
+    }
+    @media(max-width:1023px){
+      #webxr-iframe{width:100%;height:calc(80vw)}
+    }
 
-    /* ====== 待ち合わせ一覧（案C：Paper Cards） ====== */
+    /* ====== 待ち合わせ一覧（Paper Cards） ====== */
     :root{
       --paper-bg-1: #FBF6ED;
       --paper-bg-2: #F2E7D8;
       --ink-900:   #1e2430;
       --ink-700:   #344054;
       --ink-500:   #667085;
-      --ink-950:   #111827; /* ほとんど黒のグレー */
+      --ink-950:   #111827;
       --accent:    #3B82F6;
       --accent-ink:#ffffff;
       --card-shadow-1: 0 4px 10px rgba(0,0,0,.06);
       --card-shadow-2: 0 16px 30px rgba(0,0,0,.08);
     }
 
-    /* クリーム色ボックス（内側に背景画像） */
     .meetups{
       width:min(1024px,100%);
       margin:24px auto 80px;
@@ -117,14 +123,15 @@
       overflow:hidden;
     }
     .meetups::before{
-      content:""; position:absolute; inset:0;
+      content:"";
+      position:absolute;
+      inset:0;
       background:
         radial-gradient(1000px 400px at 10% -20%, rgba(255,255,255,.55), rgba(255,255,255,0)),
         radial-gradient(800px 300px at 90% 120%, rgba(255,255,255,.45), rgba(255,255,255,0));
       pointer-events:none;
     }
 
-    /* 見出し：中央タイトル + 右に作成ボタン（Gridで中央厳密センター） */
     .meetups__head{
       display:grid;
       grid-template-columns: 1fr auto 1fr;
@@ -133,7 +140,8 @@
       margin:0 0 16px;
     }
     .meetups__title{
-      grid-column:2; justify-self:center;
+      grid-column:2;
+      justify-self:center;
       margin:0;
       font-weight:900;
       font-size: clamp(24px, 4.2vw, 36px);
@@ -143,59 +151,113 @@
       text-align:center;
     }
 
-    /* こげ茶ボタン（タイトル右） */
     .meetups .head-create.btn{
-      grid-column:3; justify-self:end;
-      background:#3b2a1a; color:#fff; border:1px solid #3b2a1a;
-      height:44px; padding:0 18px; border-radius:12px;
-      font:700 14px/1 system-ui; white-space:nowrap;
+      grid-column:3;
+      justify-self:end;
+      background:#3b2a1a;
+      color:#fff;
+      border:1px solid #3b2a1a;
+      height:44px;
+      padding:0 18px;
+      border-radius:12px;
+      font:700 14px/1 system-ui;
+      white-space:nowrap;
       box-shadow:0 6px 16px rgba(59,42,26,.25), inset 0 -2px 0 rgba(0,0,0,.15);
       transition:transform .05s ease, box-shadow .15s ease, opacity .15s ease;
     }
-    .meetups .head-create.btn:hover{ box-shadow:0 8px 20px rgba(59,42,26,.35), inset 0 -2px 0 rgba(0,0,0,.2); opacity:.98; }
+    .meetups .head-create.btn:hover{
+      box-shadow:0 8px 20px rgba(59,42,26,.35), inset 0 -2px 0 rgba(0,0,0,.2);
+      opacity:.98;
+    }
     .meetups .head-create.btn:active{ transform:translateY(1px); }
 
     .grid{
-      display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:20px;
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+      gap:20px;
     }
 
-    /* カード */
     .card{
-      position:relative; border:none; border-radius:16px; padding:14px 14px 56px;
-      background:#fff; box-shadow: var(--card-shadow-1), var(--card-shadow-2);
-      transition: transform .15s ease, box-shadow .15s ease; overflow:hidden; isolation:isolate;
+      position:relative;
+      border:none;
+      border-radius:16px;
+      padding:14px 14px 56px;
+      background:#fff;
+      box-shadow: var(--card-shadow-1), var(--card-shadow-2);
+      transition: transform .15s ease, box-shadow .15s ease;
+      overflow:hidden;
+      isolation:isolate;
     }
-    .card:hover{ transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.12); }
+    .card:hover{
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(0,0,0,.12);
+    }
 
     .title{font:700 17px/1.4 system-ui;margin:0 0 6px;color:var(--ink-900)}
     .meta{color:var(--ink-500);font:12px/1.4 system-ui;margin:0 0 8px}
 
-    .tools{position:absolute;right:10px;top:10px;display:flex;gap:6px;z-index:2}
+    .tools{
+      position:absolute;
+      right:10px;
+      top:10px;
+      display:flex;
+      gap:6px;
+      z-index:2;
+    }
     .icon{
-      width:28px;height:28px;padding:0;border-radius:8px;
-      display:inline-grid;place-items:center;background:#f6f7fb;border:1px solid #e6e8ef;color:#334155;
+      width:28px;
+      height:28px;
+      padding:0;
+      border-radius:8px;
+      display:inline-grid;
+      place-items:center;
+      background:#f6f7fb;
+      border:1px solid #e6e8ef;
+      color:#334155;
     }
 
-    /* Enterボタン（カード内のみ） */
     .meetups .card [data-enter].btn{
-      position:absolute; left:14px; right:14px; bottom:14px; height:44px;
-      display:flex; align-items:center; justify-content:center;
-      border:none; border-radius:12px; cursor:pointer;
-      font:700 14px/1 system-ui; letter-spacing:.02em;
-      background: var(--accent); color: var(--accent-ink);
+      position:absolute;
+      left:14px;
+      right:14px;
+      bottom:14px;
+      height:44px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border:none;
+      border-radius:12px;
+      cursor:pointer;
+      font:700 14px/1 system-ui;
+      letter-spacing:.02em;
+      background: var(--accent);
+      color: var(--accent-ink);
       box-shadow: 0 8px 18px rgba(59,130,246,.35), inset 0 -2px 0 rgba(0,0,0,.08);
       transition: transform .05s ease, box-shadow .15s ease, opacity .15s ease;
       text-decoration:none;
     }
-    .meetups .card [data-enter].btn:hover{ box-shadow: 0 10px 22px rgba(59,130,246,.45), inset 0 -2px 0 rgba(0,0,0,.12); }
+    .meetups .card [data-enter].btn:hover{
+      box-shadow: 0 10px 22px rgba(59,130,246,.45), inset 0 -2px 0 rgba(0,0,0,.12);
+    }
     .meetups .card [data-enter].btn:active{ transform: translateY(1px); }
 
-    /* 汎用ボタン */
-    .btn{appearance:none;border:1px solid #111;background:#111;color:#fff;padding:8px 12px;border-radius:10px;cursor:pointer;font:600 12px system-ui;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+    .btn{
+      appearance:none;
+      border:1px solid #111;
+      background:#111;
+      color:#fff;
+      padding:8px 12px;
+      border-radius:10px;
+      cursor:pointer;
+      font:600 12px system-ui;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
     .btn.ghost{background:#fff;color:#111}
     .btn.danger{background:#b00020;border-color:#b00020}
 
-    /* ===== カード 4 色ローテーション ===== */
     #grid .card:nth-child(4n+1){ background:#0B3559; color:#fff; }
     #grid .card:nth-child(4n+1) .title{ color:#fff; }
     #grid .card:nth-child(4n+1) .meta{ color:rgba(255,255,255,.85); }
@@ -212,37 +274,68 @@
     #grid .card:nth-child(4n+4) .title{ color:#fff; }
     #grid .card:nth-child(4n+4) .meta{ color:rgba(255,255,255,.9); }
 
-    /* === モーダル（共通） === */
     .backdrop{
-      position:fixed; inset:0;
+      position:fixed;
+      inset:0;
       background:rgba(0,0,0,.45);
       display:none;
-      align-items:center; justify-content:center;
+      align-items:center;
+      justify-content:center;
       z-index:20;
-      touch-action: manipulation; /* Quest でのタップ反応性を改善 */
+      touch-action: manipulation;
     }
     .modal{
       width:min(720px,92vw);
       background:#fff;
       border-radius:16px;
       box-shadow:0 24px 60px rgba(0,0,0,.35);
-      overflow:visible; /* ← 重要：select ドロップダウンをクリップしない */
+      overflow:visible;
     }
-    .modal header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111;color:#fff;font:700 16px system-ui}
+    .modal header{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:12px 16px;
+      background:#111;
+      color:#fff;
+      font:700 16px system-ui;
+    }
     .close{cursor:pointer;font-size:20px;line-height:1}
     .body{padding:16px}
     .form{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
     @media(max-width:640px){.form{grid-template-columns:1fr}}
     label{font:600 12px system-ui;color:#333}
-    input,select{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font:14px system-ui;box-sizing:border-box}
-    select{position:relative;z-index:30;} /* Questでの重なり順の明示 */
+    input,select{
+      width:100%;
+      padding:10px 12px;
+      border:1px solid #ddd;
+      border-radius:10px;
+      font:14px system-ui;
+      box-sizing:border-box;
+    }
+    select{position:relative;z-index:30;}
 
-    .actions{display:flex;gap:10px;justify-content:flex-end;padding:0 16px 16px;flex-wrap:wrap}
-    .actions .left{margin-right:auto;display:flex;gap:10px;align-items:center}
-    .status{display:none;padding:12px 16px 16px;color:#0a7f3f;font:600 14px system-ui}
+    .actions{
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      padding:0 16px 16px;
+      flex-wrap:wrap;
+    }
+    .actions .left{
+      margin-right:auto;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .status{
+      display:none;
+      padding:12px 16px 16px;
+      color:#0a7f3f;
+      font:600 14px system-ui;
+    }
     .note{font:12px system-ui;color:#666;margin-top:6px}
 
-    /* === フッター（黒バー 60px） === */
     footer{
       width:100%;
       height:60px;
@@ -263,7 +356,6 @@
       <iframe id="webxr-iframe" title="WebXR Earth" src="./earth.html" allow="xr-spatial-tracking; fullscreen" scrolling="no"></iframe>
     </div>
 
-    <!-- クリーム色ボックス -->
     <section class="meetups">
       <div class="meetups__head">
         <h2 class="meetups__title">待ち合わせ部屋の一覧</h2>
@@ -276,7 +368,10 @@
   <!-- 作成/編集モーダル -->
   <div class="backdrop" id="backdrop">
     <div class="modal">
-      <header><div id="modalTitle">待ち合わせを作成</div><div class="close" id="close">×</div></header>
+      <header>
+        <div id="modalTitle">待ち合わせを作成</div>
+        <div class="close" id="close">×</div>
+      </header>
       <div class="body">
         <div class="form">
           <div>
@@ -324,7 +419,10 @@
   <!-- カスタムアラート（目的URLの内容） -->
   <div class="backdrop" id="alertBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
-      <header><div id="alertTitle">目的URLの内容</div><div class="close" id="alertClose" aria-label="閉じる">×</div></header>
+      <header>
+        <div id="alertTitle">目的URLの内容</div>
+        <div class="close" id="alertClose" aria-label="閉じる">×</div>
+      </header>
       <div class="body" id="alertBody">
         目的URLには、どこでもドアのツアーまたはワールドを指定してください
       </div>
@@ -361,15 +459,16 @@
     const writeOwners=(map)=>localStorage.setItem(O,JSON.stringify(map));
     const isOwner   =(roomId)=>Boolean(readOwners()[roomId]);
 
-    // 共有レジストリ API
     const REGISTRY_API = 'https://do-chat.awachima7.workers.dev/api/rooms';
-    const NEGATIVE_LIMIT_MS = 20*60*1000; // 開始後20分で自動削除
+    const NEGATIVE_LIMIT_MS = 20*60*1000;
 
     function autoDeleteRoom(roomId){
       if (!roomId) return;
       const remain = readStore().filter(x=>x.roomId!==roomId);
       writeStore(remain);
-      const owners = readOwners(); delete owners[roomId]; writeOwners(owners);
+      const owners = readOwners();
+      delete owners[roomId];
+      writeOwners(owners);
       const c = document.querySelector(`.card[data-room-id="${roomId}"]`);
       if (c) c.remove();
       console.info('[auto-delete]', roomId, 'を削除しました（開始から20分経過）');
@@ -386,7 +485,9 @@
         const now  = new Date();
         const diff = start - now;
         if (diff > 0){
-          const h=Math.floor(diff/3600000), m=Math.floor(diff/60000)%60, s=Math.floor(diff/1000)%60;
+          const h=Math.floor(diff/3600000),
+                m=Math.floor(diff/60000)%60,
+                s=Math.floor(diff/1000)%60;
           if (el) el.textContent = `${label}: ${pad(h)}:${pad(m)}:${pad(s)}`;
           requestAnimationFrame(tick); return;
         }
@@ -460,8 +561,7 @@
       card.dataset.url=item.target;
       card.dataset.limit=item.limit;
 
-      const gridEl = $('#grid');
-      if (card.parentElement !== gridEl) gridEl.prepend(card);
+      if (card.parentElement !== grid) grid.prepend(card);
       initCountdown(card);
       attachEnter(card);
       renderTools(card);
@@ -482,7 +582,7 @@
       readStore().forEach(upsertCard);
     }
 
-    // ===== Modal =====
+    // ===== モーダル & 日付セレクト =====
     const backdrop=$('#backdrop');
     const modalTitle=$('#modalTitle');
     const mTitle=$('#mTitle');
@@ -495,39 +595,37 @@
     const statusMsg=$('#statusMsg');
     const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
 
-    // 集合日時（セレクト）用ヘルパー
     let fallbackYear = new Date().getFullYear();
 
     function daysInMonth(year, month){
-      return new Date(year, month, 0).getDate(); // month: 1-12
+      // month: 1〜12
+      return new Date(year, month, 0).getDate();
     }
 
     function populateDateSelects(){
       if (!mMonth || !mDay || !mHour || !mMinute) return;
 
       if (!mMonth.options.length){
-        for (let i = 1; i <= 12; i++){
-          const opt = document.createElement('option');
-          opt.value = String(i);
-          opt.textContent = String(i);
+        for (let i=1;i<=12;i++){
+          const opt=document.createElement('option');
+          opt.value=String(i);
+          opt.textContent=String(i);
           mMonth.appendChild(opt);
         }
       }
-
       if (!mHour.options.length){
-        for (let h = 0; h < 24; h++){
-          const opt = document.createElement('option');
-          opt.value = String(h);
-          opt.textContent = pad(h);
+        for (let h=0;h<24;h++){
+          const opt=document.createElement('option');
+          opt.value=String(h);
+          opt.textContent=pad(h);
           mHour.appendChild(opt);
         }
       }
-
       if (!mMinute.options.length){
-        for (let m = 0; m < 60; m += 10){
-          const opt = document.createElement('option');
-          opt.value = String(m);
-          opt.textContent = pad(m);
+        for (let m=0;m<60;m+=10){
+          const opt=document.createElement('option');
+          opt.value=String(m);
+          opt.textContent=pad(m);
           mMinute.appendChild(opt);
         }
       }
@@ -536,18 +634,17 @@
     function updateDayOptions(year, month, currentDay){
       if (!mDay) return;
       const maxDay = daysInMonth(year, month || 1);
-      const prev = currentDay || parseInt(mDay.value || '1', 10) || 1;
+      const prev = currentDay || parseInt(mDay.value || '1',10) || 1;
 
       while (mDay.firstChild){
         mDay.removeChild(mDay.firstChild);
       }
-      for (let d = 1; d <= maxDay; d++){
-        const opt = document.createElement('option');
-        opt.value = String(d);
-        opt.textContent = String(d);
+      for (let d=1; d<=maxDay; d++){
+        const opt=document.createElement('option');
+        opt.value=String(d);
+        opt.textContent=String(d);
         mDay.appendChild(opt);
       }
-
       const clamped = Math.min(prev, maxDay);
       mDay.value = String(clamped);
     }
@@ -555,7 +652,7 @@
     function initStartInput(){
       const now = new Date();
       now.setMinutes(now.getMinutes() + 30);
-      now.setSeconds(0, 0);
+      now.setSeconds(0,0);
 
       fallbackYear = now.getFullYear();
       populateDateSelects();
@@ -579,39 +676,41 @@
 
     function openModal(m='create', payload=null){
       mode = m;
-      statusMsg.style.display = 'none';
-      statusMsg.textContent = '';
+      statusMsg.style.display='none';
+      statusMsg.textContent='';
+
       if (m === 'create'){
-        modalTitle.textContent = '待ち合わせを作成';
-        submit.textContent = '待ち合わせを作成';
-        duplicate.style.display = 'none';
-        delBtn.style.display = 'none';
-        mTarget.disabled = false;
-        mTitle.value = '';
-        mLimit.value = '10';
-        mTarget.value = '';
-        editingRoomId = null;
-        editingTarget = null;
+        modalTitle.textContent='待ち合わせを作成';
+        submit.textContent='待ち合わせを作成';
+        duplicate.style.display='none';
+        delBtn.style.display='none';
+        mTarget.disabled=false;
+        mTitle.value='';
+        mLimit.value='10';
+        mTarget.value='';
+        editingRoomId=null;
+        editingTarget=null;
         initStartInput();
       } else {
-        const owners = readOwners();
-        if (!payload || !owners[payload.roomId]) {
+        const owners=readOwners();
+        if(!payload || !owners[payload.roomId]){
           alert('この端末には編集権限がありません');
           return;
         }
-        modalTitle.textContent = '待ち合わせを編集';
-        submit.textContent = '更新する';
-        duplicate.style.display = 'inline-block';
-        delBtn.style.display = 'inline-block';
-        mTarget.disabled = true;
-        editingRoomId = payload.roomId;
-        editingTarget = payload.target;
-        mTitle.value = payload.title || '';
-        mLimit.value = String(payload.limit || '10');
+        modalTitle.textContent='待ち合わせを編集';
+        submit.textContent='更新する';
+        duplicate.style.display='inline-block';
+        delBtn.style.display='inline-block';
+        mTarget.disabled=true;
+        editingRoomId=payload.roomId;
+        editingTarget=payload.target;
+        mTitle.value=payload.title||'';
+        mLimit.value=String(payload.limit||'10');
 
-        const d = new Date(payload.start || Date.now());
+        const d = new Date(payload.start||Date.now());
         fallbackYear = d.getFullYear();
         populateDateSelects();
+
         const monthNum = d.getMonth() + 1;
         const dayNum   = d.getDate();
         const hourNum  = d.getHours();
@@ -625,31 +724,35 @@
         mMinute.value = String(minuteNum);
         mTarget.value = payload.target || '';
       }
-      backdrop.style.display = 'flex';
+      backdrop.style.display='flex';
     }
     function closeModal(){ backdrop.style.display='none'; }
 
-    // ===== カスタムアラート =====
+    // URLアラート
     const alertBackdrop = $('#alertBackdrop');
     const alertClose = $('#alertClose');
     const alertOk = $('#alertOk');
-    function showUrlAlert(){
-      if(alertBackdrop){ alertBackdrop.style.display='flex'; }
-    }
-    function hideUrlAlert(){
-      if(alertBackdrop){ alertBackdrop.style.display='none'; }
-    }
+    function showUrlAlert(){ if(alertBackdrop) alertBackdrop.style.display='flex'; }
+    function hideUrlAlert(){ if(alertBackdrop) alertBackdrop.style.display='none'; }
     if(alertClose) alertClose.onclick = hideUrlAlert;
     if(alertOk) alertOk.onclick = hideUrlAlert;
 
     async function postRegistry(item){
       try{
-        const owner = localStorage.getItem('nickname') || null;
-        const ownerKey = readOwners()[item.roomId] || null;
+        const owner   = localStorage.getItem('nickname') || null;
+        const ownerKey= readOwners()[item.roomId] || null;
         await fetch(REGISTRY_API, {
-          method: "POST",
-          headers: {"content-type":"application/json"},
-          body: JSON.stringify({ roomId: item.roomId, title: item.title, start: item.start, limit: item.limit, target: item.target, owner, ownerKey })
+          method:"POST",
+          headers:{"content-type":"application/json"},
+          body:JSON.stringify({
+            roomId:item.roomId,
+            title:item.title,
+            start:item.start,
+            limit:item.limit,
+            target:item.target,
+            owner,
+            ownerKey
+          })
         });
       }catch(e){ console.warn('[registry]', e); }
     }
@@ -657,21 +760,19 @@
     function composeStartISO(){
       const year  = fallbackYear || new Date().getFullYear();
       const month = parseInt(mMonth.value || '0', 10);
-      const day   = parseInt(mDay.value || '0', 10);
-      const hour  = parseInt(mHour.value || '0', 10);
-      const min   = parseInt(mMinute.value || '0', 10);
+      const day   = parseInt(mDay.value   || '0', 10);
+      const hour  = parseInt(mHour.value  || '0', 10);
+      const min   = parseInt(mMinute.value|| '0', 10);
 
-      if (!month || !day || Number.isNaN(hour) || Number.isNaN(min)) {
+      if (!(month >= 1 && month <= 12) ||
+          !(day   >= 1 && day   <= 31) ||
+          Number.isNaN(hour) || Number.isNaN(min)) {
         alert('集合日時を入力してください。');
         return '';
       }
 
-      const maxDay = daysInMonth(year, month);
-      if (day > maxDay){
-        alert('存在しない日付が選択されています。月・日付を確認してください。');
-        return '';
-      }
-
+      // day の妥当性は updateDayOptions 側で保証する前提にして、
+      // ここでは単純に組み立てるだけにする。
       const mm = pad(month);
       const dd = pad(day);
       const hh = pad(hour);
@@ -691,19 +792,25 @@
 
       if(mode==='create'){
         target=(mTarget.value||'').trim();
-
-        /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
         if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
           showUrlAlert();
           return;
         }
-
-        roomId=uuid(); owners[roomId]=randKey(); writeOwners(owners);
+        roomId=uuid();
+        owners[roomId]=randKey();
+        writeOwners(owners);
       }
+
+      const prev = readStore().find(x=>x.roomId===roomId);
+      const nowIso = new Date().toISOString();
       const item={
-        roomId, title, start: startISO, limit: String(limit), target,
-        updatedAt: new Date().toISOString(),
-        createdAt: (readStore().find(x=>x.roomId===roomId)?.createdAt || new Date().toISOString())
+        roomId,
+        title,
+        start: startISO,
+        limit: String(limit),
+        target,
+        updatedAt: nowIso,
+        createdAt: prev?.createdAt || nowIso
       };
 
       upsertCard(item);
@@ -717,61 +824,71 @@
     function onDuplicate(){
       if(!editingRoomId) return;
       const owners=readOwners();
-      const newId=uuid(); owners[newId]=randKey(); writeOwners(owners);
+      const newId=uuid();
+      owners[newId]=randKey();
+      writeOwners(owners);
 
       const startISO = composeStartISO() || new Date().toISOString();
-
+      const nowIso = new Date().toISOString();
       const item={
         roomId:newId,
         title:(mTitle.value||'待ち合わせ').trim(),
         start:startISO,
         limit:String(parseInt(mLimit.value,10)||10),
         target:editingTarget,
-        updatedAt:new Date().toISOString(),
-        createdAt:new Date().toISOString()
+        updatedAt:nowIso,
+        createdAt:nowIso
       };
-      upsertCard(item); persist(item); postRegistry(item);
+      upsertCard(item);
+      persist(item);
+      postRegistry(item);
       alert('複製しました（目的URLは元と同じです）');
     }
 
     async function onDelete(){
       if(!editingRoomId) return;
-      try {
+      try{
         const ownerKey = readOwners()[editingRoomId];
-        if (!ownerKey) { alert("この端末にオーナー情報がないため、削除できません。"); return; }
-        const res = await fetch(REGISTRY_API, {
-          method: "DELETE",
-          headers: {"content-type":"application/json"},
-          body: JSON.stringify({ roomId: editingRoomId, ownerKey: ownerKey })
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          alert(`削除に失敗しました: ${data.error || res.statusText}`); return;
+        if (!ownerKey){
+          alert("この端末にオーナー情報がないため、削除できません。");
+          return;
         }
-      } catch (e) {
-        alert("サーバーへの接続中にエラーが発生しました。"); console.warn('[registry DELETE]', e); return;
+        const res = await fetch(REGISTRY_API, {
+          method:"DELETE",
+          headers:{"content-type":"application/json"},
+          body:JSON.stringify({ roomId: editingRoomId, ownerKey })
+        });
+        if (!res.ok){
+          const data = await res.json().catch(()=>({}));
+          alert(`削除に失敗しました: ${data.error || res.statusText}`);
+          return;
+        }
+      }catch(e){
+        alert("サーバーへの接続中にエラーが発生しました。");
+        console.warn('[registry DELETE]', e);
+        return;
       }
-      autoDeleteRoom(editingRoomId); closeModal();
+      autoDeleteRoom(editingRoomId);
+      closeModal();
     }
 
     // ===== 初期化 =====
     restore();
+    populateDateSelects();
 
-    // 月変更時に日付の上限をその月の最終日に合わせる
+    // 月変更時に日付上限をその月の最終日に合わせる
     if (mMonth && mDay){
-      mMonth.addEventListener('change', () => {
+      mMonth.addEventListener('change', ()=>{
         const year = fallbackYear || new Date().getFullYear();
-        const currentDay = parseInt(mDay.value || '1', 10) || 1;
-        const monthNum   = parseInt(mMonth.value || '1', 10) || 1;
+        const currentDay = parseInt(mDay.value || '1',10) || 1;
+        const monthNum   = parseInt(mMonth.value || '1',10) || 1;
         updateDayOptions(year, monthNum, currentDay);
       });
     }
 
-    // タイトル右の作成ボタン
     const oc = document.getElementById('openCreate');
     if (oc) oc.onclick = () => openModal('create');
 
-    // 読み込み直後は確実に非表示（チラ見え対策）
     closeModal();
 
     document.getElementById('close').onclick=closeModal;
@@ -784,22 +901,25 @@
       try{
         const res = await fetch(REGISTRY_API);
         const j = await res.json();
-        if (j && j.ok && Array.isArray(j.rooms)) {
-          const remoteRoomIds = new Set(j.rooms.map(r => r.roomId));
-          document.querySelectorAll('#grid .card').forEach(card => {
+        if (j && j.ok && Array.isArray(j.rooms)){
+          const remoteRoomIds = new Set(j.rooms.map(r=>r.roomId));
+          document.querySelectorAll('#grid .card').forEach(card=>{
             const roomId = card.dataset.roomId;
-            if (roomId && !remoteRoomIds.has(roomId)) { card.remove(); }
+            if (roomId && !remoteRoomIds.has(roomId)) card.remove();
           });
           j.rooms.forEach(upsertCard);
         }
-      }catch(e){ console.warn('[registry GET]', e); }
+      }catch(e){
+        console.warn('[registry GET]', e);
+      }
     }
-    loadShared(); setInterval(loadShared, 30000);
+    loadShared();
+    setInterval(loadShared, 30000);
 
-    const ADMIN_HASH = "27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
-    function toHex(buf){ return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
-    async function sha256(s){ const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return toHex(buf); }
-    function subtleEqual(a,b){ if(a.length!==b.length) return false; let r=0; for(let i=0;i<a.length;i++) r |= a.charCodeAt(i)^b.charCodeAt(i); return r===0; }
+    const ADMIN_HASH="27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
+    function toHex(buf){return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");}
+    async function sha256(s){const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));return toHex(buf);}
+    function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i);return r===0;}
   </script>
 
   <script>
@@ -817,8 +937,6 @@
     })();
   </script>
 
-  <!-- ▼▼ フッター（黒バー 60px） ▼▼ -->
   <footer></footer>
-  <!-- ▲▲ フッター（黒バー 60px） ▲▲ -->
 </body>
 </html>
