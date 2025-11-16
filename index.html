@@ -294,12 +294,9 @@
           </div>
 
           <div>
-            <label for="mStart">集合日時（JST）</label>
-            <!-- 通常（対応ブラウザ向け） -->
-            <input id="mStart" type="datetime-local" inputmode="none">
-
-            <!-- フォールバック（Quest 等）：date + time の2入力 -->
-            <div id="mStartFallback" style="display:none; gap:8px">
+            <label for="mDate">集合日時（JST）</label>
+            <!-- datetime-local は使わず、常に date + time 入力のみ使用 -->
+            <div id="mStartFallback" style="display:grid; gap:8px">
               <input id="mDate" type="date" aria-label="日付" />
               <input id="mTime" type="time" step="60" aria-label="時刻（分単位）" />
             </div>
@@ -467,37 +464,25 @@
     // ===== Modal =====
     const backdrop=$('#backdrop');
     const modalTitle=$('#modalTitle');
-    const mTitle=$('#mTitle'), mLimit=$('#mLimit'), mStart=$('#mStart'), mTarget=$('#mTarget');
-    const mStartFallback = $('#mStartFallback');
+    const mTitle=$('#mTitle'), mLimit=$('#mLimit'), mTarget=$('#mTarget');
     const mDate = $('#mDate'), mTime = $('#mTime');
     const statusMsg=$('#statusMsg');
     const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
 
-    // Quest / datetime-local 非対応検出
-    const isQuest = /\b(OculusBrowser|Meta Quest Browser|MetaQuestBrowser|Quest)\b/i.test(navigator.userAgent);
-    function supportsDateTimeLocal(){
-      const i=document.createElement('input');
-      i.setAttribute('type','datetime-local');
-      return i.type === 'datetime-local';
-    }
-    const useFallback = isQuest || !supportsDateTimeLocal();
-
+    // 集合日時の初期値（現在時刻+30分）
     function initStartInput(){
-      const now=new Date(); now.setMinutes(now.getMinutes()+30); now.setSeconds(0,0);
+      const now=new Date();
+      now.setMinutes(now.getMinutes()+30);
+      now.setSeconds(0,0);
       const yyyy=now.getFullYear(), mm=pad(now.getMonth()+1), dd=pad(now.getDate());
       const hh=pad(now.getHours()), mi=pad(now.getMinutes());
-
-      if (useFallback){
-        mStart.style.display='none';
-        mStartFallback.style.display='grid';
-        mDate.value=`${yyyy}-${mm}-${dd}`;
-        mTime.value=`${hh}:${mi}`;
-      }else{
-        mStart.style.display='';
-        mStartFallback.style.display='none';
-        mStart.value=`${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-      }
+      if (mDate) mDate.value=`${yyyy}-${mm}-${dd}`;
+      if (mTime) mTime.value=`${hh}:${mi}`;
     }
+
+    let mode='create';
+    let editingRoomId=null;
+    let editingTarget=null;
 
     function openModal(m='create', payload=null){
       mode=m; statusMsg.style.display='none'; statusMsg.textContent='';
@@ -520,17 +505,10 @@
         editingRoomId=payload.roomId; editingTarget=payload.target;
         mTitle.value=payload.title||''; mLimit.value=String(payload.limit||'10');
 
-        if (useFallback){
-          mStart.style.display='none';
-          mStartFallback.style.display='grid';
-          const d = new Date(payload.start||Date.now());
-          mDate.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-          mTime.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        }else{
-          mStart.style.display='';
-          mStartFallback.style.display='none';
-          mStart.value=(payload.start||'').slice(0,16);
-        }
+        const d = new Date(payload.start||Date.now());
+        if (mDate) mDate.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        if (mTime) mTime.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
         mTarget.value=payload.target||'';
       }
       backdrop.style.display='flex';
@@ -563,14 +541,10 @@
     }
 
     function composeStartISO(){
-      if (!useFallback){
-        return toISO(mStart.value);
-      } else {
-        const d = (mDate.value||'').trim();
-        const t = (mTime.value||'').trim();
-        if(!d || !t){ return ''; }
-        return toISO(`${d}T${t}`);
-      }
+      const d = (mDate.value||'').trim();
+      const t = (mTime.value||'').trim();
+      if(!d || !t){ return ''; }
+      return toISO(`${d}T${t}`);
     }
 
     async function onSubmit(){
