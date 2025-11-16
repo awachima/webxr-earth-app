@@ -388,8 +388,12 @@
           </div>
 
           <div>
-            <label>集合日時（JST）</label>
-            <div id="mStartFallback" style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px">
+            <label for="mStart">集合日時（JST）</label>
+            <!-- 通常（対応ブラウザ向け） -->
+            <input id="mStart" type="datetime-local" inputmode="none">
+
+            <!-- フォールバック（Quest 等）：月/日/時/分 セレクト -->
+            <div id="mStartFallback" style="display:none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px">
               <select id="mMonth" aria-label="月"></select>
               <select id="mDay" aria-label="日"></select>
               <select id="mHour" aria-label="時"></select>
@@ -462,13 +466,12 @@
     const REGISTRY_API = 'https://do-chat.awachima7.workers.dev/api/rooms';
     const NEGATIVE_LIMIT_MS = 20*60*1000;
 
+    // ===== タイマー & 自動削除 =====
     function autoDeleteRoom(roomId){
       if (!roomId) return;
       const remain = readStore().filter(x=>x.roomId!==roomId);
       writeStore(remain);
-      const owners = readOwners();
-      delete owners[roomId];
-      writeOwners(owners);
+      const owners = readOwners(); delete owners[roomId]; writeOwners(owners);
       const c = document.querySelector(`.card[data-room-id="${roomId}"]`);
       if (c) c.remove();
       console.info('[auto-delete]', roomId, 'を削除しました（開始から20分経過）');
@@ -489,7 +492,8 @@
                 m=Math.floor(diff/60000)%60,
                 s=Math.floor(diff/1000)%60;
           if (el) el.textContent = `${label}: ${pad(h)}:${pad(m)}:${pad(s)}`;
-          requestAnimationFrame(tick); return;
+          requestAnimationFrame(tick);
+          return;
         }
         const remainMs = expireAt - now;
         if (remainMs > 0){
@@ -504,6 +508,7 @@
       requestAnimationFrame(tick);
     }
 
+    // ===== カード操作 =====
     function attachEnter(card){
       const btn=card.querySelector('[data-enter]');
       btn.onclick=()=>{
@@ -582,19 +587,25 @@
       readStore().forEach(upsertCard);
     }
 
-    // ===== モーダル & 日付セレクト =====
+    // ===== モーダル =====
     const backdrop=$('#backdrop');
     const modalTitle=$('#modalTitle');
-    const mTitle=$('#mTitle');
-    const mLimit=$('#mLimit');
-    const mTarget=$('#mTarget');
-    const mMonth=$('#mMonth');
-    const mDay=$('#mDay');
-    const mHour=$('#mHour');
-    const mMinute=$('#mMinute');
+    const mTitle=$('#mTitle'), mLimit=$('#mLimit'), mStart=$('#mStart'), mTarget=$('#mTarget');
+    const mStartFallback = $('#mStartFallback');
+    const mMonth = $('#mMonth'), mDay = $('#mDay'), mHour = $('#mHour'), mMinute = $('#mMinute');
     const statusMsg=$('#statusMsg');
     const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
 
+    // Quest / datetime-local 非対応検出
+    const isQuest = /\b(OculusBrowser|Meta Quest Browser|MetaQuestBrowser|Quest)\b/i.test(navigator.userAgent);
+    function supportsDateTimeLocal(){
+      const i=document.createElement('input');
+      i.setAttribute('type','datetime-local');
+      return i.type === 'datetime-local';
+    }
+    const useFallback = isQuest || !supportsDateTimeLocal();
+
+    // フォールバック用（セレクト）の年情報
     let fallbackYear = new Date().getFullYear();
 
     function daysInMonth(year, month){
@@ -650,131 +661,142 @@
     }
 
     function initStartInput(){
-      const now = new Date();
-      now.setMinutes(now.getMinutes() + 30);
+      const now=new Date(); 
+      now.setMinutes(now.getMinutes()+30); 
       now.setSeconds(0,0);
+      const yyyy=now.getFullYear(), mm=pad(now.getMonth()+1), dd=pad(now.getDate());
+      const hh=pad(now.getHours()), mi=pad(now.getMinutes());
 
-      fallbackYear = now.getFullYear();
-      populateDateSelects();
+      if (useFallback){
+        // Quest 等: 月/日/時/分 セレクトを使用
+        mStart.style.display='none';
+        mStartFallback.style.display='grid';
 
-      const monthNum = now.getMonth() + 1;
-      const dayNum   = now.getDate();
-      const hourNum  = now.getHours();
-      let minuteNum  = now.getMinutes();
-      minuteNum = Math.ceil(minuteNum / 10) * 10;
-      if (minuteNum >= 60) minuteNum = 50;
-
-      mMonth.value = String(monthNum);
-      updateDayOptions(fallbackYear, monthNum, dayNum);
-      mHour.value = String(hourNum);
-      mMinute.value = String(minuteNum);
-    }
-
-    let mode='create';
-    let editingRoomId=null;
-    let editingTarget=null;
-
-    function openModal(m='create', payload=null){
-      mode = m;
-      statusMsg.style.display='none';
-      statusMsg.textContent='';
-
-      if (m === 'create'){
-        modalTitle.textContent='待ち合わせを作成';
-        submit.textContent='待ち合わせを作成';
-        duplicate.style.display='none';
-        delBtn.style.display='none';
-        mTarget.disabled=false;
-        mTitle.value='';
-        mLimit.value='10';
-        mTarget.value='';
-        editingRoomId=null;
-        editingTarget=null;
-        initStartInput();
-      } else {
-        const owners=readOwners();
-        if(!payload || !owners[payload.roomId]){
-          alert('この端末には編集権限がありません');
-          return;
-        }
-        modalTitle.textContent='待ち合わせを編集';
-        submit.textContent='更新する';
-        duplicate.style.display='inline-block';
-        delBtn.style.display='inline-block';
-        mTarget.disabled=true;
-        editingRoomId=payload.roomId;
-        editingTarget=payload.target;
-        mTitle.value=payload.title||'';
-        mLimit.value=String(payload.limit||'10');
-
-        const d = new Date(payload.start||Date.now());
-        fallbackYear = d.getFullYear();
+        fallbackYear = now.getFullYear();
         populateDateSelects();
 
-        const monthNum = d.getMonth() + 1;
-        const dayNum   = d.getDate();
-        const hourNum  = d.getHours();
-        let minuteNum  = d.getMinutes();
-        minuteNum = Math.floor(minuteNum / 10) * 10;
+        const monthNum = now.getMonth()+1;
+        const dayNum   = now.getDate();
+        const hourNum  = now.getHours();
+        let minuteNum  = now.getMinutes();
+        minuteNum = Math.ceil(minuteNum / 10) * 10;
         if (minuteNum >= 60) minuteNum = 50;
 
         mMonth.value = String(monthNum);
         updateDayOptions(fallbackYear, monthNum, dayNum);
         mHour.value = String(hourNum);
         mMinute.value = String(minuteNum);
-        mTarget.value = payload.target || '';
+      }else{
+        // PC など: datetime-local を使用
+        mStart.style.display='';
+        mStartFallback.style.display='none';
+        mStart.value=`${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+      }
+    }
+
+    function openModal(m='create', payload=null){
+      mode=m; 
+      statusMsg.style.display='none'; 
+      statusMsg.textContent='';
+
+      if(m==='create'){
+        modalTitle.textContent='待ち合わせを作成';
+        submit.textContent='待ち合わせを作成';
+        duplicate.style.display='none';
+        delBtn.style.display='none';
+        mTarget.disabled=false;
+        mTitle.value=''; 
+        mLimit.value='10'; 
+        mTarget.value='';
+        editingRoomId=null; 
+        editingTarget=null;
+        initStartInput();
+      }else{
+        const owners=readOwners();
+        if(!payload || !owners[payload.roomId]){ 
+          alert('この端末には編集権限がありません'); 
+          return; 
+        }
+        modalTitle.textContent='待ち合わせを編集';
+        submit.textContent='更新する';
+        duplicate.style.display='inline-block';
+        delBtn.style.display='inline-block';
+        mTarget.disabled=true;
+        editingRoomId=payload.roomId; 
+        editingTarget=payload.target;
+        mTitle.value=payload.title||''; 
+        mLimit.value=String(payload.limit||'10');
+
+        const d = new Date(payload.start||Date.now());
+        if (useFallback){
+          // セレクト版
+          mStart.style.display='none';
+          mStartFallback.style.display='grid';
+
+          fallbackYear = d.getFullYear();
+          populateDateSelects();
+
+          const monthNum = d.getMonth()+1;
+          const dayNum   = d.getDate();
+          const hourNum  = d.getHours();
+          let minuteNum  = d.getMinutes();
+          minuteNum = Math.floor(minuteNum / 10) * 10;
+          if (minuteNum >= 60) minuteNum = 50;
+
+          mMonth.value = String(monthNum);
+          updateDayOptions(fallbackYear, monthNum, dayNum);
+          mHour.value = String(hourNum);
+          mMinute.value = String(minuteNum);
+        }else{
+          // datetime-local 版
+          mStart.style.display='';
+          mStartFallback.style.display='none';
+          mStart.value=(payload.start||'').slice(0,16);
+        }
+        mTarget.value=payload.target||'';
       }
       backdrop.style.display='flex';
     }
     function closeModal(){ backdrop.style.display='none'; }
 
-    // URLアラート
+    // ===== カスタムアラート =====
     const alertBackdrop = $('#alertBackdrop');
     const alertClose = $('#alertClose');
     const alertOk = $('#alertOk');
-    function showUrlAlert(){ if(alertBackdrop) alertBackdrop.style.display='flex'; }
-    function hideUrlAlert(){ if(alertBackdrop) alertBackdrop.style.display='none'; }
+    function showUrlAlert(){
+      if(alertBackdrop){ alertBackdrop.style.display='flex'; }
+    }
+    function hideUrlAlert(){
+      if(alertBackdrop){ alertBackdrop.style.display='none'; }
+    }
     if(alertClose) alertClose.onclick = hideUrlAlert;
     if(alertOk) alertOk.onclick = hideUrlAlert;
 
     async function postRegistry(item){
       try{
-        const owner   = localStorage.getItem('nickname') || null;
-        const ownerKey= readOwners()[item.roomId] || null;
+        const owner = localStorage.getItem('nickname') || null;
+        const ownerKey = readOwners()[item.roomId] || null;
         await fetch(REGISTRY_API, {
-          method:"POST",
-          headers:{"content-type":"application/json"},
-          body:JSON.stringify({
-            roomId:item.roomId,
-            title:item.title,
-            start:item.start,
-            limit:item.limit,
-            target:item.target,
-            owner,
-            ownerKey
-          })
+          method: "POST",
+          headers: {"content-type":"application/json"},
+          body: JSON.stringify({ roomId: item.roomId, title: item.title, start: item.start, limit: item.limit, target: item.target, owner, ownerKey })
         });
       }catch(e){ console.warn('[registry]', e); }
     }
 
     function composeStartISO(){
-      const year  = fallbackYear || new Date().getFullYear();
-      const month = parseInt(mMonth.value || '0', 10);
-      const day   = parseInt(mDay.value   || '0', 10);
-      const hour  = parseInt(mHour.value  || '0', 10);
-      const min   = parseInt(mMinute.value|| '0', 10);
-
-      if (!(month >= 1 && month <= 12) ||
-          !(day   >= 1 && day   <= 31) ||
-          Number.isNaN(hour) || Number.isNaN(min)) {
-        alert('集合日時を入力してください。');
-        return '';
+      if (!useFallback){
+        if (!mStart.value) return '';
+        return toISO(mStart.value);
       }
+      const year  = fallbackYear || new Date().getFullYear();
+      const month = parseInt(mMonth.value || '0', 10) || 1;
+      const day   = parseInt(mDay.value   || '0', 10) || 1;
+      const hour  = parseInt(mHour.value  || '0', 10) || 0;
+      const min   = parseInt(mMinute.value|| '0', 10) || 0;
 
-      // day の妥当性は updateDayOptions 側で保証する前提にして、
-      // ここでは単純に組み立てるだけにする。
-      const mm = pad(month);
-      const dd = pad(day);
+      const mm = pad(Math.min(Math.max(month,1),12));
+      const dd = pad(Math.min(Math.max(day,1),31));
       const hh = pad(hour);
       const mi = pad(min);
 
@@ -788,17 +810,21 @@
       const limit=parseInt(mLimit.value,10)||10;
 
       const startISO = composeStartISO();
-      if(!startISO){ return; }
+      if(!startISO){ alert('集合日時を入力してください。'); return; }
 
       if(mode==='create'){
         target=(mTarget.value||'').trim();
+
+        /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
         if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
           showUrlAlert();
           return;
         }
+
         roomId=uuid();
-        owners[roomId]=randKey();
-        writeOwners(owners);
+        const ownersMap=readOwners();
+        ownersMap[roomId]=randKey();
+        writeOwners(ownersMap);
       }
 
       const prev = readStore().find(x=>x.roomId===roomId);
@@ -874,9 +900,7 @@
 
     // ===== 初期化 =====
     restore();
-    populateDateSelects();
-
-    // 月変更時に日付上限をその月の最終日に合わせる
+    // 月変更時に日付の上限を月に合わせてクランプ
     if (mMonth && mDay){
       mMonth.addEventListener('change', ()=>{
         const year = fallbackYear || new Date().getFullYear();
@@ -886,9 +910,12 @@
       });
     }
 
+
+    // タイトル右の作成ボタン
     const oc = document.getElementById('openCreate');
     if (oc) oc.onclick = () => openModal('create');
 
+    // 読み込み直後は確実に非表示（チラ見え対策）
     closeModal();
 
     document.getElementById('close').onclick=closeModal;
@@ -897,6 +924,7 @@
     document.getElementById('duplicate').onclick=onDuplicate;
     document.getElementById('delete').onclick=onDelete;
 
+    // 共有部屋一覧の読み込み
     async function loadShared(){
       try{
         const res = await fetch(REGISTRY_API);
@@ -916,6 +944,7 @@
     loadShared();
     setInterval(loadShared, 30000);
 
+    // （将来用）管理者パスワード関連
     const ADMIN_HASH="27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
     function toHex(buf){return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");}
     async function sha256(s){const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));return toHex(buf);}
