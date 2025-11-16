@@ -233,6 +233,37 @@
     .body{padding:16px}
     .form{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
     @media(max-width:640px){.form{grid-template-columns:1fr}}
+
+    /* ▼▼▼ [CSS] 案1: 日付/時刻 <select> スタイル追加 ▼▼▼ */
+    .form .form-grid-span {
+      grid-column: 1 / -1; /* フォームが2カラムの時、ここは1カラム幅いっぱいに使う */
+    }
+    #mStartFallback {
+      display: grid;
+      grid-template-columns: 1fr 1fr; /* PCでは「日付」と「時刻」を横並び */
+      gap: 12px 16px;
+    }
+    #mStartFallback .form-group-label { /* 「日付」「時刻」の小さいラベル */
+      font-size: 11px;
+      color: #555;
+      margin-bottom: 4px; /* selectとの間隔 */
+      display: block;
+    }
+    #mStartFallback .select-pair {
+      display: flex;
+      gap: 8px;
+    }
+    #mStartFallback select {
+      flex: 1; /* 月/日、時/分 を均等幅に */
+    }
+    @media(max-width: 640px) {
+      #mStartFallback {
+        grid-template-columns: 1fr; /* Quest/SP では「日付」と「時刻」を縦並び */
+        gap: 16px; /* 日付と時刻の間隔 */
+      }
+    }
+    /* ▲▲▲ [CSS] 案1: スタイル追加ここまで ▲▲▲ */
+
     label{font:600 12px system-ui;color:#333}
     input,select{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:10px;font:14px system-ui;box-sizing:border-box}
     select{position:relative;z-index:30;} /* Questでの重なり順の明示 */
@@ -263,7 +294,6 @@
       <iframe id="webxr-iframe" title="WebXR Earth" src="./earth.html" allow="xr-spatial-tracking; fullscreen" scrolling="no"></iframe>
     </div>
 
-    <!-- クリーム色ボックス -->
     <section class="meetups">
       <div class="meetups__head">
         <h2 class="meetups__title">待ち合わせ部屋の一覧</h2>
@@ -273,7 +303,6 @@
     </section>
   </div>
 
-  <!-- 作成/編集モーダル -->
   <div class="backdrop" id="backdrop">
     <div class="modal">
       <header><div id="modalTitle">待ち合わせを作成</div><div class="close" id="close">×</div></header>
@@ -292,14 +321,26 @@
             </select>
           </div>
 
-          <div>
-            <label for="mDate">集合日時（JST）</label>
-            <div id="mStartFallback" style="display:grid; gap:8px">
-              <input id="mDate" type="date" aria-label="日付" />
-              <input id="mTime" type="time" step="60" aria-label="時刻（分単位）" />
+          <div class="form-grid-span">
+            <label>集合日時（JST）</label>
+            <div id="mStartFallback">
+              <div>
+                <label for="mMonth" class="form-group-label">日付</label>
+                <div class="select-pair">
+                  <select id="mMonth" aria-label="月"></select>
+                  <select id="mDay" aria-label="日"></select>
+                </div>
+                <input type="hidden" id="mYear" />
+              </div>
+              <div>
+                <label for="mHour" class="form-group-label">時刻</label>
+                <div class="select-pair">
+                  <select id="mHour" aria-label="時"></select>
+                  <select id="mMinute" aria-label="分"></select>
+                </div>
+              </div>
             </div>
           </div>
-
           <div>
             <label for="mTarget">目的URL（移動先）</label>
             <input id="mTarget" placeholder="https://dokodemodoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
@@ -319,7 +360,6 @@
     </div>
   </div>
 
-  <!-- カスタムアラート（目的URLの内容） -->
   <div class="backdrop" id="alertBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
       <header><div id="alertTitle">目的URLの内容</div><div class="close" id="alertClose" aria-label="閉じる">×</div></header>
@@ -473,25 +513,84 @@
     const backdrop=$('#backdrop');
     const modalTitle=$('#modalTitle');
     const mTitle=$('#mTitle'), mLimit=$('#mLimit'), mTarget=$('#mTarget');
-    const mDate = $('#mDate'), mTime = $('#mTime');
+    // ▼▼▼ [JS] 案1: DOM参照を変更 ▼▼▼
+    const mYear = $('#mYear'), mMonth = $('#mMonth'), mDay = $('#mDay');
+    const mHour = $('#mHour'), mMinute = $('#mMinute');
+    // const mDate = $('#mDate'), mTime = $('#mTime'); // 元の参照 (削除)
+    // ▲▲▲ [JS] 案1: DOM参照を変更 ▲▲▲
     const statusMsg=$('#statusMsg');
     const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
 
-    // 集合日時の初期値（現在時刻+30分）
+    // ▼▼▼ [JS] 案1: <select> に <option> を生成する関数 ▼▼▼
+    function populateSelects() {
+      const now = new Date();
+      // 月 (1-12)
+      if (mMonth) {
+        mMonth.innerHTML = ''; // クリア
+        for (let i = 1; i <= 12; i++) {
+          mMonth.options.add(new Option(pad(i) + '月', i));
+        }
+      }
+      // 日 (1-31)
+      if (mDay) {
+        mDay.innerHTML = ''; // クリア
+        for (let i = 1; i <= 31; i++) {
+          mDay.options.add(new Option(pad(i) + '日', i));
+        }
+      }
+      // 時 (0-23)
+      if (mHour) {
+        mHour.innerHTML = ''; // クリア
+        for (let i = 0; i <= 23; i++) {
+          mHour.options.add(new Option(pad(i) + '時', i));
+        }
+      }
+      // 分 (0, 10, 20, 30, 40, 50)
+      if (mMinute) {
+        mMinute.innerHTML = ''; // クリア
+        for (let i = 0; i < 60; i += 10) { // 10分刻み
+          mMinute.options.add(new Option(pad(i) + '分', i));
+        }
+      }
+    }
+    // ▲▲▲ [JS] 案1: <option> 生成関数ここまで ▲▲▲
+
+    // ▼▼▼ [JS] 案1: initStartInput を <select> 用に修正 ▼▼▼
+    // 集合日時の初期値（現在時刻+30分、10分単位で切り上げ）
     function initStartInput(){
       const now=new Date();
-      now.setMinutes(now.getMinutes()+30);
+      // 30分後にし、キリの良い10分単位に丸める
+      const minutesToAdd = 30;
+      now.setMinutes(now.getMinutes() + minutesToAdd);
+
+      // 10分単位に切り上げ (例: 14:12 -> 14:20, 14:18 -> 14:20)
+      // (14:12 + 30m = 14:42 -> 14:50)
+      const roundedMinutes = Math.ceil(now.getMinutes() / 10) * 10;
+      now.setMinutes(roundedMinutes);
       now.setSeconds(0,0);
-      const yyyy=now.getFullYear(), mm=pad(now.getMonth()+1), dd=pad(now.getDate());
-      const hh=pad(now.getHours()), mi=pad(now.getMinutes());
-      mDate.value=`${yyyy}-${mm}-${dd}`;
-      mTime.value=`${hh}:${mi}`;
+
+      // 年、月、日、時、分をselectに設定
+      if (mYear) mYear.value = now.getFullYear();
+      if (mMonth) mMonth.value = now.getMonth() + 1;
+      if (mDay) mDay.value = now.getDate();
+      if (mHour) mHour.value = now.getHours();
+      
+      // 分 (mMinute.valueは 0, 10, 20... になる)
+      // (10分切り上げで 60 になったら、時を繰り上げて 00 にする)
+      if (now.getMinutes() >= 60 || roundedMinutes >= 60) {
+        if (mHour) mHour.value = now.getHours(); // 繰り上がった時間を再設定
+        if (mMinute) mMinute.value = 0;
+      } else {
+        if (mMinute) mMinute.value = now.getMinutes();
+      }
     }
+    // ▲▲▲ [JS] 案1: initStartInput 修正ここまで ▲▲▲
 
     let mode='create';
     let editingRoomId=null;
     let editingTarget=null;
 
+    // ▼▼▼ [JS] 案1: openModal を <select> 用に修正 ▼▼▼
     function openModal(m='create', payload=null){
       mode=m; statusMsg.style.display='none'; statusMsg.textContent='';
       if(m==='create'){
@@ -514,12 +613,25 @@
         mTitle.value=payload.title||''; mLimit.value=String(payload.limit||'10');
 
         const d = new Date(payload.start||Date.now());
-        mDate.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-        mTime.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        
+        // <select> に値を設定
+        if (mYear) mYear.value = d.getFullYear();
+        if (mMonth) mMonth.value = d.getMonth() + 1;
+        if (mDay) mDay.value = d.getDate();
+        if (mHour) mHour.value = d.getHours();
+        // 分 (10分単位に丸める - 切り捨て)
+        if (mMinute) {
+          const originalMinutes = d.getMinutes();
+          const roundedMin = Math.floor(originalMinutes / 10) * 10;
+          mMinute.value = roundedMin;
+        }
+
         mTarget.value=payload.target||'';
       }
       backdrop.style.display='flex';
     }
+    // ▲▲▲ [JS] 案1: openModal 修正ここまで ▲▲▲
+    
     function closeModal(){ backdrop.style.display='none'; }
 
     // ===== カスタムアラート =====
@@ -547,12 +659,30 @@
       }catch(e){ console.warn('[registry]', e); }
     }
 
+    // ▼▼▼ [JS] 案1: composeStartISO を <select> 用に修正 ▼▼▼
     function composeStartISO(){
-      const d = (mDate.value||'').trim();
-      const t = (mTime.value||'').trim();
-      if(!d || !t){ return ''; }
-      return toISO(`${d}T${t}`);
+      try {
+        const y = mYear.value || new Date().getFullYear(); // 今年
+        const m = pad(mMonth.value);
+        const d = pad(mDay.value);
+        const h = pad(mHour.value);
+        const min = pad(mMinute.value);
+
+        if (!y || !m || !d || !h || min === null) {
+          console.warn('日時が不完全です');
+          return '';
+        }
+        
+        // 2025-11-16T14:30
+        const localDateTime = `${y}-${m}-${d}T${h}:${min}`;
+        return toISO(localDateTime); // 既存のヘルパー関数でタイムゾーン付与
+
+      } catch(e) {
+        console.error('ISO作成失敗', e);
+        return '';
+      }
     }
+    // ▲▲▲ [JS] 案1: composeStartISO 修正ここまで ▲▲▲
 
     async function onSubmit(){
       const owners=readOwners();
@@ -630,16 +760,13 @@
     // ===== 初期化 =====
     restore();
 
-    // Quest 等で日付/時刻入力の反応を確実にする
-    ;[mDate, mTime].forEach(function(el){
-      if(!el) return;
-      el.addEventListener('click', function(){
-        el.focus();
-        if (typeof el.showPicker === 'function') {
-          try { el.showPicker(); } catch(e){}
-        }
-      });
-    });
+    // ▼▼▼ [JS] 案1: showPicker関連コードを削除し、select生成処理を呼ぶ ▼▼▼
+    
+    // <select> のオプションを生成する処理を呼び出す
+    populateSelects();
+
+    // ▲▲▲ [JS] 案1: 修正ここまで ▲▲▲
+
 
     // タイトル右の作成ボタン
     const oc = document.getElementById('openCreate');
@@ -691,8 +818,6 @@
     })();
   </script>
 
-  <!-- ▼▼ フッター（黒バー 60px） ▼▼ -->
   <footer></footer>
-  <!-- ▲▲ フッター（黒バー 60px） ▲▲ -->
-</body>
+  </body>
 </html>
