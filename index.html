@@ -694,6 +694,10 @@
       }
     }
 
+    let mode='create';
+    let editingRoomId=null;
+    let editingTarget=null;
+
     function openModal(m='create', payload=null){
       mode=m; 
       statusMsg.style.display='none'; 
@@ -784,23 +788,64 @@
       }catch(e){ console.warn('[registry]', e); }
     }
 
+    /**
+     * 日時の組み立て
+     * - PC: datetime-local の値をそのまま使う
+     * - Quest 等: 年 + セレクト（月/日/時/分）から組み立てる
+     * さらに、
+     * - 「現在より過去」の日時の場合は、自動的に「翌年の同じ月日・時刻」に繰り上げる
+     */
     function composeStartISO(){
+      const now = new Date();
+
       if (!useFallback){
         if (!mStart.value) return '';
-        return toISO(mStart.value);
+
+        // mStart.value は "YYYY-MM-DDTHH:mm"
+        const base = new Date(mStart.value);
+        if (isNaN(base.getTime())) return '';
+
+        // 過去なら翌年に繰り上げ
+        if (base < now){
+          base.setFullYear(base.getFullYear() + 1);
+        }
+
+        const y  = base.getFullYear();
+        const mo = pad(base.getMonth() + 1);
+        const d  = pad(base.getDate());
+        const h  = pad(base.getHours());
+        const mi = pad(base.getMinutes());
+        const localFixed = `${y}-${mo}-${d}T${h}:${mi}`;
+        return toISO(localFixed);
       }
-      const year  = fallbackYear || new Date().getFullYear();
-      const month = parseInt(mMonth.value || '0', 10) || 1;
-      const day   = parseInt(mDay.value   || '0', 10) || 1;
-      const hour  = parseInt(mHour.value  || '0', 10) || 0;
-      const min   = parseInt(mMinute.value|| '0', 10) || 0;
 
-      const mm = pad(Math.min(Math.max(month,1),12));
-      const dd = pad(Math.min(Math.max(day,1),31));
-      const hh = pad(hour);
-      const mi = pad(min);
+      // フォールバック（Quest 等）の場合：
+      // fallbackYear + セレクトから Date を作り、過去なら翌年に繰り上げ
+      const baseYear = fallbackYear || now.getFullYear();
+      let month = parseInt(mMonth.value || '0', 10) || 1;
+      let day   = parseInt(mDay.value   || '0', 10) || 1;
+      let hour  = parseInt(mHour.value  || '0', 10) || 0;
+      let min   = parseInt(mMinute.value|| '0', 10) || 0;
 
-      return toISO(`${year}-${mm}-${dd}T${hh}:${mi}`);
+      // 月・日を一応 1〜12 / 1〜31 の範囲にクリップしてから Date を作成
+      month = Math.min(Math.max(month, 1), 12);
+      day   = Math.min(Math.max(day,   1), 31);
+
+      let dObj = new Date(baseYear, month - 1, day, hour, min);
+      if (isNaN(dObj.getTime())) return '';
+
+      // 過去なら翌年に繰り上げ
+      if (dObj < now){
+        dObj.setFullYear(dObj.getFullYear() + 1);
+      }
+
+      const y2  = dObj.getFullYear();
+      const mo2 = pad(dObj.getMonth() + 1);
+      const d2  = pad(dObj.getDate());
+      const h2  = pad(dObj.getHours());
+      const mi2 = pad(dObj.getMinutes());
+
+      return toISO(`${y2}-${mo2}-${d2}T${h2}:${mi2}`);
     }
 
     async function onSubmit(){
@@ -909,7 +954,6 @@
         updateDayOptions(year, monthNum, currentDay);
       });
     }
-
 
     // タイトル右の作成ボタン
     const oc = document.getElementById('openCreate');
