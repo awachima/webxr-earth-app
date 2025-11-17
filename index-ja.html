@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DokodemoDoors Fan Site</title>
+  <title>DokodemoDoors ファンサイト</title>
   <style>
     * { box-sizing: border-box; }
     html {
@@ -53,6 +53,26 @@
       z-index: 2;
       pointer-events:auto;
     }
+
+    .lang-switch{
+      position:absolute;
+      top:8px;
+      right:16px;
+      display:flex;
+      gap:8px;
+      font-size:12px;
+      z-index:3;
+    }
+    .lang-switch button{
+      padding:6px 10px;
+      border-radius:6px;
+      border:none;
+      cursor:pointer;
+      font-size:12px;
+      font-weight:600;
+    }
+    .lang-switch .en{ background:#2563eb; color:#fff; }
+    .lang-switch .ja{ background:#fbbf24; color:#111827; }
 
     .stage{
       position:relative;
@@ -288,7 +308,6 @@
       width:min(720px,92vw);
       background:#fff;
       border-radius:16px;
-
       box-shadow:0 24px 60px rgba(0,0,0,.35);
       overflow:visible;
     }
@@ -344,24 +363,12 @@
       padding:0;
       background:#000;
     }
-
-    .lang-switch{
-      position:absolute;
-      top:8px;
-      right:16px;
-      display:flex;
-      gap:8px;
-      font-size:12px;
-      font-weight:600;
-    }
-    .lang-switch .en{ background:#2563eb; color:#fff; }
-    .lang-switch .ja{ background:#fbbf24; color:#111827; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <img class="brand-logo" src="./assets/fansitelogo.png" alt="DokodemoDoors Fan Site Logo">
+      <img class="brand-logo" src="./assets/fansitelogo.png" alt="DokodemoDoors ファンサイト ロゴ">
       <div class="lang-switch">
         <button type="button" class="en" onclick="switchLang('en')">English</button>
         <button type="button" class="ja" onclick="switchLang('ja')">日本語</button>
@@ -369,14 +376,14 @@
     </header>
 
     <div class="stage">
-      <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+      <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="ロゴ">
       <iframe id="webxr-iframe" title="WebXR Earth" src="./earth.html" allow="xr-spatial-tracking; fullscreen" scrolling="no"></iframe>
     </div>
 
     <section class="meetups">
       <div class="meetups__head">
-        <h2 class="meetups__title">Meetup Rooms</h2>
-        <button class="btn ghost head-create" id="openCreate">Create Meetup Room</button>
+        <h2 class="meetups__title">待ち合わせ部屋の一覧</h2>
+        <button class="btn ghost head-create" id="openCreate">待ち合わせ部屋を作る</button>
       </div>
       <div id="grid" class="grid"></div>
     </section>
@@ -386,26 +393,26 @@
   <div class="backdrop" id="backdrop">
     <div class="modal">
       <header>
-        <div id="modalTitle">Create meetup</div>
+        <div id="modalTitle">待ち合わせを作成</div>
         <div class="close" id="close">×</div>
       </header>
       <div class="body">
         <div class="form">
           <div>
-            <label for="mTitle">Title</label>
-            <input id="mTitle" placeholder="e.g. Tokyo Night Tour" inputmode="text" maxlength="60">
+            <label for="mTitle">タイトル</label>
+            <input id="mTitle" placeholder="例：〇〇ツアー集合" inputmode="text" maxlength="60">
           </div>
 
           <div>
-            <label for="mLimit">Max participants</label>
-            <select id="mLimit" aria-label="Select max participants">
+            <label for="mLimit">参加上限</label>
+            <select id="mLimit" aria-label="参加上限を選択">
               <option>10</option><option>9</option><option>8</option><option>7</option><option>6</option>
               <option>5</option><option>4</option><option>3</option><option>2</option><option>1</option>
             </select>
           </div>
 
           <div>
-            <label for="mStart">Meeting time (JST)</label>
+            <label for="mStart">集合日時（JST）</label>
             <!-- 通常（対応ブラウザ向け） -->
             <input id="mStart" type="datetime-local" inputmode="none">
 
@@ -419,21 +426,21 @@
           </div>
 
           <div>
-            <label for="mTarget">Destination URL</label>
-            <input id="mTarget" placeholder="https://dokodemoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
-            <div class="note">Once created, the destination URL cannot be changed. To change it, duplicate this room and create a new one.</div>
+            <label for="mTarget">目的URL（移動先）</label>
+            <input id="mTarget" placeholder="https://dokodemodoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
+            <div class="note">※ 作成後は目的URLは固定です。変更したい場合は「複製」して新しい部屋を作ってください。</div>
           </div>
         </div>
       </div>
       <div class="actions">
         <div class="left">
-          <button class="btn danger" id="delete" style="display:none">Delete this room</button>
+          <button class="btn danger" id="delete" style="display:none">この部屋を削除</button>
         </div>
-        <button class="btn ghost" id="duplicate" style="display:none">Duplicate this room</button>
-        <button class="btn ghost" id="close2">Close</button>
-        <button class="btn" id="submit">Create meetup</button>
+        <button class="btn ghost" id="duplicate" style="display:none">この部屋を複製</button>
+        <button class="btn ghost" id="close2">閉じる</button>
+        <button class="btn" id="submit">待ち合わせを作成</button>
       </div>
-      <div class="status" id="statusMsg">Created</div>
+      <div class="status" id="statusMsg">作成しました</div>
     </div>
   </div>
 
@@ -441,11 +448,11 @@
   <div class="backdrop" id="alertBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
       <header>
-        <div id="alertTitle">Destination URL Details</div>
-        <div class="close" id="alertClose" aria-label="Close">×</div>
+        <div id="alertTitle">目的URLの内容</div>
+        <div class="close" id="alertClose" aria-label="閉じる">×</div>
       </header>
       <div class="body" id="alertBody">
-        Please set the destination URL to a DokodemoDoors tour or world.
+        目的URLには、どこでもドアのツアーまたはワールドを指定してください
       </div>
       <div class="actions">
         <button class="btn" id="alertOk">OK</button>
@@ -491,13 +498,13 @@
       const owners = readOwners(); delete owners[roomId]; writeOwners(owners);
       const c = document.querySelector(`.card[data-room-id="${roomId}"]`);
       if (c) c.remove();
-      console.info('[auto-delete]', roomId, 'deleted (20 minutes after start)');
+      console.info('[auto-delete]', roomId, 'を削除しました（開始から20分経過）');
     }
 
     function initCountdown(card){
       const start = new Date(card.dataset.start);
       const el    = card.querySelector('[data-countdown]');
-      const label = card.dataset.title || 'Starts in';
+      const label = card.dataset.title || '開始まで';
       const roomId = card.dataset.roomId || '';
       const expireAt = new Date(start.getTime() + NEGATIVE_LIMIT_MS);
 
@@ -515,10 +522,10 @@
         const remainMs = expireAt - now;
         if (remainMs > 0){
           const remainMin = Math.ceil(remainMs/60000);
-          if (el) el.textContent = `Expires in ${pad(remainMin)} min`;
+          if (el) el.textContent = `消滅まで後${pad(remainMin)}分`;
           requestAnimationFrame(tick);
         } else {
-          if (el) el.textContent = 'Expired';
+          if (el) el.textContent = '消滅しました';
           autoDeleteRoom(roomId);
         }
       };
@@ -552,7 +559,7 @@
       if(roomId && isOwner(roomId)){
         const b=document.createElement('button');
         b.className='btn icon';
-        b.title='Edit';
+        b.title='編集';
         b.textContent='✎';
         b.onclick=()=>openModal('edit', {
           roomId,
@@ -573,7 +580,7 @@
         card.className='card';
         card.innerHTML=`
           <div class="title"></div>
-          <div class="meta"><span data-countdown>Starts in: --:--:--</span></div>
+          <div class="meta"><span data-countdown>開始まで: --:--:--</span></div>
           <div><a class="btn" data-enter>Enter Lobby</a></div>`;
       }
       card.dataset.roomId=item.roomId;
@@ -721,8 +728,8 @@
       statusMsg.textContent='';
 
       if(m==='create'){
-        modalTitle.textContent='Create meetup';
-        submit.textContent='Create meetup';
+        modalTitle.textContent='待ち合わせを作成';
+        submit.textContent='待ち合わせを作成';
         duplicate.style.display='none';
         delBtn.style.display='none';
         mTarget.disabled=false;
@@ -735,11 +742,11 @@
       }else{
         const owners=readOwners();
         if(!payload || !owners[payload.roomId]){ 
-          alert('You do not have permission to edit this room on this device'); 
+          alert('この端末には編集権限がありません'); 
           return; 
         }
-        modalTitle.textContent='Edit meetup';
-        submit.textContent='Update';
+        modalTitle.textContent='待ち合わせを編集';
+        submit.textContent='更新する';
         duplicate.style.display='inline-block';
         delBtn.style.display='inline-block';
         mTarget.disabled=true;
@@ -859,8 +866,8 @@
       const y2  = dObj.getFullYear();
       const mo2 = pad(dObj.getMonth() + 1);
       const d2  = pad(dObj.getDate());
-      const h2  = pad(dObj.getHours());
-      const mi2 = pad(dObj.getMinutes());
+      const h2  = dObj.getHours().toString().padStart(2,'0');
+      const mi2 = dObj.getMinutes().toString().padStart(2,'0');
 
       return toISO(`${y2}-${mo2}-${d2}T${h2}:${mi2}`);
     }
@@ -868,17 +875,17 @@
     async function onSubmit(){
       const owners=readOwners();
       let roomId=editingRoomId, target=editingTarget;
-      const title=(mTitle.value||'Meetup').trim();
+      const title=(mTitle.value||'待ち合わせ').trim();
       const limit=parseInt(mLimit.value,10)||10;
 
       const startISO = composeStartISO();
-      if(!startISO){ alert('Please enter the meeting time.'); return; }
+      if(!startISO){ alert('集合日時を入力してください。'); return; }
 
       if(mode==='create'){
         target=(mTarget.value||'').trim();
 
         /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
-        if (!target.toLowerCase().startsWith('https://dokodemoors.com/')) {
+        if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
           showUrlAlert();
           return;
         }
@@ -905,7 +912,7 @@
       persist(item);
       postRegistry(item);
 
-      statusMsg.textContent = (mode==='create') ? 'Created' : 'Updated';
+      statusMsg.textContent = (mode==='create') ? '作成しました' : '更新しました';
       statusMsg.style.display = 'block';
     }
 
@@ -920,7 +927,7 @@
       const nowIso = new Date().toISOString();
       const item={
         roomId:newId,
-        title:(mTitle.value||'Meetup').trim(),
+        title:(mTitle.value||'待ち合わせ').trim(),
         start:startISO,
         limit:String(parseInt(mLimit.value,10)||10),
         target:editingTarget,
@@ -930,7 +937,7 @@
       upsertCard(item);
       persist(item);
       postRegistry(item);
-      alert('Duplicated. The destination URL is the same as the original.');
+      alert('複製しました（目的URLは元と同じです）');
     }
 
     async function onDelete(){
@@ -938,7 +945,7 @@
       try{
         const ownerKey = readOwners()[editingRoomId];
         if (!ownerKey){
-          alert("Owner information is missing on this device, so the room cannot be deleted.");
+          alert("この端末にオーナー情報がないため、削除できません。");
           return;
         }
         const res = await fetch(REGISTRY_API, {
@@ -948,11 +955,11 @@
         });
         if (!res.ok){
           const data = await res.json().catch(()=>({}));
-          alert(`Failed to delete: ${data.error || res.statusText}`);
+          alert(`削除に失敗しました: ${data.error || res.statusText}`);
           return;
         }
       }catch(e){
-        alert("An error occurred while connecting to the server.");
+        alert("サーバーへの接続中にエラーが発生しました。");
         console.warn('[registry DELETE]', e);
         return;
       }
@@ -1038,20 +1045,6 @@
         location.href = 'index.html';
       }
     }
-  </script>
-
-  <script>
-    (function(){
-      let saved = null;
-      try {
-        saved = localStorage.getItem('lang');
-      } catch(e) {
-        saved = null;
-      }
-      if (saved === 'ja') {
-        location.replace('index-ja.html');
-      }
-    })();
   </script>
 
   <footer></footer>
