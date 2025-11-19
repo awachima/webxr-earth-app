@@ -90,7 +90,15 @@
       #webxr-iframe{width:1024px;height:80vh}
     }
     @media(max-width:1023px){
-      #webxr-iframe{width:100%;height:calc(80vw)}
+      /* ▼ スマホ・タブレットのときだけ左寄せ＋少し左に隙間 */
+      .stage{
+        justify-content:flex-start;       /* 子要素を左寄せ */
+      }
+      #webxr-iframe{
+        width: calc(100% - 16px);        /* 全幅から少しだけ縮める */
+        height: calc(80vw);
+        margin-left: 8px;                /* 左に8pxの隙間 */
+      }
     }
 
     /* ====== 待ち合わせ一覧（Paper Cards） ====== */
