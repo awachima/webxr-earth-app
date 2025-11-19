@@ -1070,7 +1070,20 @@
       }
     })();
   </script>
-
+<script>
+  function switchLang(lang){
+    try{
+      localStorage.setItem('lang', lang);
+    }catch(e){}
+    if(lang === 'ja'){
+      // 日本語ページへ
+      location.href = 'index-ja.html';
+    }else{
+      // 英語ページへ
+      location.href = 'index.html';
+    }
+  }
+</script>
   <footer></footer>
 </body>
 </html>
