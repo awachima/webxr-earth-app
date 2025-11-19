@@ -514,7 +514,7 @@
     function initCountdown(card){
       const start = new Date(card.dataset.start);
       const el    = card.querySelector('[data-countdown]');
-      const label = card.dataset.title || 'Starts in';
+      const label = 'Starts in';
       const roomId = card.dataset.roomId || '';
       const expireAt = new Date(start.getTime() + NEGATIVE_LIMIT_MS);
 
