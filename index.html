@@ -97,7 +97,16 @@
       #webxr-iframe{
         width: calc(100% - 30px);        /* 全幅から少しだけ縮める */
         height: calc(86vw);
-        margin-left: 2px;                /* 左に8pxの隙間 */
+        margin-left: 2px;                /* 左に少し隙間 */
+      }
+
+      /* ★ スマホ時の fansitelogo.png（brand-logo） */
+      .brand-logo{
+        width: 60vw;
+        max-width: 60vw;
+        margin-top: 5px;     /* 上方向5px */
+        margin-left: 5px;    /* 左に5pxの余白 */
+        margin-right: auto;  /* 左寄せ */
       }
     }
 
@@ -271,7 +280,7 @@
     #grid .card:nth-child(4n+1) .meta{ color:rgba(255,255,255,.85); }
 
     #grid .card:nth-child(4n+2){ background:#3270A6; color:#fff; }
-    #grid .card:nth-child(4n+2) .title{ color:#fff; }
+    #grid .card:nth-child(4n2) .title{ color:#fff; }
     #grid .card:nth-child(4n+2) .meta{ color:rgba(255,255,255,.9); }
 
     #grid .card:nth-child(4n+3){ background:#4E7DA6; color:#1f2937; }
