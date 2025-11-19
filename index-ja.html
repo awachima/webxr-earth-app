@@ -17,10 +17,15 @@
       background: #fff;
       overflow-x: hidden;
     }
-    .wrap{display:flex;flex-direction:column;align-items:center;min-height:100%}
+    .wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100%;
+    }
 
     /* === ヘッダー：ロゴ画像＋最上部固定（グレー帯 55px + 直下5px白帯） === */
-    header{
+    header {
       position: fixed;
       top: 0; left: 0; right: 0;
       z-index: 1000;
@@ -34,7 +39,7 @@
       -webkit-backdrop-filter: blur(4px);
       overflow: visible;
     }
-    header::after{
+    header::after {
       content:"";
       position: fixed;
       left: 0; right: 0; top: 55px;
@@ -44,37 +49,17 @@
       pointer-events: none;
     }
 
-    .brand-logo{
+    .brand-logo {
       display:block;
-      max-width: calc(100% - 24px);
-      margin: 0 auto -8px;
+      max-width: calc(100% - 360px);
+      margin: 0px auto -8px;
       object-fit: contain;
       position: relative;
       z-index: 2;
       pointer-events:auto;
     }
 
-    .lang-switch{
-      position:absolute;
-      top:8px;
-      right:16px;
-      display:flex;
-      gap:8px;
-      font-size:12px;
-      z-index:3;
-    }
-    .lang-switch button{
-      padding:6px 10px;
-      border-radius:6px;
-      border:none;
-      cursor:pointer;
-      font-size:12px;
-      font-weight:600;
-    }
-    .lang-switch .en{ background:#2563eb; color:#fff; }
-    .lang-switch .ja{ background:#fbbf24; color:#111827; }
-
-    .stage{
+    .stage {
       position:relative;
       width:100%;
       display:flex;
@@ -83,7 +68,7 @@
       background:url('./assets/background.jpg') center/cover no-repeat;
       margin-top: 60px; /* 55px+5px */
     }
-    .site-logo{
+    .site-logo {
       pointer-events:none;
       position:absolute;
       top:120px;
@@ -91,9 +76,9 @@
       transform:translate(-50%,-50%);
       width:min(30vw,200px);
       opacity:.95;
-      z-index:2
+      z-index:2;
     }
-    #webxr-iframe{
+    #webxr-iframe {
       display:block;
       width:100%;
       height:80vh;
@@ -107,14 +92,31 @@
       border: 5px solid #ffffff;
     }
     @media(min-width:1024px){
-      #webxr-iframe{width:1024px;height:80vh}
+      #webxr-iframe { width:90%; height:90vh; }
     }
     @media(max-width:1023px){
-      #webxr-iframe{width:100%;height:calc(80vw)}
+      /* ▼ スマホ・タブレットのときだけ左寄せ＋少し左に隙間 */
+      .stage {
+        justify-content:flex-start;       /* 子要素を左寄せ */
+      }
+      #webxr-iframe {
+        width: calc(100% - 30px);        /* 全幅から少しだけ縮める */
+        height: calc(86vw);
+        margin-left: 2px;                /* 左に少し隙間 */
+      }
+
+      /* ★ スマホ時の fansitelogo.png（brand-logo） */
+      .brand-logo {
+        width: 60vw;
+        max-width: 60vw;
+        margin-top: 5px;     /* 上方向5px */
+        margin-left: 5px;    /* 左に5pxの余白 */
+        margin-right: auto;  /* 左寄せ */
+      }
     }
 
     /* ====== 待ち合わせ一覧（Paper Cards） ====== */
-    :root{
+    :root {
       --paper-bg-1: #FBF6ED;
       --paper-bg-2: #F2E7D8;
       --ink-900:   #1e2430;
@@ -127,7 +129,7 @@
       --card-shadow-2: 0 16px 30px rgba(0,0,0,.08);
     }
 
-    .meetups{
+    .meetups {
       width:min(1024px,100%);
       margin:24px auto 80px;
       padding:24px 16px 32px;
@@ -142,7 +144,7 @@
       box-shadow: 0 18px 40px rgba(0,0,0,.08);
       overflow:hidden;
     }
-    .meetups::before{
+    .meetups::before {
       content:"";
       position:absolute;
       inset:0;
@@ -152,14 +154,14 @@
       pointer-events:none;
     }
 
-    .meetups__head{
+    .meetups__head {
       display:grid;
       grid-template-columns: 1fr auto 1fr;
       align-items:center;
       gap:12px;
       margin:0 0 16px;
     }
-    .meetups__title{
+    .meetups__title {
       grid-column:2;
       justify-self:center;
       margin:0;
@@ -171,7 +173,7 @@
       text-align:center;
     }
 
-    .meetups .head-create.btn{
+    .meetups .head-create.btn {
       grid-column:3;
       justify-self:end;
       background:#3b2a1a;
@@ -185,19 +187,19 @@
       box-shadow:0 6px 16px rgba(59,42,26,.25), inset 0 -2px 0 rgba(0,0,0,.15);
       transition:transform .05s ease, box-shadow .15s ease, opacity .15s ease;
     }
-    .meetups .head-create.btn:hover{
+    .meetups .head-create.btn:hover {
       box-shadow:0 8px 20px rgba(59,42,26,.35), inset 0 -2px 0 rgba(0,0,0,.2);
       opacity:.98;
     }
-    .meetups .head-create.btn:active{ transform:translateY(1px); }
+    .meetups .head-create.btn:active { transform:translateY(1px); }
 
-    .grid{
+    .grid {
       display:grid;
       grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
       gap:20px;
     }
 
-    .card{
+    .card {
       position:relative;
       border:none;
       border-radius:16px;
@@ -208,15 +210,15 @@
       overflow:hidden;
       isolation:isolate;
     }
-    .card:hover{
+    .card:hover {
       transform: translateY(-2px);
       box-shadow: 0 12px 28px rgba(0,0,0,.12);
     }
 
-    .title{font:700 17px/1.4 system-ui;margin:0 0 6px;color:var(--ink-900)}
-    .meta{color:var(--ink-500);font:12px/1.4 system-ui;margin:0 0 8px}
+    .title {font:700 17px/1.4 system-ui;margin:0 0 6px;color:var(--ink-900)}
+    .meta  {color:var(--ink-500);font:12px/1.4 system-ui;margin:0 0 8px}
 
-    .tools{
+    .tools {
       position:absolute;
       right:10px;
       top:10px;
@@ -224,7 +226,7 @@
       gap:6px;
       z-index:2;
     }
-    .icon{
+    .icon {
       width:28px;
       height:28px;
       padding:0;
@@ -236,7 +238,7 @@
       color:#334155;
     }
 
-    .meetups .card [data-enter].btn{
+    .meetups .card [data-enter].btn {
       position:absolute;
       left:14px;
       right:14px;
@@ -256,12 +258,12 @@
       transition: transform .05s ease, box-shadow .15s ease, opacity .15s ease;
       text-decoration:none;
     }
-    .meetups .card [data-enter].btn:hover{
+    .meetups .card [data-enter].btn:hover {
       box-shadow: 0 10px 22px rgba(59,130,246,.45), inset 0 -2px 0 rgba(0,0,0,.12);
     }
-    .meetups .card [data-enter].btn:active{ transform: translateY(1px); }
+    .meetups .card [data-enter].btn:active { transform: translateY(1px); }
 
-    .btn{
+    .btn {
       appearance:none;
       border:1px solid #111;
       background:#111;
@@ -275,8 +277,8 @@
       align-items:center;
       justify-content:center;
     }
-    .btn.ghost{background:#fff;color:#111}
-    .btn.danger{background:#b00020;border-color:#b00020}
+    .btn.ghost  {background:#fff;color:#111}
+    .btn.danger {background:#b00020;border-color:#b00020}
 
     #grid .card:nth-child(4n+1){ background:#0B3559; color:#fff; }
     #grid .card:nth-child(4n+1) .title{ color:#fff; }
@@ -294,7 +296,7 @@
     #grid .card:nth-child(4n+4) .title{ color:#fff; }
     #grid .card:nth-child(4n+4) .meta{ color:rgba(255,255,255,.9); }
 
-    .backdrop{
+    .backdrop {
       position:fixed;
       inset:0;
       background:rgba(0,0,0,.45);
@@ -304,14 +306,14 @@
       z-index:20;
       touch-action: manipulation;
     }
-    .modal{
+    .modal {
       width:min(720px,92vw);
       background:#fff;
       border-radius:16px;
       box-shadow:0 24px 60px rgba(0,0,0,.35);
       overflow:visible;
     }
-    .modal header{
+    .modal header {
       display:flex;
       justify-content:space-between;
       align-items:center;
@@ -320,12 +322,15 @@
       color:#fff;
       font:700 16px system-ui;
     }
-    .close{cursor:pointer;font-size:20px;line-height:1}
-    .body{padding:16px}
-    .form{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+    .close {cursor:pointer;font-size:20px;line-height:1}
+    .body  {padding:16px}
+    .form  {display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
     @media(max-width:640px){.form{grid-template-columns:1fr}}
-    label{font:600 12px system-ui;color:#333}
-    input,select{
+    label {
+      font:600 12px system-ui;
+      color:#333;
+    }
+    input,select {
       width:100%;
       padding:10px 12px;
       border:1px solid #ddd;
@@ -333,36 +338,52 @@
       font:14px system-ui;
       box-sizing:border-box;
     }
-    select{position:relative;z-index:30;}
+    select {position:relative;z-index:30;}
 
-    .actions{
+    .actions {
       display:flex;
       gap:10px;
       justify-content:flex-end;
       padding:0 16px 16px;
       flex-wrap:wrap;
     }
-    .actions .left{
+    .actions .left {
       margin-right:auto;
       display:flex;
       gap:10px;
       align-items:center;
     }
-    .status{
+    .status {
       display:none;
       padding:12px 16px 16px;
       color:#0a7f3f;
       font:600 14px system-ui;
     }
-    .note{font:12px system-ui;color:#666;margin-top:6px}
+    .note {
+      font:12px system-ui;
+      color:#666;
+      margin-top:6px;
+    }
 
-    footer{
+    footer {
       width:100%;
       height:60px;
       margin:0;
       padding:0;
       background:#000;
     }
+
+    .lang-switch {
+      position:absolute;
+      top:8px;
+      right:16px;
+      display:flex;
+      gap:8px;
+      font-size:12px;
+      font-weight:600;
+    }
+    .lang-switch .en { background:#2563eb; color:#fff; }
+    .lang-switch .ja { background:#fbbf24; color:#111827; }
   </style>
 </head>
 <body>
@@ -452,7 +473,7 @@
         <div class="close" id="alertClose" aria-label="閉じる">×</div>
       </header>
       <div class="body" id="alertBody">
-        目的URLには、どこでもドアのツアーまたはワールドを指定してください
+        目的URLには、DokodemoDoors のツアーやワールドの URL を設定してください。
       </div>
       <div class="actions">
         <button class="btn" id="alertOk">OK</button>
@@ -488,23 +509,25 @@
     const isOwner   =(roomId)=>Boolean(readOwners()[roomId]);
 
     const REGISTRY_API = 'https://do-chat.awachima7.workers.dev/api/rooms';
-    const NEGATIVE_LIMIT_MS = 20*60*1000;
+    const NEGATIVE_LIMIT_MS = 20*60*1000; // 開始から -20分 で自動削除
 
     // ===== タイマー & 自動削除 =====
     function autoDeleteRoom(roomId){
       if (!roomId) return;
       const remain = readStore().filter(x=>x.roomId!==roomId);
       writeStore(remain);
-      const owners = readOwners(); delete owners[roomId]; writeOwners(owners);
+      const owners = readOwners(); 
+      delete owners[roomId]; 
+      writeOwners(owners);
       const c = document.querySelector(`.card[data-room-id="${roomId}"]`);
       if (c) c.remove();
-      console.info('[auto-delete]', roomId, 'を削除しました（開始から20分経過）');
+      console.info('[auto-delete]', roomId, 'deleted (20 minutes after start)');
     }
 
     function initCountdown(card){
       const start = new Date(card.dataset.start);
       const el    = card.querySelector('[data-countdown]');
-      const label = card.dataset.title || '開始まで';
+      const label = '開始まで';
       const roomId = card.dataset.roomId || '';
       const expireAt = new Date(start.getTime() + NEGATIVE_LIMIT_MS);
 
@@ -522,10 +545,10 @@
         const remainMs = expireAt - now;
         if (remainMs > 0){
           const remainMin = Math.ceil(remainMs/60000);
-          if (el) el.textContent = `消滅まで後${pad(remainMin)}分`;
+          if (el) el.textContent = `終了まで残り ${pad(remainMin)} 分`;
           requestAnimationFrame(tick);
         } else {
-          if (el) el.textContent = '消滅しました';
+          if (el) el.textContent = '終了しました';
           autoDeleteRoom(roomId);
         }
       };
@@ -535,6 +558,7 @@
     // ===== カード操作 =====
     function attachEnter(card){
       const btn=card.querySelector('[data-enter]');
+      if (!btn) return;
       btn.onclick=()=>{
         const p=new URLSearchParams({
           roomId: card.dataset.roomId || '',
@@ -581,7 +605,7 @@
         card.innerHTML=`
           <div class="title"></div>
           <div class="meta"><span data-countdown>開始まで: --:--:--</span></div>
-          <div><a class="btn" data-enter>Enter Lobby</a></div>`;
+          <div><a class="btn" data-enter>部屋に入る</a></div>`;
       }
       card.dataset.roomId=item.roomId;
       card.dataset.title=item.title;
@@ -685,8 +709,8 @@
     }
 
     function initStartInput(){
-      const now=new Date(); 
-      now.setMinutes(now.getMinutes()+30); 
+      const now=new Date();
+      now.setMinutes(now.getMinutes()+30);
       now.setSeconds(0,0);
       const yyyy=now.getFullYear(), mm=pad(now.getMonth()+1), dd=pad(now.getDate());
       const hh=pad(now.getHours()), mi=pad(now.getMinutes());
@@ -723,8 +747,8 @@
     let editingTarget=null;
 
     function openModal(m='create', payload=null){
-      mode=m; 
-      statusMsg.style.display='none'; 
+      mode=m;
+      statusMsg.style.display='none';
       statusMsg.textContent='';
 
       if(m==='create'){
@@ -733,26 +757,26 @@
         duplicate.style.display='none';
         delBtn.style.display='none';
         mTarget.disabled=false;
-        mTitle.value=''; 
-        mLimit.value='10'; 
+        mTitle.value='';
+        mLimit.value='10';
         mTarget.value='';
-        editingRoomId=null; 
+        editingRoomId=null;
         editingTarget=null;
         initStartInput();
       }else{
         const owners=readOwners();
-        if(!payload || !owners[payload.roomId]){ 
-          alert('この端末には編集権限がありません'); 
-          return; 
+        if(!payload || !owners[payload.roomId]){
+          alert('このデバイスでは、この部屋を編集する権限がありません。');
+          return;
         }
         modalTitle.textContent='待ち合わせを編集';
-        submit.textContent='更新する';
+        submit.textContent='更新';
         duplicate.style.display='inline-block';
         delBtn.style.display='inline-block';
         mTarget.disabled=true;
-        editingRoomId=payload.roomId; 
+        editingRoomId=payload.roomId;
         editingTarget=payload.target;
-        mTitle.value=payload.title||''; 
+        mTitle.value=payload.title||'';
         mLimit.value=String(payload.limit||'10');
 
         const d = new Date(payload.start||Date.now());
@@ -785,7 +809,9 @@
       }
       backdrop.style.display='flex';
     }
-    function closeModal(){ backdrop.style.display='none'; }
+    function closeModal(){ 
+      backdrop.style.display='none'; 
+    }
 
     // ===== カスタムアラート =====
     const alertBackdrop = $('#alertBackdrop');
@@ -798,7 +824,7 @@
       if(alertBackdrop){ alertBackdrop.style.display='none'; }
     }
     if(alertClose) alertClose.onclick = hideUrlAlert;
-    if(alertOk) alertOk.onclick = hideUrlAlert;
+    if(alertOk)    alertOk.onclick    = hideUrlAlert;
 
     async function postRegistry(item){
       try{
@@ -844,7 +870,6 @@
       }
 
       // フォールバック（Quest 等）の場合：
-      // fallbackYear + セレクトから Date を作り、過去なら翌年に繰り上げ
       const baseYear = fallbackYear || now.getFullYear();
       let month = parseInt(mMonth.value || '0', 10) || 1;
       let day   = parseInt(mDay.value   || '0', 10) || 1;
@@ -866,26 +891,28 @@
       const y2  = dObj.getFullYear();
       const mo2 = pad(dObj.getMonth() + 1);
       const d2  = pad(dObj.getDate());
-      const h2  = dObj.getHours().toString().padStart(2,'0');
-      const mi2 = dObj.getMinutes().toString().padStart(2,'0');
+      const h2  = pad(dObj.getHours());
+      const mi2 = pad(dObj.getMinutes());
 
       return toISO(`${y2}-${mo2}-${d2}T${h2}:${mi2}`);
     }
 
     async function onSubmit(){
-      const owners=readOwners();
       let roomId=editingRoomId, target=editingTarget;
       const title=(mTitle.value||'待ち合わせ').trim();
       const limit=parseInt(mLimit.value,10)||10;
 
       const startISO = composeStartISO();
-      if(!startISO){ alert('集合日時を入力してください。'); return; }
+      if(!startISO){ 
+        alert('集合日時を入力してください。'); 
+        return; 
+      }
 
       if(mode==='create'){
         target=(mTarget.value||'').trim();
 
         /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
-        if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
+        if (!target.toLowerCase().startsWith('https://dokodemoors.com/')) {
           showUrlAlert();
           return;
         }
@@ -916,137 +943,119 @@
       statusMsg.style.display = 'block';
     }
 
-    function onDuplicate(){
+    async function onDuplicate(){
       if(!editingRoomId) return;
-      const owners=readOwners();
       const newId=uuid();
+      const owners=readOwners();
       owners[newId]=randKey();
       writeOwners(owners);
 
       const startISO = composeStartISO() || new Date().toISOString();
       const nowIso = new Date().toISOString();
+      const title=(mTitle.value||'待ち合わせ').trim();
+      const limit=parseInt(mLimit.value,10)||10;
+
       const item={
-        roomId:newId,
-        title:(mTitle.value||'待ち合わせ').trim(),
-        start:startISO,
-        limit:String(parseInt(mLimit.value,10)||10),
-        target:editingTarget,
-        updatedAt:nowIso,
-        createdAt:nowIso
+        roomId: newId,
+        title,
+        start: startISO,
+        limit: String(limit),
+        target: editingTarget || '',
+        updatedAt: nowIso,
+        createdAt: nowIso
       };
+
       upsertCard(item);
       persist(item);
       postRegistry(item);
-      alert('複製しました（目的URLは元と同じです）');
+
+      statusMsg.textContent = '複製しました';
+      statusMsg.style.display = 'block';
     }
 
     async function onDelete(){
       if(!editingRoomId) return;
+      if(!confirm('この待ち合わせ部屋を削除しますか？')) return;
+      const id = editingRoomId;
+
+      const remain = readStore().filter(x=>x.roomId!==id);
+      writeStore(remain);
+      const owners=readOwners(); 
+      delete owners[id]; 
+      writeOwners(owners);
+      const card = document.querySelector(`.card[data-room-id="${id}"]`);
+      if(card) card.remove();
+
       try{
-        const ownerKey = readOwners()[editingRoomId];
-        if (!ownerKey){
-          alert("この端末にオーナー情報がないため、削除できません。");
-          return;
-        }
-        const res = await fetch(REGISTRY_API, {
-          method:"DELETE",
-          headers:{"content-type":"application/json"},
-          body:JSON.stringify({ roomId: editingRoomId, ownerKey })
-        });
-        if (!res.ok){
-          const data = await res.json().catch(()=>({}));
-          alert(`削除に失敗しました: ${data.error || res.statusText}`);
-          return;
-        }
+        await fetch(`${REGISTRY_API}?roomId=${encodeURIComponent(id)}`, { method:'DELETE' });
       }catch(e){
-        alert("サーバーへの接続中にエラーが発生しました。");
-        console.warn('[registry DELETE]', e);
+        console.warn('[registry delete]', e);
+      }
+
+      editingRoomId=null;
+      editingTarget=null;
+
+      statusMsg.textContent='削除しました';
+      statusMsg.style.display='block';
+    }
+
+    function initEvents(){
+      const openBtn = $('#openCreate');
+      const close   = $('#close');
+      const close2  = $('#close2');
+
+      if(openBtn) openBtn.onclick = ()=>openModal('create');
+      if(close)   close.onclick   = closeModal;
+      if(close2)  close2.onclick  = closeModal;
+
+      if(backdrop){
+        backdrop.addEventListener('click',(e)=>{
+          if(e.target === backdrop) closeModal();
+        });
+      }
+
+      if(submit)    submit.onclick    = onSubmit;
+      if(duplicate) duplicate.onclick = onDuplicate;
+      if(delBtn)    delBtn.onclick    = onDelete;
+
+      if(mMonth){
+        mMonth.addEventListener('change', ()=>{
+          const month = parseInt(mMonth.value||'1',10);
+          updateDayOptions(fallbackYear, month);
+        });
+      }
+    }
+
+    // 言語切り替え
+    function initLang(){
+      const saved = localStorage.getItem('siteLang');
+      const path  = location.pathname;
+      const isJa  = path.includes('index-ja');
+
+      if (!saved){
+        localStorage.setItem('siteLang', isJa ? 'ja' : 'en');
         return;
       }
-      autoDeleteRoom(editingRoomId);
-      closeModal();
+      // ここでは自動リダイレクトは行わず、ボタン操作に任せてもOK
+      // （必要なら index.html 側でも同じロジックを入れて同期）
     }
 
-    // ===== 初期化 =====
-    restore();
-    // 月変更時に日付の上限を月に合わせてクランプ
-    if (mMonth && mDay){
-      mMonth.addEventListener('change', ()=>{
-        const year = fallbackYear || new Date().getFullYear();
-        const currentDay = parseInt(mDay.value || '1',10) || 1;
-        const monthNum   = parseInt(mMonth.value || '1',10) || 1;
-        updateDayOptions(year, monthNum, currentDay);
-      });
-    }
-
-    // タイトル右の作成ボタン
-    const oc = document.getElementById('openCreate');
-    if (oc) oc.onclick = () => openModal('create');
-
-    // 読み込み直後は確実に非表示（チラ見え対策）
-    closeModal();
-
-    document.getElementById('close').onclick=closeModal;
-    document.getElementById('close2').onclick=closeModal;
-    document.getElementById('submit').onclick=onSubmit;
-    document.getElementById('duplicate').onclick=onDuplicate;
-    document.getElementById('delete').onclick=onDelete;
-
-    // 共有部屋一覧の読み込み
-    async function loadShared(){
-      try{
-        const res = await fetch(REGISTRY_API);
-        const j = await res.json();
-        if (j && j.ok && Array.isArray(j.rooms)){
-          const remoteRoomIds = new Set(j.rooms.map(r=>r.roomId));
-          document.querySelectorAll('#grid .card').forEach(card=>{
-            const roomId = card.dataset.roomId;
-            if (roomId && !remoteRoomIds.has(roomId)) card.remove();
-          });
-          j.rooms.forEach(upsertCard);
-        }
-      }catch(e){
-        console.warn('[registry GET]', e);
-      }
-    }
-    loadShared();
-    setInterval(loadShared, 30000);
-
-    // （将来用）管理者パスワード関連
-    const ADMIN_HASH="27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
-    function toHex(buf){return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");}
-    async function sha256(s){const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));return toHex(buf);}
-    function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i);return r===0;}
-  </script>
-
-  <script>
-    (function(){
-      var iframe = document.getElementById('webxr-iframe');
-      if(!iframe) return;
-
-      function lockPageScroll(){ document.documentElement.style.overflowY = 'hidden'; }
-      function unlockPageScroll(){ document.documentElement.style.overflowY = ''; }
-
-      iframe.addEventListener('mouseenter', lockPageScroll);
-      iframe.addEventListener('mouseleave', unlockPageScroll);
-      window.addEventListener('blur', unlockPageScroll);
-      window.addEventListener('beforeunload', unlockPageScroll);
-    })();
-  </script>
-
-  <script>
     function switchLang(lang){
-      try{
-        localStorage.setItem('lang', lang);
-      }catch(e){}
+      localStorage.setItem('siteLang', lang);
       if(lang === 'ja'){
-        location.href = 'index-ja.html';
+        location.href = './index-ja.html';
       }else{
-        location.href = 'index.html';
+        location.href = './index.html';
       }
     }
-  </script>
 
-  <footer></footer>
+    function init(){
+      restore();
+      initStartInput();
+      initEvents();
+      initLang();
+    }
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
 </body>
 </html>
