@@ -912,7 +912,7 @@
         target=(mTarget.value||'').trim();
 
         /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
-        if (!target.toLowerCase().startsWith('https://dokodemoors.com/')) {
+        if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
           showUrlAlert();
           return;
         }
@@ -1042,10 +1042,10 @@
 
     function switchLang(lang){
       localStorage.setItem('siteLang', lang);
-      if(lang === 'en'){
-        location.href = './index.html';
-      }else{
+      if(lang === 'ja'){
         location.href = './index-ja.html';
+      }else{
+        location.href = './index.html';
       }
     }
 
