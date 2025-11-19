@@ -1057,19 +1057,6 @@
     }
   </script>
 
-  <script>
-    (function(){
-      let saved = null;
-      try {
-        saved = localStorage.getItem('lang');
-      } catch(e) {
-        saved = null;
-      }
-      if (saved === 'ja') {
-        location.replace('index-ja.html');
-      }
-    })();
-  </script>
 <script>
   function switchLang(lang){
     try{
