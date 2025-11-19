@@ -635,6 +635,28 @@
       readStore().forEach(upsertCard);
     }
 
+    // ===== 共有待ち合わせ部屋の読み込み（Workersから取得） =====
+    async function loadShared(){
+      try{
+        const res = await fetch(REGISTRY_API);
+        const j = await res.json();
+        if (j && j.ok && Array.isArray(j.rooms)){
+          // リモートに存在しない部屋は削除
+          const remoteRoomIds = new Set(j.rooms.map(r=>r.roomId));
+          document.querySelectorAll('#grid .card').forEach(card=>{
+            const roomId = card.dataset.roomId;
+            if (roomId && !remoteRoomIds.has(roomId)) card.remove();
+          });
+          // 最新の一覧を反映
+          j.rooms.forEach(upsertCard);
+        }
+      }catch(e){
+        console.warn('[registry GET]', e);
+      }
+    }
+    loadShared();
+    setInterval(loadShared, 30000);
+
     // ===== モーダル =====
     const backdrop=$('#backdrop');
     const modalTitle=$('#modalTitle');
@@ -835,7 +857,7 @@
           headers: {"content-type":"application/json"},
           body: JSON.stringify({ roomId: item.roomId, title: item.title, start: item.start, limit: item.limit, target: item.target, owner, ownerKey })
         });
-      }catch(e){ console.warn('[registry]', e); }
+      }catch(e){ console.warn('[registry POST]', e); }
     }
 
     /**
@@ -912,7 +934,7 @@
         target=(mTarget.value||'').trim();
 
         /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
-        if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
+        if (!target.toLowerCase().startsWith('https://dokodemoors.com/')) {
           showUrlAlert();
           return;
         }
@@ -1027,25 +1049,25 @@
     }
 
     // 言語切り替え
-    function initLang(){
-      const saved = localStorage.getItem('siteLang');
-      const path  = location.pathname;
-      const isJa  = path.includes('index-ja');
-
-      if (!saved){
-        localStorage.setItem('siteLang', isJa ? 'ja' : 'en');
-        return;
-      }
-      // ここでは自動リダイレクトは行わず、ボタン操作に任せてもOK
-      // （必要なら index.html 側でも同じロジックを入れて同期）
-    }
-
     function switchLang(lang){
-      localStorage.setItem('Lang', lang);
+      try{
+        localStorage.setItem('lang', lang);
+      }catch(e){}
       if(lang === 'ja'){
         location.href = './index-ja.html';
       }else{
         location.href = './index.html';
+      }
+    }
+
+    function initLang(){
+      const saved = localStorage.getItem('lang');
+      const path  = location.pathname;
+      const isJa  = path.includes('index-ja');
+
+      if (!saved){
+        localStorage.setItem('lang', isJa ? 'ja' : 'en');
+        return;
       }
     }
 
