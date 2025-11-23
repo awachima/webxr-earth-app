@@ -25,7 +25,7 @@
       top: 0; left: 0; right: 0;
       z-index: 1000;
       width: 100%;
-      height: 55px;
+      height: 120px;
       padding: 0 12px;
       background: rgba(0,0,0,.6);
       color:#fff;
@@ -37,7 +37,7 @@
     header::after{
       content:"";
       position: fixed;
-      left: 0; right: 0; top: 55px;
+      left: 0; right: 0; top: 120px;
       height: 5px;
       background: #fff;
       z-index: 0;
@@ -54,7 +54,7 @@
       z-index: 2;
       position: relative;
       pointer-events: auto;
-      max-width: calc(100% - 360px);
+      max-width: calc(100% - 160px);
       text-align: center;
       /* ▼ 外側にだけ縁が出るように text-shadow で擬似アウトライン */
       text-shadow:
@@ -66,6 +66,8 @@
         -3px  3px 0 #373d49,
          0px  3px 0 #373d49,
          3px  3px 0 #373d49;
+      /* ▼ 475pxで14px、1280pxで64pxになる流体フォントサイズ */
+      font-size: clamp(28px, calc(28px + (64 - 28) * ((100vw - 475px) / (1280 - 475))), 64px);
     }
 
     .brand-logo{
@@ -119,8 +121,8 @@
         margin-left: 30px;
         margin-right: auto;
         text-align: left;
-        max-width: 50vw;
-		font-size: 64px;
+        max-width: calc(100% - 160px);
+        /* font-size は fluid 指定に一本化（ここでは指定しない） */
       }
     }
     @media(max-width:1023px){
@@ -136,20 +138,20 @@
 
       /* ★ スマホ時のタイトルテキスト */
       .brand-logo-text{
-        font-size: 54px;
-        width: 60vw;
-        max-width: 60vw;
+        /* font-size は fluid 指定に一本化（ここでは指定しない） */
+        width: calc(100% - 160px);
+        max-width: calc(100% - 160px);
         margin-top: 5px;     /* 上方向5px */
         margin-left: 5px;    /* 左に5pxの余白 */
         margin-right: auto;  /* 左寄せ */
-		text-align: left;
+        text-align: left;
       }
     }
 
     @media(max-width:624px){
       .brand-logo-text{
-        font-size: 42px;
-        max-width: 50vw;
+        /* font-size は fluid 指定に一本化（ここでは指定しない） */
+        max-width: calc(100% - 160px);
       }
     }
 
