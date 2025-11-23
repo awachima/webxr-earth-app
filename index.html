@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DokodemoDoors Fan Site</title>
+  <title>Dokodemo Doors Fan Site</title>
   <style>
     * { box-sizing: border-box; }
     html {
@@ -19,7 +19,7 @@
     }
     .wrap{display:flex;flex-direction:column;align-items:center;min-height:100%}
 
-    /* === ヘッダー：ロゴ画像＋最上部固定（グレー帯 55px + 直下5px白帯） === */
+    /* === ヘッダー：ロゴ＋最上部固定（グレー帯 55px + 直下5px白帯） === */
     header{
       position: fixed;
       top: 0; left: 0; right: 0;
@@ -44,7 +44,32 @@
       pointer-events: none;
     }
 
+    .brand-logo-text{
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-weight: 900;
+      color: #f3aa1a;
+      margin: 0 auto;
+      margin-top: 8px;
+      letter-spacing: 0.03em;
+      z-index: 2;
+      position: relative;
+      pointer-events: auto;
+      max-width: calc(100% - 360px);
+      text-align: center;
+      /* ▼ 外側にだけ縁が出るように text-shadow で擬似アウトライン */
+      text-shadow:
+        -3px -3px 0 #373d49,
+         0px -3px 0 #373d49,
+         3px -3px 0 #373d49,
+        -3px  0px 0 #373d49,
+         3px  0px 0 #373d49,
+        -3px  3px 0 #373d49,
+         0px  3px 0 #373d49,
+         3px  3px 0 #373d49;
+    }
+
     .brand-logo{
+      font-size: 68px;
       display:block;
       max-width: calc(100% - 360px);
       margin: 0px auto -8px;
@@ -88,6 +113,15 @@
     }
     @media(min-width:1024px){
       #webxr-iframe{width:90%;height:90vh}
+      .brand-logo-text{
+        margin: 0;
+        margin-top: 8px;
+        margin-left: 30px;
+        margin-right: auto;
+        text-align: left;
+        max-width: 50vw;
+		font-size: 64px;
+      }
     }
     @media(max-width:1023px){
       /* ▼ スマホ・タブレットのときだけ左寄せ＋少し左に隙間 */
@@ -100,13 +134,22 @@
         margin-left: 2px;                /* 左に少し隙間 */
       }
 
-      /* ★ スマホ時の fansitelogo.png（brand-logo） */
-      .brand-logo{
+      /* ★ スマホ時のタイトルテキスト */
+      .brand-logo-text{
+        font-size: 54px;
         width: 60vw;
         max-width: 60vw;
         margin-top: 5px;     /* 上方向5px */
         margin-left: 5px;    /* 左に5pxの余白 */
         margin-right: auto;  /* 左寄せ */
+		text-align: left;
+      }
+    }
+
+    @media(max-width:624px){
+      .brand-logo-text{
+        font-size: 42px;
+        max-width: 50vw;
       }
     }
 
@@ -379,7 +422,7 @@
 <body>
   <div class="wrap">
     <header>
-      <img class="brand-logo" src="./assets/fansitelogo.png" alt="DokodemoDoors Fan Site Logo">
+      <div class="brand-logo-text">Dokodemo Doors Fan Site</div>
       <div class="lang-switch">
         <button type="button" class="en" onclick="switchLang('en')">English</button>
         <button type="button" class="ja" onclick="switchLang('ja')">日本語</button>
@@ -438,7 +481,7 @@
 
           <div>
             <label for="mTarget">Destination URL</label>
-            <input id="mTarget" placeholder="https://dokodemodoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
+            <input id="mTarget" placeholder="https://dokodemoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
             <div class="note">Once created, the destination URL cannot be changed. To change it, duplicate this room and create a new one.</div>
           </div>
         </div>
@@ -877,8 +920,8 @@
       const y2  = dObj.getFullYear();
       const mo2 = pad(dObj.getMonth() + 1);
       const d2  = pad(dObj.getDate());
-      const h2  = pad(dObj.getHours());
-      const mi2 = pad(dObj.getMinutes());
+      const h2  = dObj.getHours().toString().padStart(2,'0');
+      const mi2 = dObj.getMinutes().toString().padStart(2,'0');
 
       return toISO(`${y2}-${mo2}-${d2}T${h2}:${mi2}`);
     }
@@ -1058,20 +1101,20 @@
     }
   </script>
 
-<script>
-  function switchLang(lang){
-    try{
-      localStorage.setItem('lang', lang);
-    }catch(e){}
-    if(lang === 'ja'){
-      // 日本語ページへ
-      location.href = 'index-ja.html';
-    }else{
-      // 英語ページへ
-      location.href = 'index.html';
+  <script>
+    function switchLang(lang){
+      try{
+        localStorage.setItem('lang', lang);
+      }catch(e){}
+      if(lang === 'ja'){
+        // 日本語ページへ
+        location.href = 'index-ja.html';
+      }else{
+        // 英語ページへ
+        location.href = 'index.html';
+      }
     }
-  }
-</script>
+  </script>
   <footer></footer>
 </body>
 </html>
