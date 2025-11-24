@@ -1,17 +1,17 @@
 {
-  "pageTitle": "‚Ç‚±‚Å‚àƒhƒA ƒtƒ@ƒ“ƒTƒCƒg",
-  "siteTitle": "‚Ç‚±‚Å‚àƒhƒA ƒtƒ@ƒ“ƒTƒCƒg",
+  "pageTitle": "ã©ã“ã§ã‚‚ãƒ‰ã‚¢ ãƒ•ã‚¡ãƒ³ã‚µã‚¤ãƒˆ",
+  "siteTitle": "ã©ã“ã§ã‚‚ãƒ‰ã‚¢ ãƒ•ã‚¡ãƒ³ã‚µã‚¤ãƒˆ",
   "buttons": {
     "about": "What is dokodemo doors?",
     "guide": "How to use Meetup Rooms?"
   },
   "about": {
     "title": "About this site",
-    "bodyHtml": "<p class='heading-large'>—£‚ê‚Ä‚¢‚Ä‚àA‹¤‚É—·‚ª‚Å‚«‚éêŠ‚ª‚ ‚é</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/'>ƒIƒ“ƒ‰ƒCƒ“VR‹óŠÔu‚Ç‚±‚Å‚àƒhƒAv</a>‚ÍA¢ŠE‚Ì360“xVR“®‰æ‚ğŒöŠJ‚·‚éƒTƒCƒg‚Å‚·B</p><p class='heading-strong'>ŒfÚ“®‰æ”1,700ˆÈã</p><p style='padding-left: 1em;'>Youtube‚É‚à‘½‚­‚ÌVR“®‰æ‚ª‚ ‚è‚Ü‚·B<br>‚µ‚©‚µA‚±‚ê‚¾‚¯‚Ì”‚ªˆê‚©Š‚ÉW‚Ü‚Á‚Ä‚¢‚é‚Ì‚Í‚±‚±‚¾‚¯‚Å‚·B</p><p class='heading-strong'>•¡”l“¯‰{——‰Â”\</p><p style='padding-left: 1em;'>ŠÔ‚ğ•¹‚¹‚Ä“¯‰{——‚·‚é‚±‚Æ‚ÅA“¯‚¶ŒiF‚ğŒ©‚È‚ª‚ç‰ï˜b‚âƒWƒFƒXƒ`ƒƒ[‚ÅˆÓv‘a’Ê‚Å‚«‚Ü‚·B</p>"
+    "bodyHtml": "<p class='heading-large'>é›¢ã‚Œã¦ã„ã¦ã‚‚ã€å…±ã«æ—…ãŒã§ãã‚‹å ´æ‰€ãŒã‚ã‚‹</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/'>ã‚ªãƒ³ãƒ©ã‚¤ãƒ³VRç©ºé–“ã€Œã©ã“ã§ã‚‚ãƒ‰ã‚¢ã€</a>ã¯ã€ä¸–ç•Œã®360åº¦VRå‹•ç”»ã‚’å…¬é–‹ã™ã‚‹ã‚µã‚¤ãƒˆã§ã™ã€‚</p><p class='heading-strong'>æ²è¼‰å‹•ç”»æ•°1,700ä»¥ä¸Š</p><p style='padding-left: 1em;'>Youtubeã«ã‚‚å¤šãã®VRå‹•ç”»ãŒã‚ã‚Šã¾ã™ã€‚<br>ã—ã‹ã—ã€ã“ã‚Œã ã‘ã®æ•°ãŒä¸€ã‹æ‰€ã«é›†ã¾ã£ã¦ã„ã‚‹ã®ã¯ã“ã“ã ã‘ã§ã™ã€‚</p><p class='heading-strong'>è¤‡æ•°äººåŒæ™‚é–²è¦§å¯èƒ½</p><p style='padding-left: 1em;'>æ™‚é–“ã‚’ä½µã›ã¦åŒæ™‚é–²è¦§ã™ã‚‹ã“ã¨ã§ã€åŒã˜æ™¯è‰²ã‚’è¦‹ãªãŒã‚‰ä¼šè©±ã‚„ã‚¸ã‚§ã‚¹ãƒãƒ£ãƒ¼ã§æ„æ€ç–é€šã§ãã¾ã™ã€‚</p>"
   },
   "guide": {
     "title": "How to use Meetup Rooms",
-    "bodyHtml": "<p class='heading-large'>Enjoy the same VR tour at the same time</p><p>Meetup Rooms let you and your friends watch the same DokodemoDoors VR tour at the same time, even if you are far apart.</p><p class='heading-strong'>1. Create a room</p><p style='padding-left: 1em;'>Click the <strong>gCreate Meetup Roomh</strong> button, set a title, meeting time, max participants, and paste the destination URL of the tour you want to visit together.</p><p class='heading-strong'>2. Share the link</p><p style='padding-left: 1em;'>After creating the room, share the URL of the lobby page with everyone who will join. They can access it from a PC, smartphone, or VR headset browser.</p><p class='heading-strong'>3. Enter the lobby and start the tour</p><p style='padding-left: 1em;'>When the meeting time comes, click <strong>gEnter Lobbyh</strong>. From there, everyone can jump to the same destination URL and enjoy the VR tour at the same timing while talking together.</p>"
+    "bodyHtml": "<p class='heading-large'>Enjoy the same VR tour at the same time</p><p>Meetup Rooms let you and your friends watch the same DokodemoDoors VR tour at the same time, even if you are far apart.</p><p class='heading-strong'>1. Create a room</p><p style='padding-left: 1em;'>Click the <strong>â€œCreate Meetup Roomâ€</strong> button, set a title, meeting time, max participants, and paste the destination URL of the tour you want to visit together.</p><p class='heading-strong'>2. Share the link</p><p style='padding-left: 1em;'>After creating the room, share the URL of the lobby page with everyone who will join. They can access it from a PC, smartphone, or VR headset browser.</p><p class='heading-strong'>3. Enter the lobby and start the tour</p><p style='padding-left: 1em;'>When the meeting time comes, click <strong>â€œEnter Lobbyâ€</strong>. From there, everyone can jump to the same destination URL and enjoy the VR tour at the same timing while talking together.</p>"
   },
   "meetups": {
     "title": "Meetup Rooms",
