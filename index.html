@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dokodemo Doors Fan Site</title>
-<style>
+  <style>
     * { box-sizing: border-box; }
     html {
       height: 100%;
@@ -17,7 +17,12 @@
       background: #fff;
       overflow-x: hidden;
     }
-    .wrap{display:flex;flex-direction:column;align-items:center;min-height:100%}
+    .wrap{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      min-height:100%;
+    }
 
     /* === ヘッダー：ロゴ＋最上部固定 === */
     header{
@@ -26,7 +31,7 @@
       z-index: 1000;
       width: 100%;
       padding: 0 12px 20px;  /* タイトル下の余白を 20px に */
-      background: rgba(100,100,105,.9);
+      background: rgba(100,100,105,.9); /* グレー系の半透明 */
       color:#fff;
       text-align:center;
       backdrop-filter: blur(4px);
@@ -58,7 +63,7 @@
       pointer-events: auto;
       max-width: calc(100% - 160px);
       text-align: center;
-      /* ▼ 外側にだけ縁が出るように text-shadow で擬似アウトライン */
+      /* 外側にだけ縁が出るように text-shadow で擬似アウトライン */
       text-shadow:
         -3px -3px 0 #373d49,
          0px -3px 0 #373d49,
@@ -68,8 +73,8 @@
         -3px  3px 0 #373d49,
          0px  3px 0 #373d49,
          3px  3px 0 #373d49;
-      /* ▼ 475pxで14px、1280pxで64pxになる流体フォントサイズ */
-      font-size: clamp(28px, calc(28px + (64 - 28) * ((100vw - 475px) / (1280 - 475))), 64px);
+      /* 475pxで14px、1280pxで64pxになる流体フォントサイズ */
+      font-size: clamp(14px, calc(14px + (64 - 14) * ((100vw - 475px) / (1280 - 475))), 64px);
     }
 
     .brand-logo{
@@ -83,11 +88,50 @@
       pointer-events:auto;
     }
 
+    /* ヘッダー直下のボタン群（2つ） */
+    .intro-bar{
+      position: relative;
+      width: 100%;
+      display: flex;
+      flex-direction: column;      /* デフォルト：縦並び */
+      align-items: center;
+      justify-content: center;
+      gap: 8px;                    /* ボタン間のすき間 */
+      margin-top: 10px;
+      z-index: 3;
+    }
+    .intro-bar__button{
+      appearance: none;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.9);
+      background: rgba(17,24,39,0.85);
+      color: #f9fafb;
+      padding: 8px 18px;
+      font: 600 18px/1.4 system-ui;   /* ボタンのフォントサイズ */
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      box-sizing: border-box;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      white-space: nowrap;
+    }
+    .intro-bar__button:hover{
+      opacity: 0.97;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+    }
+    .intro-bar__button:active{
+      transform: translateY(1px);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+    }
+
     .stage{
       position:relative;
       width:100%;
       display:flex;
-      justify-content:center;
+      flex-direction: column;   /* 縦並び */
+      align-items:center;       /* PCでは中央寄せ */
       padding-bottom:24px;
       background:url('./assets/background.jpg') center/cover no-repeat;
       margin-top: var(--header-offset); /* ヘッダーの高さに応じて背景開始位置を調整 */
@@ -100,14 +144,15 @@
       transform:translate(-50%,-50%);
       width:min(30vw,200px);
       opacity:.95;
-      z-index:2
+      z-index:2;
     }
+
     #webxr-iframe{
       display:block;
       width:100%;
       height:80vh;
       border:none;
-      margin-top:120px;
+      margin-top:20px;
       border-radius:16px;
       box-shadow:0 30px 80px rgba(0,0,0,.25);
       background:#000;
@@ -115,8 +160,25 @@
       overflow:hidden;
       border: 5px solid #ffffff;
     }
+
     @media(min-width:1024px){
-      #webxr-iframe{width:90%;height:90vh}
+      /* PC 時：iframe は 90%、ボタンは横並び */
+      #webxr-iframe{
+        width:90%;
+        height:90vh;
+      }
+      .intro-bar{
+        flex-direction: row;      /* 横並び */
+        justify-content: center;
+        align-items: center;
+        padding-left: 0;
+      }
+      .intro-bar__button{
+        width: auto;
+        max-width: 420px;
+        white-space: nowrap;
+      }
+
       .brand-logo-text{
         margin: 0;
         margin-top: 8px;
@@ -124,35 +186,42 @@
         margin-right: auto;
         text-align: left;
         max-width: calc(100% - 160px);
-        /* font-size は fluid 指定に一本化（ここでは指定しない） */
       }
     }
+
     @media(max-width:1023px){
-      /* ▼ スマホ・タブレットのときだけ左寄せ＋少し左に隙間 */
+      /* スマホ・タブレット：左寄せ＆縦並び */
       .stage{
-        justify-content:flex-start;       /* 子要素を左寄せ */
+        align-items:flex-start;
       }
       #webxr-iframe{
-        width: calc(100% - 30px);        /* 全幅から少しだけ縮める */
+        width: calc(100% - 30px);
         height: calc(86vw);
-        margin-left: 2px;                /* 左に少し隙間 */
+        margin-left: 2px;
+      }
+      .intro-bar{
+        flex-direction: column;     /* 縦並び */
+        align-items:flex-start;
+        padding-left: 2px;
+      }
+      .intro-bar__button{
+        width: calc(100% - 30px);
+        max-width:none;
+        white-space: normal;
       }
 
-      /* ★ スマホ時のタイトルテキスト */
       .brand-logo-text{
-        /* font-size は fluid 指定に一本化（ここでは指定しない） */
         width: calc(100% - 160px);
         max-width: calc(100% - 160px);
-        margin-top: 5px;     /* 上方向5px */
-        margin-left: 5px;    /* 左に5pxの余白 */
-        margin-right: auto;  /* 左寄せ */
+        margin-top: 5px;
+        margin-left: 5px;
+        margin-right: auto;
         text-align: left;
       }
     }
 
     @media(max-width:624px){
       .brand-logo-text{
-        /* font-size は fluid 指定に一本化（ここでは指定しない） */
         max-width: calc(100% - 160px);
       }
     }
@@ -339,24 +408,28 @@
     #grid .card:nth-child(4n+4) .title{ color:#fff; }
     #grid .card:nth-child(4n+4) .meta{ color:rgba(255,255,255,.9); }
 
-
     .backdrop{
       position:fixed;
       inset:0;
       background:rgba(0,0,0,.45);
       display:none;
-      align-items:center;
-      justify-content:center;
+      align-items:flex-start;                                  /* 上寄せ表示 */
+      justify-content:center;                                  /* 横は中央 */
       z-index:20;
       touch-action: manipulation;
+      padding: calc(var(--header-offset) + 20px) 16px 16px;    /* ヘッダーの下から表示開始 */
     }
+
     .modal{
       width:min(720px,92vw);
       background:#fff;
       border-radius:16px;
-
       box-shadow:0 24px 60px rgba(0,0,0,.35);
-      overflow:visible;
+      overflow:hidden;
+      /* モーダル全体を画面内に収めて、中身だけスクロールさせる */
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
     }
     .modal header{
       display:flex;
@@ -366,9 +439,14 @@
       background:#111;
       color:#fff;
       font:700 16px system-ui;
+      position: static; /* ページ全体の header:fixed の影響を打ち消す */
     }
     .close{cursor:pointer;font-size:20px;line-height:1}
-    .body{padding:16px}
+    .body{
+      padding:16px;
+      overflow-y: auto;   /* 本文だけスクロール */
+      flex: 1 1 auto;     /* 余白をここで受け止める */
+    }
     .form{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
     @media(max-width:640px){.form{grid-template-columns:1fr}}
     label{font:600 12px system-ui;color:#333}
@@ -422,7 +500,30 @@
     }
     .lang-switch .en{ background:#2563eb; color:#fff; }
     .lang-switch .ja{ background:#fbbf24; color:#111827; }
-</style>
+
+    /* === About / Guide モーダル本文の文章を読みやすく整える === */
+    #aboutBody p,
+    #guideBody p{
+      font-size: 18px;
+      line-height: 1.7;
+      margin: 0 0 0.8em;
+      text-align: left;
+    }
+    /* 大きめ見出し */
+    #aboutBody p.heading-large,
+    #guideBody p.heading-large{
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 0.5em;
+    }
+    /* 特大見出し（動画数など） */
+    #aboutBody p.heading-strong,
+    #guideBody p.heading-strong{
+      font-size: 34px;
+      font-weight: bold;
+      margin-bottom: 0.4em;
+    }
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -436,6 +537,17 @@
 
     <div class="stage">
       <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+
+      <!-- 白線の下に表示するボタン群 -->
+      <div class="intro-bar">
+        <button type="button" id="aboutBtn" class="intro-bar__button">
+          What is dokodemo doors?
+        </button>
+        <button type="button" id="guideBtn" class="intro-bar__button">
+          How to use Meetup Rooms?
+        </button>
+      </div>
+
       <iframe id="webxr-iframe" title="WebXR Earth" src="./earth.html" allow="xr-spatial-tracking; fullscreen" scrolling="no"></iframe>
     </div>
 
@@ -448,7 +560,7 @@
     </section>
   </div>
 
-  <!-- ★ 追加：ヘッダーの実高さに合わせて --header-offset を更新する軽量スクリプト -->
+  <!-- ★ ヘッダーの実高さに合わせて --header-offset を更新する軽量スクリプト -->
   <script>
     function adjustHeaderOffset(){
       var header = document.querySelector('header');
@@ -459,6 +571,89 @@
     window.addEventListener('load', adjustHeaderOffset);
     window.addEventListener('resize', adjustHeaderOffset);
   </script>
+
+  <!-- サイト説明モーダル -->
+  <div class="backdrop" id="aboutBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="aboutTitle" aria-describedby="aboutBody">
+      <header>
+        <div id="aboutTitle">About this site</div>
+
+        <div class="close" id="aboutClose" aria-label="Close">×</div>
+      </header>
+      <div class="body" id="aboutBody">
+        <p class="heading-large">
+          離れていても、共に旅ができる場所がある
+        </p>
+
+        <p style="padding-left: 1em;">
+          <a href="https://dokodemodoors.com/">オンラインVR空間「どこでもドア」</a>は、世界の360度VR動画を公開するサイトです。
+        </p>
+
+        <p class="heading-strong">
+          掲載動画数1,700以上
+        </p>
+
+        <p style="padding-left: 1em;">
+          Youtubeにも多くのVR動画があります。<br>
+          しかし、これだけの数が一か所に集まっているのはここだけです。
+        </p>
+
+        <p class="heading-strong">
+          複数人同時閲覧可能
+        </p>
+
+        <p style="padding-left: 1em;">
+          時間を併せて同時閲覧することで、同じ景色を見ながら会話やジェスチャーで意思疎通できます。
+        </p>
+      </div>
+      <div class="actions">
+        <button class="btn" id="aboutOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Meetup Rooms の使い方モーダル（2つ目のボタン用） -->
+  <div class="backdrop" id="guideBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="guideTitle" aria-describedby="guideBody">
+      <header>
+        <div id="guideTitle">How to use Meetup Rooms</div>
+        <div class="close" id="guideClose" aria-label="Close">×</div>
+      </header>
+      <div class="body" id="guideBody">
+        <p class="heading-large">
+          Enjoy the same VR tour at the same time
+        </p>
+
+        <p>
+          Meetup Rooms let you and your friends watch the same DokodemoDoors VR tour at the same time, even if you are far apart.
+        </p>
+
+        <p class="heading-strong">
+          1. Create a room
+        </p>
+        <p style="padding-left: 1em;">
+          Click the <strong>“Create Meetup Room”</strong> button, set a title, meeting time, max participants, and paste the destination URL of the tour you want to visit together.
+        </p>
+
+        <p class="heading-strong">
+          2. Share the link
+        </p>
+        <p style="padding-left: 1em;">
+          After creating the room, share the URL of the lobby page with everyone who will join. They can access it from a PC, smartphone, or VR headset browser.
+        </p>
+
+        <p class="heading-strong">
+          3. Enter the lobby and start the tour
+        </p>
+        <p style="padding-left: 1em;">
+          When the meeting time comes, click <strong>“Enter Lobby”</strong>. From there, everyone can jump to the same destination URL and enjoy the VR tour at the same timing while talking together.
+        </p>
+      </div>
+      <div class="actions">
+        <button class="btn" id="guideOk">OK</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 作成/編集モーダル -->
   <div class="backdrop" id="backdrop">
@@ -678,6 +873,7 @@
         initCountdown(c);
         attachEnter(c);
         renderTools(c);
+
       });
       readStore().forEach(upsertCard);
     }
@@ -756,8 +952,8 @@
     }
 
     function initStartInput(){
-      const now=new Date(); 
-      now.setMinutes(now.getMinutes()+30); 
+      const now=new Date();
+      now.setMinutes(now.getMinutes()+30);
       now.setSeconds(0,0);
       const yyyy=now.getFullYear(), mm=pad(now.getMonth()+1), dd=pad(now.getDate());
       const hh=pad(now.getHours()), mi=pad(now.getMinutes());
@@ -794,8 +990,8 @@
     let editingTarget=null;
 
     function openModal(m='create', payload=null){
-      mode=m; 
-      statusMsg.style.display='none'; 
+      mode=m;
+      statusMsg.style.display='none';
       statusMsg.textContent='';
 
       if(m==='create'){
@@ -804,26 +1000,26 @@
         duplicate.style.display='none';
         delBtn.style.display='none';
         mTarget.disabled=false;
-        mTitle.value=''; 
-        mLimit.value='10'; 
+        mTitle.value='';
+        mLimit.value='10';
         mTarget.value='';
-        editingRoomId=null; 
+        editingRoomId=null;
         editingTarget=null;
         initStartInput();
       }else{
         const owners=readOwners();
-        if(!payload || !owners[payload.roomId]){ 
-          alert('You do not have permission to edit this room on this device'); 
-          return; 
+        if(!payload || !owners[payload.roomId]){
+          alert('You do not have permission to edit this room on this device');
+          return;
         }
         modalTitle.textContent='Edit meetup';
         submit.textContent='Update';
         duplicate.style.display='inline-block';
         delBtn.style.display='inline-block';
         mTarget.disabled=true;
-        editingRoomId=payload.roomId; 
+        editingRoomId=payload.roomId;
         editingTarget=payload.target;
-        mTitle.value=payload.title||''; 
+        mTitle.value=payload.title||'';
         mLimit.value=String(payload.limit||'10');
 
         const d = new Date(payload.start||Date.now());
@@ -870,6 +1066,36 @@
     }
     if(alertClose) alertClose.onclick = hideUrlAlert;
     if(alertOk) alertOk.onclick = hideUrlAlert;
+
+    // ===== サイト説明モーダル =====
+    const aboutBackdrop = $('#aboutBackdrop');
+    const aboutBtn = $('#aboutBtn');
+    const aboutClose = $('#aboutClose');
+    const aboutOk = $('#aboutOk');
+    function openAbout(){
+      if (aboutBackdrop) aboutBackdrop.style.display = 'flex';
+    }
+    function closeAbout(){
+      if (aboutBackdrop) aboutBackdrop.style.display = 'none';
+    }
+    if (aboutBtn)   aboutBtn.onclick   = openAbout;
+    if (aboutClose) aboutClose.onclick = closeAbout;
+    if (aboutOk)    aboutOk.onclick    = closeAbout;
+
+    // ===== Meetup Rooms の使い方モーダル =====
+    const guideBackdrop = $('#guideBackdrop');
+    const guideBtn = $('#guideBtn');
+    const guideClose = $('#guideClose');
+    const guideOk = $('#guideOk');
+    function openGuide(){
+      if (guideBackdrop) guideBackdrop.style.display = 'flex';
+    }
+    function closeGuide(){
+      if (guideBackdrop) guideBackdrop.style.display = 'none';
+    }
+    if (guideBtn)   guideBtn.onclick   = openGuide;
+    if (guideClose) guideClose.onclick = closeGuide;
+    if (guideOk)    guideOk.onclick    = closeGuide;
 
     async function postRegistry(item){
       try{
@@ -944,7 +1170,6 @@
     }
 
     async function onSubmit(){
-      const owners=readOwners();
       let roomId=editingRoomId, target=editingTarget;
       const title=(mTitle.value||'Meetup').trim();
       const limit=parseInt(mLimit.value,10)||10;
@@ -1111,19 +1336,6 @@
         localStorage.setItem('lang', lang);
       }catch(e){}
       if(lang === 'ja'){
-        location.href = 'index-ja.html';
-      }else{
-        location.href = 'index.html';
-      }
-    }
-  </script>
-
-  <script>
-    function switchLang(lang){
-      try{
-        localStorage.setItem('lang', lang);
-      }catch(e){}
-      if(lang === 'ja'){
         // 日本語ページへ
         location.href = 'index-ja.html';
       }else{
@@ -1132,6 +1344,7 @@
       }
     }
   </script>
+
   <footer></footer>
 </body>
 </html>
