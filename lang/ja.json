@@ -1,17 +1,17 @@
 {
-  "pageTitle": "どこでもドア ファン サイト",
-  "siteTitle": "どこでもドア ファン サイト",
+  "pageTitle": "どこでもドア ファンサイト",
+  "siteTitle": "どこでもドア ファンサイト",
   "buttons": {
     "about": "What is dokodemo doors?",
     "guide": "How to use Meetup Rooms?"
   },
   "about": {
     "title": "About this site",
-    "bodyHtml": "<p class='heading-large'>離れていても、共に旅ができる場所がある</p>\n\n<p style='padding-left: 1em;'><a href='https://dokodemodoors.com/'>オンラインVR空間「どこでもドア」</a>は、世界の360度VR動画を公開するサイトです。</p>\n\n<p class='heading-strong'>掲載動画数1,700以上</p>\n\n<p style='padding-left: 1em;'>Youtubeにも多くのVR動画があります。<br>しかし、これだけの数が一か所に集まっているのはここだけです。</p>\n\n<p class='heading-strong'>複数人同時閲覧可能</p>\n\n<p style='padding-left: 1em;'>時間を併せて同時閲覧することで、同じ景色を見ながら会話やジェスチャーで意思疎通できます。</p>"
+    "bodyHtml": "<p class='heading-large'>離れていても、共に旅ができる場所がある</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/'>オンラインVR空間「どこでもドア」</a>は、世界の360度VR動画を公開するサイトです。</p><p class='heading-strong'>掲載動画数1,700以上</p><p style='padding-left: 1em;'>Youtubeにも多くのVR動画があります。<br>しかし、これだけの数が一か所に集まっているのはここだけです。</p><p class='heading-strong'>複数人同時閲覧可能</p><p style='padding-left: 1em;'>時間を併せて同時閲覧することで、同じ景色を見ながら会話やジェスチャーで意思疎通できます。</p>"
   },
   "guide": {
     "title": "How to use Meetup Rooms",
-    "bodyHtml": "<p class='heading-large'>Enjoy the same VR tour at the same time</p>\n\n<p>Meetup Rooms let you and your friends watch the same DokodemoDoors VR tour at the same time, even if you are far apart.</p>\n\n<p class='heading-strong'>1. Create a room</p>\n<p style='padding-left: 1em;'>Click the <strong>“Create Meetup Room”</strong> button, set a title, meeting time, max participants, and paste the destination URL of the tour you want to visit together.</p>\n\n<p class='heading-strong'>2. Share the link</p>\n<p style='padding-left: 1em;'>After creating the room, share the URL of the lobby page with everyone who will join. They can access it from a PC, smartphone, or VR headset browser.</p>\n\n<p class='heading-strong'>3. Enter the lobby and start the tour</p>\n<p style='padding-left: 1em;'>When the meeting time comes, click <strong>“Enter Lobby”</strong>. From there, everyone can jump to the same destination URL and enjoy the VR tour at the same timing while talking together.</p>"
+    "bodyHtml": "<p class='heading-large'>Enjoy the same VR tour at the same time</p><p>Meetup Rooms let you and your friends watch the same DokodemoDoors VR tour at the same time, even if you are far apart.</p><p class='heading-strong'>1. Create a room</p><p style='padding-left: 1em;'>Click the <strong>“Create Meetup Room”</strong> button, set a title, meeting time, max participants, and paste the destination URL of the tour you want to visit together.</p><p class='heading-strong'>2. Share the link</p><p style='padding-left: 1em;'>After creating the room, share the URL of the lobby page with everyone who will join. They can access it from a PC, smartphone, or VR headset browser.</p><p class='heading-strong'>3. Enter the lobby and start the tour</p><p style='padding-left: 1em;'>When the meeting time comes, click <strong>“Enter Lobby”</strong>. From there, everyone can jump to the same destination URL and enjoy the VR tour at the same timing while talking together.</p>"
   },
   "meetups": {
     "title": "Meetup Rooms",
