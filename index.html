@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dokodemo Doors Fan Site</title>
-  <style>
+<style>
     * { box-sizing: border-box; }
     html {
       height: 100%;
@@ -19,25 +19,27 @@
     }
     .wrap{display:flex;flex-direction:column;align-items:center;min-height:100%}
 
-    /* === ヘッダー：ロゴ＋最上部固定（グレー帯 55px + 直下5px白帯） === */
+    /* === ヘッダー：ロゴ＋最上部固定 === */
     header{
       position: fixed;
       top: 0; left: 0; right: 0;
       z-index: 1000;
       width: 100%;
-      height: 120px;
-      padding: 0 12px;
-      background: rgba(0,0,0,.6);
+      padding: 0 12px 20px;  /* タイトル下の余白を 20px に */
+      background: rgba(100,100,105,.9);
       color:#fff;
       text-align:center;
       backdrop-filter: blur(4px);
       -webkit-backdrop-filter: blur(4px);
       overflow: visible;
     }
+    /* タイトルブロックの下に白線を配置（padding-bottom 分だけ上にコンテンツ） */
     header::after{
       content:"";
-      position: fixed;
-      left: 0; right: 0; top: 120px;
+      position: absolute;   /* header 内での絶対配置 */
+      left: 0;
+      right: 0;
+      bottom: 0;            /* header の一番下に配置 */
       height: 5px;
       background: #fff;
       z-index: 0;
@@ -88,7 +90,7 @@
       justify-content:center;
       padding-bottom:24px;
       background:url('./assets/background.jpg') center/cover no-repeat;
-      margin-top: 60px; /* 55px+5px */
+      margin-top: var(--header-offset); /* ヘッダーの高さに応じて背景開始位置を調整 */
     }
     .site-logo{
       pointer-events:none;
@@ -157,6 +159,7 @@
 
     /* ====== 待ち合わせ一覧（Paper Cards） ====== */
     :root{
+      --header-offset: 120px; /* デフォルト値（JS で実測値に上書きする） */
       --paper-bg-1: #FBF6ED;
       --paper-bg-2: #F2E7D8;
       --ink-900:   #1e2430;
@@ -419,7 +422,7 @@
     }
     .lang-switch .en{ background:#2563eb; color:#fff; }
     .lang-switch .ja{ background:#fbbf24; color:#111827; }
-  </style>
+</style>
 </head>
 <body>
   <div class="wrap">
@@ -444,6 +447,18 @@
       <div id="grid" class="grid"></div>
     </section>
   </div>
+
+  <!-- ★ 追加：ヘッダーの実高さに合わせて --header-offset を更新する軽量スクリプト -->
+  <script>
+    function adjustHeaderOffset(){
+      var header = document.querySelector('header');
+      if (!header) return;
+      var h = header.getBoundingClientRect().height;
+      document.documentElement.style.setProperty('--header-offset', h + 'px');
+    }
+    window.addEventListener('load', adjustHeaderOffset);
+    window.addEventListener('resize', adjustHeaderOffset);
+  </script>
 
   <!-- 作成/編集モーダル -->
   <div class="backdrop" id="backdrop">
