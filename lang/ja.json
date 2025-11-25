@@ -3,20 +3,20 @@
   "siteTitle": "どこでもドア ファンサイト",
   "buttons": {
     "about": "どこでもドアて何?",
-    "guide": "待合室の使い方"
+    "guide": "どこでもドア ファンサイトて何？"
   },
   "about": {
-    "title": "About this site",
+    "title": "どこでもドアて何?",
     "bodyHtml": "<p class='heading-large'>離れていても、共に旅ができる場所がある</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/'>オンラインVR空間「どこでもドア」</a>は、世界の360度VR動画を公開するサイトです。</p><p class='heading-strong'>掲載動画数1,700以上</p><p style='padding-left: 1em;'>Youtubeにも多くのVR動画があります。<br>しかし、これだけの数が一か所に集まっているのはここだけです。</p><p class='heading-strong'>複数人同時閲覧可能</p><p style='padding-left: 1em;'>時間を併せて同時閲覧することで、同じ景色を見ながら会話やジェスチャーで意思疎通できます。</p>"
   },
   "guide": {
-    "title": "How to use Meetup Rooms",
-    "bodyHtml": "<p class='heading-large'>Enjoy the same VR tour at the same time</p><p>Meetup Rooms let you and your friends watch the same DokodemoDoors VR tour at the same time, even if you are far apart.</p><p class='heading-strong'>1. Create a room</p><p style='padding-left: 1em;'>Click the <strong>“Create Meetup Room”</strong> button, set a title, meeting time, max participants, and paste the destination URL of the tour you want to visit together.</p><p class='heading-strong'>2. Share the link</p><p style='padding-left: 1em;'>After creating the room, share the URL of the lobby page with everyone who will join. They can access it from a PC, smartphone, or VR headset browser.</p><p class='heading-strong'>3. Enter the lobby and start the tour</p><p style='padding-left: 1em;'>When the meeting time comes, click <strong>“Enter Lobby”</strong>. From there, everyone can jump to the same destination URL and enjoy the VR tour at the same timing while talking together.</p>"
+    "title": "どこでもドア ファンサイトて何？",
+    "bodyHtml": "<p class='heading-large'>どこでもドアの行先を地球儀から選ぶ</p><p>公式サイトは一覧選択式です。これを地球儀上で見て選びたかったので、公式の許可を得て、個人的にこのサイトを作成しました。</p><p class='heading-strong'>1. 事前に公式サイトでアカウント登録が必要</p><p style='padding-left: 1em;'>アカウント作成済であるが前提です。アカウントを持っていない人が地球儀から行先を選択しても、アカウント作成画面に行きつきます。</p><p class='heading-strong'>2. MetaQuest2以上の入手をお勧め</p><p style='padding-left: 1em;'>公式サイトでは様々なデバイスでアクセス可能としています。実際そうです。しかしVRとそれ以外では得られる価値に差がありすぎると「私は」感じています。MetaQuest2以上を入手の上でのアクセスをお勧めします。</p>"
   },
   "meetups": {
-    "title": "Meetup Rooms",
-    "createButton": "Create Meetup Room",
-    "cardStartsLabel": "Starts in",
+    "title": "待合室",
+    "createButton": "待合室を作成",
+    "cardStartsLabel": "開始まで",
     "cardExpiresIn": "Expires in",
     "cardExpired": "Expired",
     "enterLobby": "Enter Lobby"

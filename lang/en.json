@@ -7,7 +7,7 @@
   },
   "about": {
     "title": "About this site",
-    "bodyHtml": "<p class='heading-large'>離れていても、共に旅ができる場所がある</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/'>オンラインVR空間「どこでもドア」</a>は、世界の360度VR動画を公開するサイトです。</p><p class='heading-strong'>掲載動画数1,700以上</p><p style='padding-left: 1em;'>Youtubeにも多くのVR動画があります。<br>しかし、これだけの数が一か所に集まっているのはここだけです。</p><p class='heading-strong'>複数人同時閲覧可能</p><p style='padding-left: 1em;'>時間を併せて同時閲覧することで、同じ景色を見ながら会話やジェスチャーで意思疎通できます。</p>"
+    "bodyHtml": "<p class='heading-large'>A place where you can explore the world together, even when you're far apart</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/'>Dokodemo Doors</a>, an online VR space, offers a vast collection of 360-degree VR videos from around the world.</p><p class='heading-strong'>Over 1,700 videos available</p><p style='padding-left: 1em;'>There are many VR videos on YouTube as well,but nowhere else will you find this many gathered in one place.</p><p class='heading-strong'>Watch together in real time</p><p style='padding-left: 1em;'>By synchronizing your viewing time, you can communicate through conversation and gestures while sharing the exact same view.</p>"
   },
   "guide": {
     "title": "How to use Meetup Rooms",
