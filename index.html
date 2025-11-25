@@ -693,7 +693,7 @@
 
           <div>
             <label for="mTarget">Destination URL</label>
-            <input id="mTarget" placeholder="https://dokodemoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
+            <input id="mTarget" placeholder="https://dokodemodoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
             <div class="note">Once created, the destination URL cannot be changed. To change it, duplicate this room and create a new one.</div>
           </div>
         </div>
@@ -1203,7 +1203,7 @@
         target=(mTarget.value||'').trim();
 
         /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
-        if (!target.toLowerCase().startsWith('https://dokodemoors.com/')) {
+        if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
           showUrlAlert();
           return;
         }
