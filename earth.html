@@ -224,44 +224,82 @@ AFRAME.registerComponent('ray-aim-offset', {
 // --- Enforce child raycaster (#right-ray) as the only VR ray ---
 AFRAME.registerComponent('ray-enforce-child', {
   init: function(){
+    // 🟦 PC などヘッドセット未接続の環境では何もしない（mouseCursor を優先）
+    try {
+      if (!AFRAME.utils ||
+          !AFRAME.utils.device ||
+          !AFRAME.utils.device.checkHeadsetConnected ||
+          !AFRAME.utils.device.checkHeadsetConnected()) {
+        console.log('[ray-enforce-child] no headset detected, keep mouseCursor only');
+        return;
+      }
+    } catch (e) {
+      console.log('[ray-enforce-child] device check failed, keep mouseCursor only', e);
+      return;
+    }
+
     var scene = this.el.sceneEl || this.el;
-    function setAttr(el, comp, prop, val){ if(!el) return; try{ el.setAttribute(comp, prop, val);}catch(e){} }
+
+    function setAttr(el, comp, prop, val){
+      if (!el) return;
+      try { el.setAttribute(comp, prop, val); } catch(e){}
+    }
+
     function enableChild(){
       var right = document.getElementById('right-hand');
       var child = document.getElementById('right-ray');
       var mouse = document.getElementById('mouseCursor');
-      // Disable any raycaster on the parent
-      if(right && right.components && right.components.raycaster){
+
+      // 親（right-hand）側の raycaster は消しておく
+      if (right && right.components && right.components.raycaster){
         right.removeAttribute('raycaster');
       }
-      // Disable all raycasters except mouseCursor and right-ray
+
+      // 他の raycaster を無効化（mouseCursor と right-ray は除外）
       Array.from(document.querySelectorAll('[raycaster]')).forEach(function(e){
-        if(e.id !== 'right-ray' && e.id !== 'mouseCursor'){
-          setAttr(e,'raycaster','enabled',false);
+        if (e.id !== 'right-ray' && e.id !== 'mouseCursor'){
+          setAttr(e, 'raycaster', 'enabled', false);
         }
       });
-      // Enable child ray and show the line
-      if(child){
-        setAttr(child,'raycaster','useWorldCoordinates',false);
-        setAttr(child,'raycaster','showLine',true);
-        setAttr(child,'raycaster','enabled',true);
+
+      // 子 ray（right-ray）を有効化
+      if (child){
+        setAttr(child, 'raycaster', 'useWorldCoordinates', false);
+        setAttr(child, 'raycaster', 'showLine', true);
+        setAttr(child, 'raycaster', 'enabled', true);
       }
-      if(mouse){ setAttr(mouse,'raycaster','enabled',false); }
+
+      // VR 中は mouse を無効化
+      if (mouse){
+        setAttr(mouse, 'raycaster', 'enabled', false);
+      }
+
       console.log('[ray-enforce-child] enter-vr: child ray enabled, others disabled');
     }
+
     function disableChild(){
       var child = document.getElementById('right-ray');
       var mouse = document.getElementById('mouseCursor');
-      if(child){ setAttr(child,'raycaster','enabled',false); }
-      if(mouse){ setAttr(mouse,'raycaster','enabled',true); }
+
+      if (child){
+        setAttr(child, 'raycaster', 'enabled', false);
+      }
+      if (mouse){
+        setAttr(mouse, 'raycaster', 'enabled', true);
+      }
+
       console.log('[ray-enforce-child] exit-vr: child ray disabled, mouse enabled');
     }
-    // Initial
+
+    // 初期状態では VR 用 ray はオフ、マウスはオン
     disableChild();
+
+    // VR への出入りで切り替え
     scene.addEventListener('enter-vr', enableChild);
     scene.addEventListener('exit-vr', disableChild);
   }
 });
+
 
 
 // ===================================================================
