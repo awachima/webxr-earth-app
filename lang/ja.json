@@ -7,11 +7,11 @@
   },
   "about": {
     "title": "どこでもドアて何?",
-    "bodyHtml": "<p class='heading-large'>離れていても、共に旅ができる場所がある</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/'>オンラインVR空間「どこでもドア」</a>は、世界の360度VR動画を公開するサイトです。</p><p class='heading-strong'>掲載動画数1,700以上</p><p style='padding-left: 1em;'>Youtubeにも多くのVR動画があります。<br>しかし、これだけの数が一か所に集まっているのはここだけです。</p><p class='heading-strong'>複数人同時閲覧可能</p><p style='padding-left: 1em;'>時間を併せて同時閲覧することで、同じ景色を見ながら会話やジェスチャーで意思疎通できます。</p><p>詳しくは<a href="https://dokodemodoors.com/info/about-dokodemodoor">こちら</a>をご覧ください。</p>"
+    "bodyHtml": "<p class='heading-large'>離れていても、共に旅ができる場所がある</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/'>オンラインVR空間「どこでもドア」</a>は、世界の360度VR動画を公開するサイトです。</p><p class='heading-strong'>掲載動画数1,700以上</p><p style='padding-left: 1em;'>Youtubeにも多くのVR動画があります。<br>しかし、これだけの数が一か所に集まっているのはここだけです。</p><p class='heading-strong'>複数人同時閲覧可能</p><p style='padding-left: 1em;'>時間を併せて同時閲覧することで、同じ景色を見ながら会話やジェスチャーで意思疎通できます。</p><p>詳しくは<a href='https://dokodemodoors.com/info/about-dokodemodoor/'>こちら</a>をご覧ください。</p>"
   },
   "guide": {
     "title": "どこでもドア ファンサイトて何？",
-    "bodyHtml": "<p class='heading-large'>どこでもドアの行先を地球儀から選ぶためのサイト</p><p><a href="https://dokodemodoors.com/">公式サイト</a>は一覧選択式です。これを地球儀上で見て選びたかったので、公式の許可を得て、個人的にこのサイトを作成しました。</p><p class='heading-strong'>1. 事前にサブスクの申し込みが必要</p><p style='padding-left: 1em;'>動画視聴のためには事前に公式サイトでサブスクリプションを申し込んでおく必要があります。申し込んでいない人が地球儀から行先を選択し、各ワールドに入ろうとすることで、サブスク申請画面に行きつきます。<br>無料視聴可能なワールドもありますが、それらについては<a href="https://dokodemodoors.com/">公式サイトのトップ画面</a>で選択する方が簡単です。「おすすめワールド」と記載されているところで、よく「期間限定無料公開」のワールドが並んでいます。</p><p class='heading-strong'>2. MetaQuest2以上の入手をお勧め</p><p style='padding-left: 1em;'>公式サイトでは様々なデバイスでアクセス可能としています。実際そうです。しかしVRとそれ以外では得られる価値に差がありすぎると「私は」感じています。MetaQuest2以上を入手の上でのアクセスをお勧めします。</p>"
+    "bodyHtml": "<p class='heading-large'>どこでもドアの行先を地球儀から選ぶためのサイト</p><p><a href='https://dokodemodoors.com/'>公式サイト</a>は一覧選択式です。これを地球儀上で見て選びたかったので、公式の許可を得て、個人的にこのサイトを作成しました。</p><p class='heading-strong'>1. 事前にサブスクの申し込みが必要</p><p style='padding-left: 1em;'>動画視聴のためには事前に公式サイトでサブスクリプションを申し込んでおく必要があります。申し込んでいない人が地球儀から行先を選択し、各ワールドに入ろうとすることで、サブスク申請画面に行きつきます。<br>無料視聴可能なワールドもありますが、それらについては<a href="https://dokodemodoors.com/">公式サイトのトップ画面</a>で選択する方が簡単です。「おすすめワールド」と記載されているところで、よく「期間限定無料公開」のワールドが並んでいます。</p><p class='heading-strong'>2. MetaQuest2以上の入手をお勧め</p><p style='padding-left: 1em;'>公式サイトでは様々なデバイスでアクセス可能としています。実際そうです。しかしVRとそれ以外では得られる価値に差がありすぎると「私は」感じています。MetaQuest2以上を入手の上でのアクセスをお勧めします。</p>"
   },
   "meetups": {
     "title": "待合室",
