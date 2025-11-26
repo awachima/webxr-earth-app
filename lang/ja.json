@@ -32,7 +32,7 @@
       "targetNote": "作成後はツアーのURLは固定されます。変更したい場合は「複製」して新しい部屋を作ってください。"
     },
     "deleteButton": "この部屋を削除",
-    "duplicateButton": この部屋を複製",
+    "duplicateButton": "この部屋を複製",
     "closeButton": "閉じる",
     "submitCreate": "待ち合わせを作成",
     "submitUpdate": "更新",
