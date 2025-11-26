@@ -2,54 +2,54 @@
   "pageTitle": "どこでもドア ファンサイト",
   "siteTitle": "どこでもドア ファンサイト",
   "buttons": {
-    "about": "どこでもドアて何?",
-    "guide": "どこでもドア ファンサイトて何？"
+    "about": "どこでもドアとは？",
+    "guide": "ファンサイトとは？"
   },
   "about": {
-    "title": "どこでもドアて何?",
-    "bodyHtml": "<p class='heading-large'>離れていても、共に旅ができる場所がある</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/'>オンラインVR空間「どこでもドア」</a>は、世界の360度VR動画を公開するサイトです。</p><p class='heading-strong'>掲載動画数1,700以上</p><p style='padding-left: 1em;'>Youtubeにも多くのVR動画があります。<br>しかし、これだけの数が一か所に集まっているのはここだけです。</p><p class='heading-strong'>複数人同時閲覧可能</p><p style='padding-left: 1em;'>時間を併せて同時閲覧することで、同じ景色を見ながら会話やジェスチャーで意思疎通できます。</p><p>詳しくは<a href='https://dokodemodoors.com/info/about-dokodemodoor'>こちら</a>をご覧ください。</p>"
+    "title": "どこでもドアとは？",
+    "bodyHtml": "<p class='heading-large'>離れていても、共に旅ができる場所がある</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>オンラインVR空間「どこでもドア」</a>は、世界の360度VR動画を公開するサイトです。</p><p class='heading-strong'>掲載動画数 1,700 本以上</p><p style='padding-left: 1em;'>YouTubeにもVR動画は多く存在しますが、これだけの数が一か所に集まっているのは「どこでもドア」だけです。</p><p class='heading-strong'>複数人で“同時に”閲覧可能</p><p style='padding-left: 1em;'>同じタイミングで動画を再生することで、同じ景色を見ながら会話やジェスチャーを使って体験を共有できます。</p><p>詳しくは、<a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>こちら</a>をご覧ください。</p>"
   },
   "guide": {
-    "title": "どこでもドア ファンサイトて何？",
-    "bodyHtml": "<p class='heading-large'>どこでもドアの行先を地球儀から選ぶためのサイト</p><p><a href='https://dokodemodoors.com/'>公式サイト</a>は一覧選択式です。これを地球儀上で見て選びたかったので、公式の許可を得て、個人的にこのサイトを作成しました。</p><p class='heading-strong'>1. 事前にサブスクの申し込みが必要</p><p style='padding-left: 1em;'>動画視聴のためには事前に公式サイトでサブスクリプションを申し込んでおく必要があります。申し込んでいない人が地球儀から行先を選択し、各ワールドに入ろうとすることで、サブスク申請画面に行きつきます。<br>無料視聴可能なワールドもありますが、それらについては<a href='https://dokodemodoors.com/'>公式サイトのトップ画面</a>で選択する方が簡単です。「おすすめワールド」と記載されているところで、よく「期間限定無料公開」のワールドが並んでいます。</p><p class='heading-strong'>2. MetaQuest2以上の入手をお勧め</p><p style='padding-left: 1em;'>公式サイトでは様々なデバイスでアクセス可能としています。実際そうです。しかしVRとそれ以外では得られる価値に差がありすぎると「私は」感じています。MetaQuest2以上を入手の上でのアクセスをお勧めします。</p>"
+    "title": "どこでもドア ファンサイトとは？",
+    "bodyHtml": "<p class='heading-large'>地球儀から行き先を選べる、非公式サポートサイト</p><p><a href='https://dokodemodoors.com/' target='_blank'>公式サイト</a>では一覧形式でワールドを選びますが、これを“地球儀上で見て選びたい”と思い、公式の許可をいただいたうえで作成した個人サイトです。</p><p class='heading-strong'>1. 事前にサブスクリプション登録が必要</p><p style='padding-left: 1em;'>各ワールドの視聴には、公式サイトでのサブスク登録が必要です。登録していない場合、ワールド入室時にサブスク申請画面に移動します。<br>一部ワールドは無料公開の期間がありますが、それらは<a href='https://dokodemodoors.com/' target='_blank'>公式サイトのトップ画面</a>から選択する方が分かりやすいです。「おすすめワールド」に表示されていることが多いです。</p><p class='heading-strong'>2. Meta Quest 2 以上での視聴を推奨</p><p style='padding-left: 1em;'>どの端末でも視聴は可能ですが、VR での体験価値は桁違いです。可能であれば Meta Quest 2 以上での視聴を強くお勧めします。</p>"
   },
   "meetups": {
-    "title": "待合室",
+    "title": "待合室一覧",
     "createButton": "待合室を作成",
     "cardStartsLabel": "開始まで",
-    "cardExpiresIn": "Expires in",
-    "cardExpired": "Expired",
-    "enterLobby": "Enter Lobby"
+    "cardExpiresIn": "削除までの残り時間",
+    "cardExpired": "期限切れ",
+    "enterLobby": "入室"
   },
   "modal": {
     "createTitle": "待合室を作成",
-    "editTitle": "Edit meetup",
+    "editTitle": "待合室を編集",
     "form": {
       "titleLabel": "タイトル",
       "limitLabel": "参加上限",
       "startLabel": "集合日時 (JST)",
-      "targetLabel": "作成したツアーのURL",
-      "targetNote": "作成後はツアーのURLは固定されます。変更したい場合は「複製」して新しい部屋を作ってください。"
+      "targetLabel": "ツアー（またはワールド）のURL",
+      "targetNote": "作成後はURLの変更はできません。変更したい場合は「複製」から新しく作成してください。"
     },
-    "deleteButton": "この部屋を削除",
-    "duplicateButton": "この部屋を複製",
+    "deleteButton": "この待合室を削除",
+    "duplicateButton": "この待合室を複製",
     "closeButton": "閉じる",
-    "submitCreate": "待ち合わせを作成",
-    "submitUpdate": "更新",
+    "submitCreate": "作成する",
+    "submitUpdate": "更新する",
     "statusCreated": "作成しました",
     "statusUpdated": "更新しました",
     "validation": {
-      "startRequired": "Please enter the meeting time.",
-      "noPermission": "You do not have permission to edit this room on this device.",
-      "ownerMissing": "Owner information is missing on this device, so the room cannot be deleted.",
-      "deleteFailedPrefix": "Failed to delete",
-      "serverError": "An error occurred while connecting to the server.",
-      "duplicated": "Duplicated. The destination URL is the same as the original."
+      "startRequired": "集合日時を入力してください。",
+      "noPermission": "このデバイスには編集権限がありません。",
+      "ownerMissing": "このデバイスに作成者情報がないため、削除できません。",
+      "deleteFailedPrefix": "削除に失敗しました：",
+      "serverError": "サーバーへの接続中にエラーが発生しました。",
+      "duplicated": "複製済みです。同じURLの待合室がすでに存在します。"
     }
   },
   "alert": {
-    "title": "Destination URL Details",
-    "body": "Please set the destination URL to a DokodemoDoors tour or world.",
+    "title": "URLの詳細",
+    "body": "URLには、どこでもドアのツアーまたはワールドのリンクを設定してください。",
     "ok": "OK"
   },
   "aboutModal": {
