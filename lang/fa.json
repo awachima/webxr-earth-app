@@ -1,0 +1,61 @@
+{
+  "pageTitle": "سایت هواداران دُکودِمو دورز",
+  "siteTitle": "سایت هواداران دُکودِمو دورز",
+  "buttons": {
+    "about": "دُکودِمو دورز چیست؟",
+    "guide": "این سایت هواداری چیست؟"
+  },
+  "about": {
+    "title": "دُکودِمو دورز چیست؟",
+    "bodyHtml": "<p class='heading-large'>جایی که می‌توانید حتی از دور هم با هم سفر کنید</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors</a> یک پلتفرم VR آنلاین است که مجموعه‌ای بزرگ از ویدیوهای ۳۶۰ درجه سفر در جهان را ارائه می‌دهد.</p><p class='heading-strong'>بیش از ۱۷۰۰ ویدیو</p><p style='padding-left: 1em;'>در حالی که یوتیوب نیز ویدیوهای VR دارد، هیچ سایتی به اندازه Dokodemo Doors محتوای متمرکز VR ارائه نمی‌دهد.</p><p class='heading-strong'>تماشای همزمان با دیگران</p><p style='padding-left: 1em;'>با پخش همزمان ویدیو، می‌توانید مناظر یکسان را در یک لحظه مشاهده کرده و گفتگو کنید.</p><p>برای اطلاعات بیشتر <a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>اینجا</a> را ببینید.</p>"
+  },
+  "guide": {
+    "title": "این سایت هواداری چیست؟",
+    "bodyHtml": "<p class='heading-large'>سایتی غیررسمی برای انتخاب مقصد از روی یک کره‌ سه‌بعدی</p><p>چون می‌خواستم مقصدها را از روی یک کره انتخاب کنم و نه فقط از فهرست موجود در <a href='https://dokodemodoors.com/' target='_blank'>سایت رسمی</a>، با کسب اجازه رسمی این سایت را ایجاد کردم.</p><p class='heading-strong'>۱. نیاز به اشتراک</p><p style='padding-left: 1em;'>برای ورود به هر دنیا باید در سایت رسمی اشتراک داشته باشید. اگر اشتراک نداشته باشید، هنگام ورود به دنیا به صفحه اشتراک منتقل می‌شوید.<br>برخی دنیاها در دوره‌های زمانی محدود رایگان هستند و از صفحه اصلی <a href='https://dokodemodoors.com/' target='_blank'>سایت رسمی</a> قابل مشاهده‌اند.</p><p class='heading-strong'>۲. پیشنهاد استفاده از Meta Quest 2 یا بالاتر</p><p style='padding-left: 1em;'>هرچند روی دستگاه‌های مختلف قابل مشاهده است، اما تجربه VR بسیار برتر است. توصیه می‌شود از Meta Quest 2 یا بالاتر استفاده کنید.</p>"
+  },
+  "meetups": {
+    "title": "اتاق‌های ملاقات",
+    "createButton": "ساخت اتاق",
+    "cardStartsLabel": "زمان باقی‌مانده تا شروع",
+    "cardExpiresIn": "زمان باقی‌مانده تا حذف",
+    "cardExpired": "منقضی شده",
+    "enterLobby": "ورود"
+  },
+  "modal": {
+    "createTitle": "ساخت اتاق ملاقات",
+    "editTitle": "ویرایش اتاق",
+    "form": {
+      "titleLabel": "عنوان",
+      "limitLabel": "حداکثر تعداد",
+      "startLabel": "زمان ملاقات (JST)",
+      "targetLabel": "لینک تور / دنیا",
+      "targetNote": "پس از ساخت، امکان تغییر لینک وجود ندارد. برای تغییر، اتاق را کپی کرده و یک مورد جدید بسازید."
+    },
+    "deleteButton": "حذف این اتاق",
+    "duplicateButton": "کپی این اتاق",
+    "closeButton": "بستن",
+    "submitCreate": "ساخت",
+    "submitUpdate": "به‌روزرسانی",
+    "statusCreated": "ساخته شد",
+    "statusUpdated": "به‌روزرسانی شد",
+    "validation": {
+      "startRequired": "لطفاً زمان ملاقات را وارد کنید.",
+      "noPermission": "این دستگاه اجازه ویرایش ندارد.",
+      "ownerMissing": "اطلاعات سازنده یافت نشد؛ امکان حذف نیست.",
+      "deleteFailedPrefix": "خطا در حذف:",
+      "serverError": "خطای سرور.",
+      "duplicated": "قبلاً کپی شده. اتاقی با همین لینک موجود است."
+    }
+  },
+  "alert": {
+    "title": "درباره لینک",
+    "body": "لطفاً لینک یک تور یا دنیای Dokodemo Doors را وارد کنید.",
+    "ok": "باشه"
+  },
+  "aboutModal": {
+    "ok": "باشه"
+  },
+  "guideModal": {
+    "ok": "باشه"
+  }
+}

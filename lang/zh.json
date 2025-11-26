@@ -1,0 +1,61 @@
+{
+  "pageTitle": "任意门粉丝网站",
+  "siteTitle": "任意门粉丝网站",
+  "buttons": {
+    "about": "什么是任意门？",
+    "guide": "什么是粉丝网站？"
+  },
+  "about": {
+    "title": "什么是任意门？",
+    "bodyHtml": "<p class='heading-large'>即使相隔遥远，也能一起旅行的地方</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>任意门</a>是一个提供全球 360° VR 旅行视频的线上 VR 平台。</p><p class='heading-strong'>超过 1,700 个视频</p><p style='padding-left: 1em;'>虽然 YouTube 上也有 VR 视频，但没有任何其他网站像任意门这样集中这么多 VR 旅行内容。</p><p class='heading-strong'>多人同步观看</p><p style='padding-left: 1em;'>通过同步播放，你可以与朋友在同一时刻观看相同的风景并交流。</p><p>详情请查看<a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>这里</a>。</p>"
+  },
+  "guide": {
+    "title": "什么是粉丝网站？",
+    "bodyHtml": "<p class='heading-large'>一个可以从地球仪上选择目的地的非官方支持网站</p><p>因为我希望能在 3D 地球仪上选择目的地，而不仅仅是在<a href='https://dokodemodoors.com/' target='_blank'>官方网站</a>的列表中选择，所以在获得官方许可后创建了本网站。</p><p class='heading-strong'>1. 需要订阅</p><p style='padding-left: 1em;'>观看各个世界需要在官方网站上订阅。如果未订阅，进入世界时会跳转到订阅页面。<br>部分世界会在限定期间免费公开，最容易在<a href='https://dokodemodoors.com/' target='_blank'>官网首页</a>的“推荐世界”中找到。</p><p class='heading-strong'>2. 建议使用 Meta Quest 2 或更高版本</p><p style='padding-left: 1em;'>虽然可在多种设备上使用，但 VR 体验远胜于其他方式。强烈建议使用 Meta Quest 2 或以上的设备。</p>"
+  },
+  "meetups": {
+    "title": "等待房间",
+    "createButton": "创建房间",
+    "cardStartsLabel": "开始剩余",
+    "cardExpiresIn": "距离删除剩余时间",
+    "cardExpired": "已过期",
+    "enterLobby": "进入"
+  },
+  "modal": {
+    "createTitle": "创建等待房间",
+    "editTitle": "编辑等待房间",
+    "form": {
+      "titleLabel": "标题",
+      "limitLabel": "人数上限",
+      "startLabel": "集合时间（JST）",
+      "targetLabel": "旅游 / 世界 URL",
+      "targetNote": "创建后无法修改 URL。如需修改，请复制房间并重新创建。"
+    },
+    "deleteButton": "删除此房间",
+    "duplicateButton": "复制此房间",
+    "closeButton": "关闭",
+    "submitCreate": "创建",
+    "submitUpdate": "更新",
+    "statusCreated": "已创建",
+    "statusUpdated": "已更新",
+    "validation": {
+      "startRequired": "请输入集合时间。",
+      "noPermission": "此设备无权编辑该房间。",
+      "ownerMissing": "此设备无创建者信息，无法删除房间。",
+      "deleteFailedPrefix": "删除失败：",
+      "serverError": "服务器错误。",
+      "duplicated": "已复制。相同 URL 的房间已存在。"
+    }
+  },
+  "alert": {
+    "title": "关于 URL",
+    "body": "请输入任意门的旅游或世界 URL。",
+    "ok": "OK"
+  },
+  "aboutModal": {
+    "ok": "OK"
+  },
+  "guideModal": {
+    "ok": "OK"
+  }
+}

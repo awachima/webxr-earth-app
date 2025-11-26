@@ -1,0 +1,61 @@
+{
+  "pageTitle": "אתר המעריצים של Dokodemo Doors",
+  "siteTitle": "אתר המעריצים של Dokodemo Doors",
+  "buttons": {
+    "about": "מה זה Dokodemo Doors?",
+    "guide": "מהו אתר המעריצים?"
+  },
+  "about": {
+    "title": "מה זה Dokodemo Doors?",
+    "bodyHtml": "<p class='heading-large'>מקום שבו אפשר לטייל יחד גם כשאתם רחוקים</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors</a> הוא פלטפורמת VR מקוונת המציעה אוסף גדול של סרטוני טיול ב־360° מכל העולם.</p><p class='heading-strong'>מעל 1,700 סרטונים</p><p style='padding-left: 1em;'>למרות שגם ביוטיוב יש תוכן VR, אין עוד אתר שמרכז כל כך הרבה סרטוני טיול VR במקום אחד.</p><p class='heading-strong'>צפייה מסונכרנת עם אחרים</p><p style='padding-left: 1em;'>על ידי התחלת הסרטון בו־זמנית, תוכלו לראות את אותו הנוף באותו הרגע ולשוחח תוך כדי.</p><p>למידע נוסף לחצו <a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>כאן</a>.</p>"
+  },
+  "guide": {
+    "title": "מהו אתר המעריצים?",
+    "bodyHtml": "<p class='heading-large'>אתר לא רשמי המאפשר לבחור יעדים מגלובוס תלת־ממדי</p><p>רציתי לבחור עולמות דרך גלובוס ולא מרשימת טקסט, ולכן יצרתי אתר זה באישור הרשמי של <a href='https://dokodemodoors.com/' target='_blank'>האתר הרשמי</a>.</p><p class='heading-strong'>1. נדרש מנוי</p><p style='padding-left: 1em;'>לצפייה בכל עולם נדרש מנוי באתר הרשמי. אם אין מנוי, הכניסה לעולם תעביר אתכם לדף ההרשמה.<br>חלק מהעולמות זמינים בחינם לפרקי זמן מוגבלים, וניתן למצוא אותם ב־<a href='https://dokodemodoors.com/' target='_blank'>דף הבית</a> תחת “Recommended Worlds”.</p><p class='heading-strong'>2. מומלץ להשתמש ב־Meta Quest 2 ומעלה</p><p style='padding-left: 1em;'>למרות שניתן לצפות גם ממכשירים אחרים, חוויית ה־VR עדיפה באופן משמעותי. מומלץ להשתמש ב־Meta Quest 2 או חדש ממנו.</p>"
+  },
+  "meetups": {
+    "title": "חדרי מפגש",
+    "createButton": "יצירת חדר",
+    "cardStartsLabel": "מתחיל בעוד",
+    "cardExpiresIn": "זמן עד למחיקה",
+    "cardExpired": "פג תוקף",
+    "enterLobby": "כניסה"
+  },
+  "modal": {
+    "createTitle": "יצירת חדר מפגש",
+    "editTitle": "עריכת חדר",
+    "form": {
+      "titleLabel": "כותרת",
+      "limitLabel": "מגבלת משתתפים",
+      "startLabel": "זמן מפגש (JST)",
+      "targetLabel": "קישור לעולם / טיול",
+      "targetNote": "לאחר יצירה לא ניתן לשנות את הקישור. לשינוי יש ליצור עותק חדש."
+    },
+    "deleteButton": "מחיקת חדר",
+    "duplicateButton": "שכפול חדר",
+    "closeButton": "סגור",
+    "submitCreate": "צור",
+    "submitUpdate": "עדכן",
+    "statusCreated": "נוצר",
+    "statusUpdated": "עודכן",
+    "validation": {
+      "startRequired": "אנא הזינו זמן מפגש.",
+      "noPermission": "למכשיר זה אין הרשאה לעריכת החדר.",
+      "ownerMissing": "אין מידע על יוצר החדר; לא ניתן למחוק.",
+      "deleteFailedPrefix": "שגיאה במחיקה:",
+      "serverError": "שגיאת שרת.",
+      "duplicated": "כבר קיים חדר עם אותו קישור."
+    }
+  },
+  "alert": {
+    "title": "אודות הקישור",
+    "body": "אנא הזינו קישור לעולם או טיול של Dokodemo Doors.",
+    "ok": "אישור"
+  },
+  "aboutModal": {
+    "ok": "אישור"
+  },
+  "guideModal": {
+    "ok": "אישור"
+  }
+}

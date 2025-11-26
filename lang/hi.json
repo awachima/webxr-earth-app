@@ -1,0 +1,61 @@
+{
+  "pageTitle": "Dokodemo Doors फैन साइट",
+  "siteTitle": "Dokodemo Doors फैन साइट",
+  "buttons": {
+    "about": "Dokodemo Doors क्या है?",
+    "guide": "फैन साइट क्या है?"
+  },
+  "about": {
+    "title": "Dokodemo Doors क्या है?",
+    "bodyHtml": "<p class='heading-large'>दूरी होने पर भी साथ में यात्रा करने की जगह</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors</a> एक ऑनलाइन VR प्लेटफ़ॉर्म है जो दुनिया भर के 360° VR यात्रा वीडियो प्रस्तुत करता है।</p><p class='heading-strong'>1700 से अधिक वीडियो</p><p style='padding-left: 1em;'>YouTube पर भी VR वीडियो हैं, लेकिन इतने बड़े पैमाने पर संग्रह किसी और साइट पर नहीं मिलता।</p><p class='heading-strong'>सिंक्रोनाइज़्ड व्यूइंग</p><p style='padding-left: 1em;'>एक ही समय पर वीडियो चलाकर आप बिल्कुल वही दृश्य एक साथ देख सकते हैं और बातचीत भी कर सकते हैं।</p><p>अधिक जानकारी के लिए <a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>यहाँ</a> देखें।</p>"
+  },
+  "guide": {
+    "title": "फैन साइट क्या है?",
+    "bodyHtml": "<p class='heading-large'>3D ग्लोब से दुनिया चुनने के लिए बनाया गया एक अनौपचारिक साइट</p><p>मैं सूची के बजाय ग्लोब से दुनिया चुनना चाहता था, इसलिए <a href='https://dokodemodoors.com/' target='_blank'>आधिकारिक साइट</a> की अनुमति लेकर इसे बनाया।</p><p class='heading-strong'>1. सदस्यता आवश्यक</p><p style='padding-left: 1em;'>हर वर्ल्ड देखने के लिए आधिकारिक साइट पर सदस्यता लेनी होती है। यदि सदस्यता नहीं है, तो प्रवेश पर सदस्यता पेज पर भेज दिया जाता है।<br>कुछ वर्ल्ड सीमित समय के लिए मुफ्त भी होते हैं और <a href='https://dokodemodoors.com/' target='_blank'>होमपेज</a> पर “Recommended Worlds” में मिलते हैं।</p><p class='heading-strong'>2. Meta Quest 2 या उससे ऊपर का सुझाव</p><p style='padding-left: 1em;'>हालाँकि कई डिवाइस पर देखा जा सकता है, लेकिन VR अनुभव कहीं बेहतर है। Meta Quest 2 या उससे ऊपर की सलाह दी जाती है।</p>"
+  },
+  "meetups": {
+    "title": "मीटअप रूम",
+    "createButton": "रूम बनाएँ",
+    "cardStartsLabel": "शुरू होने में",
+    "cardExpiresIn": "हटाए जाने तक शेष समय",
+    "cardExpired": "समय समाप्त",
+    "enterLobby": "प्रवेश करें"
+  },
+  "modal": {
+    "createTitle": "मीटअप रूम बनाएँ",
+    "editTitle": "रूम संपादित करें",
+    "form": {
+      "titleLabel": "शीर्षक",
+      "limitLabel": "प्रतिभागी सीमा",
+      "startLabel": "समय (JST)",
+      "targetLabel": "टूर / वर्ल्ड URL",
+      "targetNote": "एक बार बनाने के बाद URL बदला नहीं जा सकता। बदलने के लिए रूम की प्रतिलिपि बनाएँ।"
+    },
+    "deleteButton": "इस रूम को हटाएँ",
+    "duplicateButton": "रूम कॉपी करें",
+    "closeButton": "बंद करें",
+    "submitCreate": "बनाएँ",
+    "submitUpdate": "अपडेट करें",
+    "statusCreated": "बन गया",
+    "statusUpdated": "अपडेट हुआ",
+    "validation": {
+      "startRequired": "कृपया समय दर्ज करें।",
+      "noPermission": "इस डिवाइस को संपादन की अनुमति नहीं है।",
+      "ownerMissing": "निर्माता जानकारी नहीं मिली, हटाया नहीं जा सकता।",
+      "deleteFailedPrefix": "हटाने में त्रुटि:",
+      "serverError": "सर्वर त्रुटि।",
+      "duplicated": "पहले से मौजूद। समान URL वाला रूम पहले से है।"
+    }
+  },
+  "alert": {
+    "title": "URL के बारे में",
+    "body": "कृपया Dokodemo Doors का टूर / वर्ल्ड URL दर्ज करें।",
+    "ok": "OK"
+  },
+  "aboutModal": {
+    "ok": "OK"
+  },
+  "guideModal": {
+    "ok": "OK"
+  }
+}
