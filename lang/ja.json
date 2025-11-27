@@ -11,7 +11,7 @@
   },
   "guide": {
     "title": "どこでもドア ファンサイトとは？",
-    "bodyHtml": "<p class='heading-large'>地球儀から行き先を選べる、非公式サポートサイト</p><p><a href='https://dokodemodoors.com/' target='_blank'>公式サイト</a>では一覧形式でワールドを選びますが、これを“地球儀上で見て選びたい”と思い、公式の許可をいただいたうえで作成した個人サイトです。</p><p class='heading-strong'>1. 事前にサブスクリプション登録が必要</p><p style='padding-left: 1em;'>各ワールドの視聴には、公式サイトでのサブスク登録が必要です。登録していない場合、ワールド入室時にサブスク申請画面に移動します。<br>一部ワールドは無料公開の期間がありますが、それらは<a href='https://dokodemodoors.com/' target='_blank'>公式サイトのトップ画面</a>から選択する方が分かりやすいです。「おすすめワールド」に表示されていることが多いです。</p><p class='heading-strong'>2. Meta Quest 2 以上での視聴を推奨</p><p style='padding-left: 1em;'>どの端末でも視聴は可能ですが、VR での体験価値は桁違いです。可能であれば Meta Quest 2 以上での視聴を強くお勧めします。</p>"
+    "bodyHtml": "<p class='heading-large'>地球儀から行き先を選べる、非公式サポートサイト</p><p><a href='https://dokodemodoors.com/' target='_blank'>公式サイト</a>では一覧形式でワールドを選びますが、これを“地球儀上で見て選びたい”と思い、公式の許可をいただいたうえで個人的に作成したサイトです。</p><p class='heading-strong'>1. 動画閲覧にはサブスク登録が無難</p><p style='padding-left: 1em;'>ほとんどのワールドの視聴には、公式サイトでのサブスク登録が必要です。登録していない場合、大体、動画を見に行く際にサブスク申請画面に移動します。<br>一部ワールドは無料公開の期間がありますが、それらは<a href='https://dokodemodoors.com/' target='_blank'>公式サイトのトップ画面</a>から選択する方が分かりやすいです。「おすすめワールド」に表示されていることが多いです。</p><p class='heading-strong'>2. Meta Quest 2 以上での視聴を推奨</p><p style='padding-left: 1em;'>どの端末でも視聴は可能ですが、VR での体験価値は桁違いです。可能であれば Meta Quest 2 以上での視聴を強くお勧めします。</p>"
   },
   "meetups": {
     "title": "待合室一覧",
