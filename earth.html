@@ -791,18 +791,34 @@ AFRAME.registerComponent('panel-raf-proxy', {
 
   <a-sky src="eartn_model/sky.jpg"></a-sky>
 
-  <script>
+<script>
   AFRAME.registerComponent('vr-ray-toggle',{
     init:function(){
       var scene=this.el.sceneEl||this.el; var right=document.getElementById('right-hand'); var mouse=document.getElementById('mouseCursor');
       function setAttr(el, comp, prop, val){ if(!el) return; try{ el.setAttribute(comp, prop, val); }catch(e){} }
-      function enableVRRay(){ if(right){ right.setAttribute('visible',true); setAttr(right,'raycaster','enabled',true);} if(mouse){ setAttr(mouse,'raycaster','enabled',false);} console.log('[vr-ray-toggle] enter-vr: enable right-hand ray'); }
-      function disableVRRay(){ if(right){ right.setAttribute('visible',false); setAttr(right,'raycaster','enabled',false);} if(mouse){ setAttr(mouse,'raycaster','enabled',true);} console.log('[vr-ray-toggle] exit-vr: disable right-hand ray'); }
+      
+      function enableVRRay(){
+        // ★追加: ヘッドセットが接続されていない(PC全画面など)なら、マウスを無効化せずここで終了
+        if (!AFRAME.utils.device.checkHeadsetConnected()) {
+           console.log('[vr-ray-toggle] enter-vr (Desktop/No Headset): keep mouse enabled');
+           return;
+        }
+
+        if(right){ right.setAttribute('visible',true); setAttr(right,'raycaster','enabled',true);} 
+        if(mouse){ setAttr(mouse,'raycaster','enabled',false);} 
+        console.log('[vr-ray-toggle] enter-vr: enable right-hand ray'); 
+      }
+
+      function disableVRRay(){ 
+        if(right){ right.setAttribute('visible',false); setAttr(right,'raycaster','enabled',false);} 
+        if(mouse){ setAttr(mouse,'raycaster','enabled',true);} 
+        console.log('[vr-ray-toggle] exit-vr: disable right-hand ray'); 
+      }
+      
       disableVRRay(); scene.addEventListener('enter-vr', enableVRRay); scene.addEventListener('exit-vr', disableVRRay);
     }
   });
-  </script>
-</a-scene>
+  </script></a-scene>
 
 <script>
 (function(){
