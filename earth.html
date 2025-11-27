@@ -777,7 +777,7 @@ AFRAME.registerComponent('panel-raf-proxy', {
     </a-entity>
   </a-entity>
 
-  <a-entity id="ui-panel" position="-0.025 1.599 -0.033" rotation="0 0 0" scale="0.03 0.03 0.03">
+  <a-entity id="ui-panel" visible="false" position="-0.025 1.599 -0.033" rotation="0 0 0" scale="0.03 0.03 0.03">
     <a-entity rounded-panel="width: 0.6; height: 0.7; radius: 0.05;
                  color: #228; opacity: 0.6;
                  stroke: 0.01; strokeColor: #fff; strokeOpacity: 1"></a-entity>
@@ -1195,6 +1195,40 @@ AFRAME.registerComponent('panel-raf-proxy', {
     }
   }, {capture:true});
 
+})();
+</script>
+
+<!-- ★追加スクリプト：Meta Quest ブラウザ（非VR）のときだけパネル表示 -->
+<script>
+(function(){
+  function isQuestBrowser(){
+    var ua = navigator.userAgent || '';
+    // Meta Quest / Oculus Browser の UA をざっくり判定
+    return /OculusBrowser|Quest|Meta Quest/i.test(ua);
+  }
+
+  function updatePanelVisibility(){
+    var panel = document.getElementById('ui-panel');
+    var scene = (AFRAME.scenes && AFRAME.scenes[0]) || document.querySelector('a-scene');
+    if (!panel || !scene) return;
+
+    // VRモードかどうか
+    var isVr = scene.is && scene.is('vr-mode');
+
+    // Meta Quest ブラウザ かつ 非VR のときだけ表示
+    var show = isQuestBrowser() && !isVr;
+    panel.setAttribute('visible', show ? 'true' : 'false');
+  }
+
+  window.addEventListener('load', function(){
+    var scene = (AFRAME.scenes && AFRAME.scenes[0]) || document.querySelector('a-scene');
+    if (scene) {
+      scene.addEventListener('enter-vr', updatePanelVisibility);
+      scene.addEventListener('exit-vr', updatePanelVisibility);
+    }
+    // 初期表示時にも一度チェック
+    updatePanelVisibility();
+  });
 })();
 </script>
 
