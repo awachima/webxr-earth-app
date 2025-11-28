@@ -85,12 +85,24 @@ function initCountdown(card){
 function attachEnter(card){
   const btn=card.querySelector('[data-enter]');
   btn.onclick=()=>{
+    // ▼ ここで現在の言語を取得して lobby.html に渡す
+    let currentLang = 'en';
+    if (window.currentLang){
+      currentLang = window.currentLang;
+    } else {
+      try{
+        const stored = localStorage.getItem('lang');
+        if (stored) currentLang = stored;
+      }catch(e){}
+    }
+
     const p=new URLSearchParams({
       roomId: card.dataset.roomId || '',
       title : card.dataset.title,
       start : card.dataset.start,
       limit : card.dataset.limit,
-      target: card.dataset.url
+      target: card.dataset.url,
+      lang  : currentLang
     });
     location.href = `./lobby.html?${p.toString()}`;
   };
