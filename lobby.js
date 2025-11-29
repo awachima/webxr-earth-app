@@ -293,7 +293,7 @@ async function loadLobbyLanguage(lang) {
   function addMsg(elClass, text) {
     const div = document.createElement("div");
     div.className = "msg " + elClass;
-    div.textContent = text;
+    div.innerHTML = text;
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
   }
