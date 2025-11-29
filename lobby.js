@@ -109,6 +109,16 @@ async function loadLobbyLanguage(lang) {
   applyLobbyTexts();
 }
 
+// ===== URL 自動リンク化 =====
+function linkify(text) {
+  if (!text) return "";
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, (url) => {
+    const safeUrl = url.replace(/"/g, "&quot;");
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
+  });
+}
+
 // ===== メイン初期化（i18n 読み込み後に実行） =====
 (async function initLobby() {
   await loadLobbyLanguage(currentLang);
@@ -293,14 +303,14 @@ async function loadLobbyLanguage(lang) {
   function addMsg(elClass, text) {
     const div = document.createElement("div");
     div.className = "msg " + elClass;
-    div.innerHTML = text;
+    div.innerHTML = linkify(text);
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
   }
   function addSys(text) {
     const div = document.createElement("div");
     div.className = "msg sys";
-    div.innerHTML = text;
+    div.innerHTML = linkify(text);
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
   }
