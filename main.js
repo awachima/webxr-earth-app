@@ -97,13 +97,14 @@ function attachEnter(card){
     }
 
     const p=new URLSearchParams({
-      roomId: card.dataset.roomId || '',
-      title : card.dataset.title,
-      start : card.dataset.start,
-      limit : card.dataset.limit,
-      target: card.dataset.url,
-      lang  : currentLang
-      // eventType / price は後でロビー側に渡すタイミングで追加予定
+      roomId   : card.dataset.roomId || '',
+      title    : card.dataset.title,
+      start    : card.dataset.start,
+      limit    : card.dataset.limit,
+      target   : card.dataset.url,
+      lang     : currentLang,
+      eventType: card.dataset.eventType || 'free',
+      price    : card.dataset.price || ''
     });
     location.href = `./lobby.html?${p.toString()}`;
   };
