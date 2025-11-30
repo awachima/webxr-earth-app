@@ -28,52 +28,57 @@ const randKey=(n=16)=>{
 
 // ===== Storage =====
 const S='meetups-store', O='meetups-owners';
-const readStore =()=>JSON.parse(localStorage.getItem(S)||'[]'
-)||[];
-
+const readStore =()=>JSON.parse(localStorage.getItem(S)||'[]');
 const writeStore=(arr)=>localStorage.setItem(S,JSON.stringify(arr));
-const readOwners = () => JSON.parse(localStorage.getItem(O) || "{}");
-const writeOwners = (map) => localStorage.setItem(O, JSON.stringify(map));
+const readOwners=()=>JSON.parse(localStorage.getItem(O)||'{}');
+const writeOwners=(map)=>localStorage.setItem(O,JSON.stringify(map));
+const isOwner   =(roomId)=>Boolean(readOwners()[roomId]);
 
-// ===== カウントダウン =====
-function initCountdown(card){
-  const span=card.querySelector('[data-countdown]');
-  if(!span) return;
-  const start=card.dataset.start;
-  if(!start) return;
+const REGISTRY_API = 'https://do-chat.awachima7.workers.dev/api/rooms';
+const NEGATIVE_LIMIT_MS = 20*60*1000;
 
-  function tick(){
-    const now=Date.now();
-    const t=new Date(start).getTime()-now;
-    if(t<=0){
-      span.textContent=(window.i18n?.meetups?.cardStartedLabel || 'Started');
-      return;
-    }
-    const h=Math.floor(t/3600000);
-    const m=Math.floor(t/60000)%60;
-    const s=Math.floor(t/1000)%60;
-    span.textContent=
-      (window.i18n?.meetups?.cardStartsLabel || 'Starts in')
-      +` ${pad(h)}:${pad(m)}:${pad(s)}`;
-    requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
+// ===== タイマー & 自動削除 =====
+function autoDeleteRoom(roomId){
+  if (!roomId) return;
+  const remain = readStore().filter(x=>x.roomId!==roomId);
+  writeStore(remain);
+  const owners = readOwners(); delete owners[roomId]; writeOwners(owners);
+  const c = document.querySelector(`.card[data-room-id="${roomId}"]`);
+  if (c) c.remove();
+  console.info('[auto-delete]', roomId, 'deleted (20 minutes after start)');
 }
 
-function formatFeeLabel(item){
-  const feeType = item.feeType || 'free';
-  const feeAmount = (item.feeAmount || '').trim();
-  const lang = (window.currentLang || document.documentElement.lang || 'en').toLowerCase();
-  const isJa = lang.startsWith('ja');
-  if (feeType === 'paid'){
-    if (isJa){
-      return feeAmount ? `有料イベント（${feeAmount}円）` : '有料イベント';
-    } else {
-      return feeAmount ? `Paid event (${feeAmount})` : 'Paid event';
+function initCountdown(card){
+  const start = new Date(card.dataset.start);
+  const el    = card.querySelector('[data-countdown]');
+  const label = (window.i18n && window.i18n.meetups && window.i18n.meetups.cardStartsLabel) || 'Starts in';
+  const roomId = card.dataset.roomId || '';
+  const expireAt = new Date(start.getTime() + NEGATIVE_LIMIT_MS);
+
+  const tick = ()=>{
+    const now  = new Date();
+    const diff = start - now;
+    if (diff > 0){
+      const h=Math.floor(diff/3600000),
+            m=Math.floor(diff/60000)%60,
+            s=Math.floor(diff/1000)%60;
+      if (el) el.textContent = `${label}: ${pad(h)}:${pad(m)}:${pad(s)}`;
+      requestAnimationFrame(tick);
+      return;
     }
-  } else {
-    return isJa ? '無料イベント' : 'Free event';
-  }
+    const remainMs = expireAt - now;
+    if (remainMs > 0){
+      const expLabel = (window.i18n && window.i18n.meetups && window.i18n.meetups.cardExpiresIn) || 'Expires in';
+      const remainMin = Math.ceil(remainMs/60000);
+      if (el) el.textContent = `${expLabel} ${pad(remainMin)} min`;
+      requestAnimationFrame(tick);
+    } else {
+      const expiredLabel = (window.i18n && window.i18n.meetups && window.i18n.meetups.cardExpired) || 'Expired';
+      if (el) el.textContent = expiredLabel;
+      autoDeleteRoom(roomId);
+    }
+  };
+  requestAnimationFrame(tick);
 }
 
 // ===== カード操作 =====
@@ -97,9 +102,7 @@ function attachEnter(card){
       start : card.dataset.start,
       limit : card.dataset.limit,
       target: card.dataset.url,
-      lang  : currentLang,
-      feeType: card.dataset.feeType || 'free',
-      feeAmount: card.dataset.feeAmount || ''
+      lang  : currentLang
     });
     location.href = `./lobby.html?${p.toString()}`;
   };
@@ -107,48 +110,27 @@ function attachEnter(card){
 
 function renderTools(card){
   const roomId=card.dataset.roomId;
-  if(!roomId) return;
-  const tools=card.querySelector('.tools')||(()=>{
-    const div=document.createElement('div');
-    div.className='tools';
-    const edit=document.createElement('button');
-    edit.type='button';
-    edit.className='link';
-    edit.textContent=(window.i18n?.meetups?.editLabel || 'Edit');
-    edit.dataset.tool='edit';
-    const copy=document.createElement('button');
-    copy.type='button';
-    copy.className='link';
-    copy.textContent=(window.i18n?.meetups?.copyUrlLabel || 'Copy URL');
-    copy.dataset.tool='copy';
-    div.append(edit,copy);
-    card.appendChild(div);
-    return div;
-  })();
-
-  tools.querySelectorAll('button').forEach(b=>{
-    const t=b.dataset.tool;
-    if(t==='edit'){
-      b.onclick=()=>openModal('edit', {
-        roomId,
-        title: card.dataset.title,
-        start: card.dataset.start,
-        limit: card.dataset.limit,
-        target: card.dataset.url,
-        feeType: card.dataset.feeType || 'free',
-        feeAmount: card.dataset.feeAmount || ''
-      });
-    }else if(t==='copy'){
-      b.onclick=async()=>{
-        try{
-          await navigator.clipboard.writeText(location.origin+location.pathname.replace(/[^/]+$/,'')+`lobby.html?roomId=${encodeURIComponent(roomId)}`);
-          alert((window.i18n?.meetups?.copiedLabel || 'Copied.'));
-        }catch(e){
-          alert((window.i18n?.meetups?.copyFailedLabel || 'Copy failed. Please copy manually.'));
-        }
-      };
-    }
-  });
+  let tools=card.querySelector('.tools');
+  if(!tools){
+    tools=document.createElement('div');
+    tools.className='tools';
+    card.appendChild(tools);
+  }
+  tools.innerHTML='';
+  if(roomId && isOwner(roomId)){
+    const b=document.createElement('button');
+    b.className='btn icon';
+    b.title='Edit';
+    b.textContent='✎';
+    b.onclick=()=>openModal('edit', {
+      roomId,
+      title: card.dataset.title,
+      start: card.dataset.start,
+      limit: card.dataset.limit,
+      target: card.dataset.url
+    });
+    tools.appendChild(b);
+  }
 }
 
 function upsertCard(item){
@@ -162,7 +144,6 @@ function upsertCard(item){
     const enterLabel = t.enterLobby || 'Enter Lobby';
     card.innerHTML=`
       <div class="title"></div>
-      <div class="meta fee-meta" data-fee></div>
       <div class="meta"><span data-countdown>${startLabel}: --:--:--</span></div>
       <div><a class="btn" data-enter>${enterLabel}</a></div>`;
   }
@@ -172,13 +153,6 @@ function upsertCard(item){
   card.dataset.start=item.start;
   card.dataset.url=item.target;
   card.dataset.limit=item.limit;
-  card.dataset.feeType = item.feeType || 'free';
-  card.dataset.feeAmount = (item.feeAmount || '').trim();
-  const feeEl = card.querySelector('[data-fee]');
-  if (feeEl){
-    feeEl.textContent = formatFeeLabel(item);
-    feeEl.style.display = feeEl.textContent ? '' : 'none';
-  }
 
   if (card.parentElement !== grid) grid.prepend(card);
   initCountdown(card);
@@ -205,44 +179,10 @@ function restore(){
 const backdrop=$('#backdrop');
 const modalTitle=$('#modalTitle');
 const mTitle=$('#mTitle'), mLimit=$('#mLimit'), mStart=$('#mStart'), mTarget=$('#mTarget');
-const mFeeFree=$('#mFeeFree'), mFeePaid=$('#mFeePaid'), mFeeAmount=$('#mFeeAmount');
 const mStartFallback = $('#mStartFallback');
 const mMonth = $('#mMonth'), mDay = $('#mDay'), mHour = $('#mHour'), mMinute = $('#mMinute');
 const statusMsg=$('#statusMsg');
 const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
-
-function updateFeeAmountState(){
-  if (!mFeeAmount) return;
-  const isPaid = mFeePaid && mFeePaid.checked;
-  mFeeAmount.disabled = !isPaid;
-  mFeeAmount.style.opacity = isPaid ? '1' : '0.5';
-}
-
-if (mFeeFree) mFeeFree.addEventListener('change', updateFeeAmountState);
-if (mFeePaid) mFeePaid.addEventListener('change', updateFeeAmountState);
-
-function setFeeControls(feeType, feeAmount){
-  const type = feeType || 'free';
-  const amount = (feeAmount || '').trim();
-  if (mFeeFree && mFeePaid){
-    mFeeFree.checked = type !== 'paid';
-    mFeePaid.checked = type === 'paid';
-  }
-  if (mFeeAmount){
-    mFeeAmount.value = amount;
-  }
-  updateFeeAmountState();
-}
-
-function getCurrentFee(){
-  let type = 'free';
-  if (mFeePaid && mFeePaid.checked) type = 'paid';
-  const amount = (mFeeAmount && mFeeAmount.value || '').trim();
-  return {
-    feeType: type,
-    feeAmount: type === 'paid' ? amount : ''
-  };
-}
 
 // Quest / datetime-local 非対応検出
 const isQuest = /\b(OculusBrowser|Meta Quest Browser|MetaQuestBrowser|Quest)\b/i.test(navigator.userAgent);
@@ -264,47 +204,45 @@ function daysInMonth(year, month){
 function populateDateSelects(){
   if (!mMonth || !mDay || !mHour || !mMinute) return;
 
-  mMonth.innerHTML = '';
-  for (let i = 1; i <= 12; i++){
-    const opt = document.createElement('option');
-    opt.value = String(i);
-    opt.textContent = String(i);
-    mMonth.appendChild(opt);
+  if (!mMonth.options.length){
+    for (let i=1;i<=12;i++){
+      const opt=document.createElement('option');
+      opt.value=String(i);
+      opt.textContent=String(i);
+      mMonth.appendChild(opt);
+    }
   }
-
-  updateDayOptions(fallbackYear, parseInt(mMonth.value || '1', 10), null);
-
-  mHour.innerHTML = '';
-  for (let i = 0; i < 24; i++){
-    const opt = document.createElement('option');
-    opt.value = String(i);
-    opt.textContent = pad(i);
-    mHour.appendChild(opt);
+  if (!mHour.options.length){
+    for (let h=0;h<24;h++){
+      const opt=document.createElement('option');
+      opt.value=String(h);
+      opt.textContent=pad(h);
+      mHour.appendChild(opt);
+    }
   }
-
-  mMinute.innerHTML = '';
-  for (let i = 0; i < 60; i += 10){
-    const opt = document.createElement('option');
-    opt.value = String(i);
-    opt.textContent = pad(i);
-    mMinute.appendChild(opt);
+  if (!mMinute.options.length){
+    for (let m=0;m<60;m+=10){
+      const opt=document.createElement('option');
+      opt.value=String(m);
+      opt.textContent=pad(m);
+      mMinute.appendChild(opt);
+    }
   }
 }
 
-function updateDayOptions(year, month, selectedDay){
+function updateDayOptions(year, month, currentDay){
   if (!mDay) return;
-  const maxDay = daysInMonth(year, month);
-  const prev = parseInt(mDay.value || '1', 10);
-  mDay.innerHTML = '';
-  for (let i = 1; i <= maxDay; i++){
-    const opt = document.createElement('option');
-    opt.value = String(i);
-    opt.textContent = String(i);
-    mDay.appendChild(opt);
+  const maxDay = daysInMonth(year, month || 1);
+  const prev = currentDay || parseInt(mDay.value || '1',10) || 1;
+
+  while (mDay.firstChild){
+    mDay.removeChild(mDay.firstChild);
   }
-  if (selectedDay && selectedDay <= maxDay){
-    mDay.value = String(selectedDay);
-    return;
+  for (let d=1; d<=maxDay; d++){
+    const opt=document.createElement('option');
+    opt.value=String(d);
+    opt.textContent=String(d);
+    mDay.appendChild(opt);
   }
   const clamped = Math.min(prev, maxDay);
   mDay.value = String(clamped);
@@ -337,22 +275,13 @@ function initStartInput(){
     mHour.value = String(hourNum);
     mMinute.value = String(minuteNum);
   }else{
-    // datetime-local が使える場合
+    // PC など: datetime-local を使用
     mStart.style.display='';
     mStartFallback.style.display='none';
-    mStart.value = `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    mStart.value=`${yyyy}-${mm}-${dd}T${hh}:${mi}`;
   }
 }
 
-if (mMonth){
-  mMonth.addEventListener('change', ()=>{
-    const year = fallbackYear || new Date().getFullYear();
-    const month = parseInt(mMonth.value || '1', 10);
-    updateDayOptions(year, month, parseInt(mDay.value || '1', 10));
-  });
-}
-
-// openModal / closeModal
 let mode='create';
 let editingRoomId=null;
 let editingTarget=null;
@@ -379,13 +308,12 @@ function openModal(m='create', payload=null){
     mTarget.value='';
     editingRoomId=null;
     editingTarget=null;
-    setFeeControls('free','');
     initStartInput();
   }else{
     const owners=readOwners();
     if(!payload || !owners[payload.roomId]){
-      const msg = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.ownerMissing)
-        || 'Owner information is missing on this device, so the room cannot be edited.';
+      const msg = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.noPermission)
+        || 'You do not have permission to edit this room on this device';
       alert(msg);
       return;
     }
@@ -396,14 +324,13 @@ function openModal(m='create', payload=null){
       modalTitle.textContent='Edit meetup';
       submit.textContent='Update';
     }
-    duplicate.style.display='';
-    delBtn.style.display='';
+    duplicate.style.display='inline-block';
+    delBtn.style.display='inline-block';
     mTarget.disabled=true;
     editingRoomId=payload.roomId;
     editingTarget=payload.target;
     mTitle.value=payload.title||'';
     mLimit.value=String(payload.limit||'10');
-    setFeeControls(payload.feeType, payload.feeAmount);
 
     const d = new Date(payload.start||Date.now());
     if (useFallback){
@@ -461,27 +388,24 @@ function openAbout(){
 function closeAboutModal(){
   if (aboutBackdrop) aboutBackdrop.style.display = 'none';
 }
-if (aboutBtn) aboutBtn.onclick = openAbout;
+if (aboutBtn)   aboutBtn.onclick   = openAbout;
 if (aboutClose) aboutClose.onclick = closeAboutModal;
-if (aboutOk) aboutOk.onclick = closeAboutModal;
+if (aboutOk)    aboutOk.onclick    = closeAboutModal;
 
-// ===== How to use Meetup Rooms モーダル =====
-const howtoBackdrop = $('#howtoBackdrop');
-const howtoBtn      = $('#howtoBtn');
-const howtoClose    = $('#howtoClose');
-const howtoOk       = $('#howtoOk');
-function openHowto(){
-  if (howtoBackdrop) howtoBackdrop.style.display = 'flex';
+// ===== Meetup Rooms の使い方モーダル =====
+const guideBackdrop = $('#guideBackdrop');
+const guideBtn = $('#guideBtn');
+const guideClose = $('#guideClose');
+const guideOk = $('#guideOk');
+function openGuide(){
+  if (guideBackdrop) guideBackdrop.style.display = 'flex';
 }
-function closeHowtoModal(){
-  if (howtoBackdrop) howtoBackdrop.style.display = 'none';
+function closeGuideModal(){
+  if (guideBackdrop) guideBackdrop.style.display = 'none';
 }
-if (howtoBtn) howtoBtn.onclick = openHowto;
-if (howtoClose) howtoClose.onclick = closeHowtoModal;
-if (howtoOk) howtoOk.onclick = closeHowtoModal;
-
-// ===== レジストリ API =====
-const REGISTRY_API = "https://dokodemodoors-fan-site-worker.pages.dev/api/meetups";
+if (guideBtn)   guideBtn.onclick   = openGuide;
+if (guideClose) guideClose.onclick = closeGuideModal;
+if (guideOk)    guideOk.onclick    = closeGuideModal;
 
 async function postRegistry(item){
   try{
@@ -490,7 +414,7 @@ async function postRegistry(item){
     await fetch(REGISTRY_API, {
       method: "POST",
       headers: {"content-type":"application/json"},
-      body: JSON.stringify({ roomId: item.roomId, title: item.title, start: item.start, limit: item.limit, target: item.target, owner, ownerKey, feeType: item.feeType, feeAmount: item.feeAmount })
+      body: JSON.stringify({ roomId: item.roomId, title: item.title, start: item.start, limit: item.limit, target: item.target, owner, ownerKey })
     });
   }catch(e){ console.warn('[registry]', e); }
 }
@@ -506,10 +430,11 @@ function composeStartISO(){
   const now = new Date();
 
   if (!useFallback){
-    // datetime-local の値をそのまま使う
-    if (!mStart || !mStart.value) return "";
+    if (!mStart.value) return '';
+
+    // mStart.value は "YYYY-MM-DDTHH:mm"
     const base = new Date(mStart.value);
-    if (isNaN(base.getTime())) return "";
+    if (isNaN(base.getTime())) return '';
 
     // 過去なら翌年に繰り上げ
     if (base < now){
@@ -567,8 +492,6 @@ async function onSubmit(){
     return;
   }
 
-  const fee = getCurrentFee();
-
   if(mode==='create'){
     target=(mTarget.value||'').trim();
 
@@ -592,8 +515,6 @@ async function onSubmit(){
     start: startISO,
     limit: String(limit),
     target,
-    feeType: fee.feeType,
-    feeAmount: fee.feeAmount,
     updatedAt: nowIso,
     createdAt: prev?.createdAt || nowIso
   };
@@ -619,8 +540,6 @@ function onDuplicate(){
   owners[newId]=randKey();
   writeOwners(owners);
 
-  const fee = getCurrentFee();
-
   const startISO = composeStartISO() || new Date().toISOString();
   const nowIso = new Date().toISOString();
   const item={
@@ -629,8 +548,6 @@ function onDuplicate(){
     start:startISO,
     limit:String(parseInt(mLimit.value,10)||10),
     target:editingTarget,
-    feeType: fee.feeType,
-    feeAmount: fee.feeAmount,
     updatedAt:nowIso,
     createdAt:nowIso
   };
@@ -653,214 +570,329 @@ async function onDelete(){
       return;
     }
     const res = await fetch(REGISTRY_API, {
-      method: "DELETE",
-      headers: {"content-type":"application/json"},
-      body: JSON.stringify({ roomId: editingRoomId, ownerKey })
+      method:"DELETE",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({ roomId: editingRoomId, ownerKey })
     });
     if (!res.ok){
-      const msg = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.deleteFailed)
-        || 'Failed to delete the room. Please try again.';
-      alert(msg);
+      const data = await res.json().catch(()=>({}));
+      const prefix = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.deleteFailedPrefix)
+        || 'Failed to delete';
+      alert(`${prefix}: ${data.error || res.statusText}`);
       return;
     }
-    const remain=readStore().filter(x=>x.roomId!==editingRoomId);
-    writeStore(remain);
-    const ownersMap=readOwners();
-    delete ownersMap[editingRoomId];
-    writeOwners(ownersMap);
-    restore();
-    closeModal();
   }catch(e){
-    console.error(e);
-    const msg = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.deleteFailed)
-      || 'Failed to delete the room. Please try again.';
+    const msg = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.serverError)
+      || 'An error occurred while connecting to the server.';
     alert(msg);
+    console.warn('[registry DELETE]', e);
+    return;
   }
+  autoDeleteRoom(editingRoomId);
+  closeModal();
 }
 
-// ===== イベント登録 =====
-document.addEventListener('DOMContentLoaded', ()=>{
-  restore();
-  $('#open')?.addEventListener('click',()=>openModal('create'));
-  $('#close')?.addEventListener('click',closeModal);
-  $('#close2')?.addEventListener('click',closeModal);
-  submit?.addEventListener('click',onSubmit);
-  duplicate?.addEventListener('click',onDuplicate);
-  delBtn?.addEventListener('click',onDelete);
-});
-
-// ===== 言語切り替え（i18n） =====
-let currentLang = 'en';  // デフォルト
-let appStarted = false;
-
-const LANGUAGE_LABELS = {
-  en: 'English',
-  ja: '日本語',
-  zh: '中文',
-  fa: 'فارسی',
-  hi: 'हिन्दी',
-  he: 'עברית'
-};
-
-function updateHtmlLangAndDir(lang){
-  const root = document.documentElement;
-  root.lang = lang || 'en';
-  if (lang === 'fa' || lang === 'he'){
-    root.dir = 'rtl';
-  }else{
-    root.dir = 'ltr';
-  }
-}
-
-async function loadLanguage(lang){
-  const files = window.LANG_FILES || {};
-  const url = files[lang] || files['en'];
-  if (!url) return null;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  return await res.json();
-}
-
-function applyLanguageDict(dict){
-  if (!dict) return;
-
-  // Hero / header
-  if (dict.hero){
-    $('#siteTitle').textContent = dict.hero.title || $('#siteTitle').textContent;
-    $('#siteLead').textContent = dict.hero.lead || $('#siteLead').textContent;
-    $('#heroOverlayText').innerHTML = dict.hero.overlay || $('#heroOverlayText').innerHTML;
-    $('#officialSiteBtn').textContent = dict.hero.officialSiteBtn || $('#officialSiteBtn').textContent;
-    $('#aboutBtn').textContent = dict.hero.aboutBtn || $('#aboutBtn').textContent;
-    $('#howtoBtn').textContent = dict.hero.howtoBtn || $('#howtoBtn').textContent;
-  }
-
-  // Description
-  if (dict.description){
-    $('#descriptionTitle').textContent = dict.description.title || $('#descriptionTitle').textContent;
-    $('#descriptionBody').textContent = dict.description.body || $('#descriptionBody').textContent;
-  }
-
-  // Meetups
-  if (dict.meetups){
-    $('#meetupsTitle').textContent = dict.meetups.title || $('#meetupsTitle').textContent;
-    $('#meetupsLead').textContent = dict.meetups.lead || $('#meetupsLead').textContent;
-    $('#open').textContent = dict.meetups.createBtn || $('#open').textContent;
-    window.i18n = window.i18n || {};
-    window.i18n.meetups = dict.meetups;
-    restore();
-  }
-
-  // Notes
-  if (dict.notes){
-    $('#notesTitle').textContent = dict.notes.title || $('#notesTitle').textContent;
-    const list = $('#notesList');
-    if (Array.isArray(dict.notes.items) && list){
-      list.innerHTML = '';
-      dict.notes.items.forEach((txt)=>{
-        const li = document.createElement('li');
-        li.textContent = txt;
-        list.appendChild(li);
-      });
-    }
-  }
-
-  // Modal
-  if (dict.modal){
-    window.i18n = window.i18n || {};
-    window.i18n.modal = dict.modal;
-
-    if (mode === 'create'){
-      $('#modalTitle').textContent = dict.modal.createTitle || $('#modalTitle').textContent;
-      submit.textContent = dict.modal.submitCreate || submit.textContent;
-    }else{
-      $('#modalTitle').textContent = dict.modal.editTitle || $('#modalTitle').textContent;
-      submit.textContent = dict.modal.submitUpdate || submit.textContent;
-    }
-
-    $('#delete').textContent = dict.modal.deleteBtn || $('#delete').textContent;
-    $('#duplicate').textContent = dict.modal.duplicateBtn || $('#duplicate').textContent;
-    $('#close2').textContent = dict.modal.closeBtn || $('#close2').textContent;
-
-    $('#alertTitle').textContent = dict.modal.alertTitle || $('#alertTitle').textContent;
-    $('#alertBody').textContent = dict.modal.alertBody || $('#alertBody').textContent;
-    $('#alertOk').textContent = dict.modal.alertOk || $('#alertOk').textContent;
-
-    $('#aboutTitle').textContent = dict.modal.aboutTitle || $('#aboutTitle').textContent;
-    $('#aboutOk').textContent = dict.modal.aboutOk || $('#aboutOk').textContent;
-
-    $('#howtoTitle').textContent = dict.modal.howtoTitle || $('#howtoTitle').textContent;
-    $('#howtoOk').textContent = dict.modal.howtoOk || $('#howtoOk').textContent;
-  }
-}
-
-async function initAppLanguage(){
-  if (appStarted) return;
-  appStarted = true;
-
+// 共有部屋一覧の読み込み
+async function loadShared(){
   try{
-    const stored = localStorage.getItem('lang');
-    if (stored && LANGUAGE_LABELS[stored]){
-      currentLang = stored;
-    }else{
-      const navLang = (navigator.language || 'en').slice(0,2);
-      if (LANGUAGE_LABELS[navLang]){
-        currentLang = navLang;
+    const res = await fetch(REGISTRY_API);
+    const j = await res.json();
+    if (j && j.ok && Array.isArray(j.rooms)){
+      const remoteRoomIds = new Set(j.rooms.map(r=>r.roomId));
+      document.querySelectorAll('#grid .card').forEach(card=>{
+        const roomId = card.dataset.roomId;
+        if (roomId && !remoteRoomIds.has(roomId)) card.remove();
+      });
+      j.rooms.forEach(upsertCard);
+    }
+  }catch(e){
+    console.warn('[registry GET]', e);
+  }
+}
+
+// ===== 初期化（言語読み込み後に startApp() から呼び出す） =====
+function startApp(){
+  restore();
+
+  // 月変更時に日付の上限を月に合わせてクランプ
+  if (mMonth && mDay){
+    mMonth.addEventListener('change', ()=>{
+      const year = fallbackYear || new Date().getFullYear();
+      const currentDay = parseInt(mDay.value || '1',10) || 1;
+      const monthNum   = parseInt(mMonth.value || '1',10) || 1;
+      updateDayOptions(year, monthNum, currentDay);
+    });
+  }
+
+  // タイトル右の作成ボタン
+  const oc = document.getElementById('openCreate');
+  if (oc) oc.onclick = () => openModal('create');
+
+  // 読み込み直後は確実に非表示（チラ見え対策）
+  closeModal();
+
+  document.getElementById('close').onclick=closeModal;
+  document.getElementById('close2').onclick=closeModal;
+  document.getElementById('submit').onclick=onSubmit;
+  document.getElementById('duplicate').onclick=onDuplicate;
+  document.getElementById('delete').onclick=onDelete;
+
+  loadShared();
+  setInterval(loadShared, 30000);
+}
+
+// （将来用）管理者パスワード関連
+const ADMIN_HASH="27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
+function toHex(buf){return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");}
+async function sha256(s){const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));return toHex(buf);}
+function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i);return r===0;}
+
+// ===== iframe ホバー時のスクロールロック =====
+(function(){
+  var iframe = document.getElementById('webxr-iframe');
+  if(!iframe) return;
+
+  function lockPageScroll(){ document.documentElement.style.overflowY = 'hidden'; }
+  function unlockPageScroll(){ document.documentElement.style.overflowY = ''; }
+
+  iframe.addEventListener('mouseenter', lockPageScroll);
+  iframe.addEventListener('mouseleave', unlockPageScroll);
+  window.addEventListener('blur', unlockPageScroll);
+  window.addEventListener('beforeunload', unlockPageScroll);
+})();
+
+// ===== 言語切り替え（外部 JSON 読み込み） =====
+(function(){
+  let appStarted = false;
+
+  const LANGUAGE_LABELS = {
+    en: 'English',
+    ja: '日本語',
+    zh: '中文',
+    fa: 'فارسی',
+    hi: 'हिन्दी',
+    he: 'עברית'
+  };
+
+  function updateHtmlLangAndDir(lang){
+    const root = document.documentElement;
+    root.lang = lang || 'en';
+    if (lang === 'fa' || lang === 'he'){
+      root.dir = 'rtl';
+    } else {
+      root.dir = 'ltr';
+    }
+  }
+
+  async function loadLanguage(lang){
+    let data = {};
+    try{
+      const res = await fetch('./lang/' + lang + '.json');
+      if (!res.ok) throw new Error('Failed to load language: ' + lang);
+      data = await res.json();
+    }catch(e){
+      console.error(e);
+      // 読み込み失敗時は既存の window.i18n をそのまま使う
+      data = window.i18n || {};
+    }
+    window.i18n = data || {};
+    window.currentLang = lang;
+    try{ localStorage.setItem('lang', lang); }catch(e){}
+    updateHtmlLangAndDir(lang);
+    applyLanguage();
+  }
+
+  function applyLanguage(){
+    const t = window.i18n || {};
+    const current = window.currentLang || 'en';
+
+    // ページタイトル
+    if (t.pageTitle){
+      document.title = t.pageTitle;
+    }
+
+    // ヘッダーロゴテキスト
+    const siteTitleEl = document.querySelector('.brand-logo-text');
+    if (siteTitleEl){
+      siteTitleEl.textContent = t.siteTitle || 'Dokodemo Doors Fan Site';
+    }
+
+    // 上部ボタン
+    if (t.buttons){
+      const aboutBtn = document.getElementById('aboutBtn');
+      const guideBtn = document.getElementById('guideBtn');
+      if (aboutBtn && t.buttons.about) aboutBtn.textContent = t.buttons.about;
+      if (guideBtn && t.buttons.guide) guideBtn.textContent = t.buttons.guide;
+    }
+
+    // About モーダル
+    if (t.about){
+      const aboutTitle = document.getElementById('aboutTitle');
+      const aboutBody  = document.getElementById('aboutBody');
+      if (aboutTitle && t.about.title) aboutTitle.textContent = t.about.title;
+      if (aboutBody && t.about.bodyHtml) aboutBody.innerHTML = t.about.bodyHtml;
+    }
+    if (t.aboutModal && t.aboutModal.ok){
+      const aboutOk = document.getElementById('aboutOk');
+      if (aboutOk) aboutOk.textContent = t.aboutModal.ok;
+    }
+
+    // Guide モーダル
+    if (t.guide){
+      const guideTitle = document.getElementById('guideTitle');
+      const guideBody  = document.getElementById('guideBody');
+      if (guideTitle && t.guide.title) guideTitle.textContent = t.guide.title;
+      if (guideBody && t.guide.bodyHtml) guideBody.innerHTML = t.guide.bodyHtml;
+    }
+    if (t.guideModal && t.guideModal.ok){
+      const guideOk = document.getElementById('guideOk');
+      if (guideOk) guideOk.textContent = t.guideModal.ok;
+    }
+
+    // Meetup Rooms ヘッダー
+    if (t.meetups){
+      const meetupsTitle = document.querySelector('.meetups__title');
+      const createBtn = document.getElementById('openCreate');
+      if (meetupsTitle && t.meetups.title) meetupsTitle.textContent = t.meetups.title;
+      if (createBtn && t.meetups.createButton) createBtn.textContent = t.meetups.createButton;
+
+      // カード内の Enter Lobby ボタン
+      if (t.meetups.enterLobby){
+        document.querySelectorAll('#grid .card [data-enter]').forEach(btn=>{
+          btn.textContent = t.meetups.enterLobby;
+        });
+      }
+
+      // カウントダウン表示のラベル部分だけ差し替え
+      if (t.meetups.cardStartsLabel){
+        document.querySelectorAll('#grid .card [data-countdown]').forEach(span=>{
+          const txt = span.textContent || '';
+          const m = txt.match(/: (.*)$/);
+          const suffix = m ? m[1] : '--:--:--';
+          span.textContent = `${t.meetups.cardStartsLabel}: ${suffix}`;
+        });
       }
     }
-  }catch(e){}
 
-  updateHtmlLangAndDir(currentLang);
-  const dict = await loadLanguage(currentLang);
-  applyLanguageDict(dict);
-}
-
-function updateLanguageToggleLabel(){
-  const btn = document.getElementById('langToggle');
-  if (!btn) return;
-  const label = LANGUAGE_LABELS[currentLang] || 'Language';
-  btn.textContent = label;
-}
-
-async function changeLanguage(lang){
-  if (!LANGUAGE_LABELS[lang]) return;
-  currentLang = lang;
-  try{
-    localStorage.setItem('lang', lang);
-  }catch(e){}
-  updateHtmlLangAndDir(lang);
-  const dict = await loadLanguage(lang);
-  applyLanguageDict(dict);
-  updateLanguageToggleLabel();
-}
-
-document.addEventListener('DOMContentLoaded', ()=>{
-  initAppLanguage().then(updateLanguageToggleLabel);
-
-  const toggle = document.getElementById('langToggle');
-  const menu   = document.getElementById('langMenu');
-  if (!toggle || !menu) return;
-
-  toggle.addEventListener('click', ()=>{
-    const isHidden = menu.hasAttribute('hidden');
-    if (isHidden){
-      menu.removeAttribute('hidden');
-    }else{
-      menu.setAttribute('hidden', 'hidden');
+    // 作成/編集モーダル（ラベル類）
+    if (t.modal && t.modal.form){
+      const lblTitle = document.querySelector("label[for='mTitle']");
+      const lblLimit = document.querySelector("label[for='mLimit']");
+      const lblStart = document.querySelector("label[for='mStart']");
+      const lblTarget= document.querySelector("label[for='mTarget']");
+      if (lblTitle && t.modal.form.titleLabel) lblTitle.textContent = t.modal.form.titleLabel;
+      if (lblLimit && t.modal.form.limitLabel) lblLimit.textContent = t.modal.form.limitLabel;
+      if (lblStart && t.modal.form.startLabel) lblStart.textContent = t.modal.form.startLabel;
+      if (lblTarget && t.modal.form.targetLabel) lblTarget.textContent = t.modal.form.targetLabel;
+      const note = document.querySelector('.note');
+      if (note && t.modal.form.targetNote) note.textContent = t.modal.form.targetNote;
     }
-  });
 
-  document.addEventListener('click', (ev)=>{
-    if (!menu || !toggle) return;
-    if (!menu.contains(ev.target) && ev.target !== toggle){
-      menu.setAttribute('hidden', 'hidden');
+    // 作成/編集モーダル（ボタン類）
+    if (t.modal){
+      const deleteBtn   = document.getElementById('delete');
+      const duplicateBtn= document.getElementById('duplicate');
+      const close2      = document.getElementById('close2');
+      const submit      = document.getElementById('submit');
+      const modalTitle  = document.getElementById('modalTitle');
+
+      if (deleteBtn && t.modal.deleteButton) deleteBtn.textContent = t.modal.deleteButton;
+      if (duplicateBtn && t.modal.duplicateButton) duplicateBtn.textContent = t.modal.duplicateButton;
+      if (close2 && t.modal.closeButton) close2.textContent = t.modal.closeButton;
+
+      if (submit){
+        if (window.mode === 'edit'){
+          submit.textContent = t.modal.submitUpdate || submit.textContent;
+        }else{
+          submit.textContent = t.modal.submitCreate || submit.textContent;
+        }
+      }
+      if (modalTitle){
+        if (window.mode === 'edit'){
+          modalTitle.textContent = t.modal.editTitle || modalTitle.textContent;
+        }else{
+          modalTitle.textContent = t.modal.createTitle || modalTitle.textContent;
+        }
+      }
     }
-  });
 
-  menu.querySelectorAll('button[data-lang]').forEach(btn=>{
-    btn.addEventListener('click', (ev)=>{
-      const lang = ev.currentTarget.getAttribute('data-lang');
-      changeLanguage(lang);
-      menu.setAttribute('hidden', 'hidden');
+    // URL アラート
+    if (t.alert){
+      const alertTitle = document.getElementById('alertTitle');
+      const alertBody  = document.getElementById('alertBody');
+      const alertOk    = document.getElementById('alertOk');
+      if (alertTitle && t.alert.title) alertTitle.textContent = t.alert.title;
+      if (alertBody && t.alert.body)   alertBody.textContent  = t.alert.body;
+      if (alertOk && t.alert.ok)       alertOk.textContent    = t.alert.ok;
+    }
+
+    // 言語トグルボタンとメニューの表示更新
+    const langToggle = document.getElementById('langToggle');
+    if (langToggle){
+      langToggle.textContent = LANGUAGE_LABELS[current] || 'Language';
+    }
+    const menuButtons = document.querySelectorAll('.lang-switch__menu button[data-lang]');
+    menuButtons.forEach(btn=>{
+      const code = btn.getAttribute('data-lang');
+      if (LANGUAGE_LABELS[code]) btn.textContent = LANGUAGE_LABELS[code];
+      btn.classList.toggle('is-active', code === current);
+    });
+  }
+
+  // ドロップダウンの開閉制御
+  function setupLangDropdown(){
+    const toggle = document.getElementById('langToggle');
+    const menu   = document.getElementById('langMenu');
+    if (!toggle || !menu) return;
+
+    toggle.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      menu.hidden = !menu.hidden;
+    });
+
+    menu.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      const btn = ev.target.closest('button[data-lang]');
+      if (!btn) return;
+      const lang = btn.getAttribute('data-lang');
+      window.switchLang(lang);
+    });
+
+    document.addEventListener('click', function(){
+      if (!menu.hidden){
+        menu.hidden = true;
+      }
+    });
+
+    document.addEventListener('keydown', function(ev){
+      if (ev.key === 'Escape' && !menu.hidden){
+        menu.hidden = true;
+      }
+    });
+  }
+
+  // グローバル関数として公開（メニューから呼ばれる）
+  window.switchLang = function(lang){
+    const menu = document.getElementById('langMenu');
+    if (menu) menu.hidden = true;
+    loadLanguage(lang);
+  };
+
+  // 初期言語のロード後に startApp() を起動
+  document.addEventListener('DOMContentLoaded', function(){
+    setupLangDropdown();
+
+    let stored = null;
+    try{
+      stored = localStorage.getItem('lang');
+    }catch(e){}
+    const initial = stored || 'en';
+    updateHtmlLangAndDir(initial);
+    loadLanguage(initial).finally(function(){
+      if (!appStarted && typeof window.startApp === 'function'){
+        appStarted = true;
+        window.startApp();
+      }
     });
   });
-});
+})();

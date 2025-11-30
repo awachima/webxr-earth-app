@@ -10,65 +10,67 @@
   <header>
     <div id="lobbyHeaderTitle">待ち合わせロビー</div>
     <div style="display:flex; gap:8px; align-items:center">
-      <button id="setName" class="btn ghost" type="button">名前を設定</button>
-      <button id="copy" class="btn ghost" type="button">この待合室のURLをコピー</button>
+      <button id="setName" class="btn ghost" type="button">ニックネーム</button>
+      <a id="backToIndex" class="btn ghost" href="./index.html">← 戻る</a>
     </div>
   </header>
 
   <main>
-    <section class="lobby-main">
-      <div class="lobby-info">
-        <h1 id="title">待ち合わせ</h1>
-        <div id="meta">開始時刻：--</div>
-        <div id="limitPill" class="pill" style="display:none">参加上限 -- 名</div>
+    <div class="card">
+      <div>
+        <div class="pill" id="limitPill" style="display:none"></div>
+        <h1 id="title">（タイトル未設定）</h1>
+        <div class="meta" id="meta">開始時刻：—</div>
       </div>
 
-      <div class="status-panel">
-        <div class="status-time">
-          <div id="count">--:--:--</div>
-          <div id="status">開始までお待ちください。</div>
-        </div>
-        <div class="status-actions">
-          <button id="enter" class="btn primary" type="button">動画の視聴ページへ進む</button>
-          <div class="status-note" id="statusNote">
-            ※ボタンを押すと Dokodemo Doors のツアー／ワールドページに移動します。
+      <div class="grid">
+        <div class="panel">
+          <div class="label" id="countdownLabel">カウントダウン</div>
+          <div class="count" id="count">--:--:--</div>
+          <div class="status" id="status">開始までお待ちください。</div>
+          <div class="row">
+            <a id="enter" class="btn" target="_top" rel="noopener">ツアーに行く</a>
           </div>
+          <div class="sep"></div>
+          <div class="row">
+            <button id="copy" class="btn" type="button">この待合室のURLをコピー</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="label" id="voiceSectionTitle">ボイスチャット</div>
+          <div id="members" class="members"></div>
+
+          <div class="sep"></div>
+          <div class="label" id="voiceControlLabel">ボイスチャット</div>
+          <div class="row">
+            <button id="voicePower" class="btn" type="button">音声ON</button>
+            <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
+          </div>
+
+          <div id="voiceHint" class="status" style="margin-top:6px">音声: 未参加</div>
+          <button id="enableSound" class="btn ghost" type="button" style="display:none;margin-top:6px">スマホで音を有効化</button>
+
+          <div class="sep"></div>
+          <div class="label" id="textChatLabel">テキストチャット</div>
+          <div class="chat">
+            <div id="chatLog" class="chat-log" aria-live="polite"></div>
+            <div class="chat-input">
+              <input id="chatInput" placeholder="メッセージを入力…" maxlength="2000">
+              <button id="chatSend" class="btn" type="button">送信</button>
+            </div>
+          </div>
+          <div class="status" id="chatStatus" style="margin-top:8px;color:#0a7f3f">接続していません</div>
         </div>
       </div>
 
-      <section class="chat-section">
-        <h2 id="chatTitle">チャット</h2>
-        <div class="chat-layout">
-          <div class="chat-messages" id="messages"></div>
-
-          <div class="chat-controls">
-            <div class="chat-input-row">
-              <input id="messageInput" class="chat-input" type="text" placeholder="メッセージを入力..." autocomplete="off" />
-              <button id="sendBtn" class="btn" type="button">送信</button>
-            </div>
-            <div class="chat-bot-toggle">
-              <label>
-                <input id="botToggle" type="checkbox" checked />
-                ロボの返信を有効にする
-              </label>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="debug-section">
-        <details>
-          <summary>デバッグ情報</summary>
-          <pre id="debug"></pre>
-        </details>
-      </section>
-    </section>
+      <div class="sep"></div>
+      <!-- デバッグログは残すが画面には表示しない -->
+      <pre id="debug" class="debug"></pre>
+    </div>
   </main>
-
-  <footer>
-    <small id="footerNote">
-      この待ち合わせロビーはファンサイトによる非公式機能です。Dokodemo Doors 本体の動作を保証するものではありません。
-    </small>
+  <footer id="lobbyFooter">
+    © DokodemoDoors
   </footer>
 
   <script src="./lobby.js"></script>
