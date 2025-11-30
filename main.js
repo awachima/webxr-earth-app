@@ -103,6 +103,7 @@ function attachEnter(card){
       limit : card.dataset.limit,
       target: card.dataset.url,
       lang  : currentLang
+      // eventType / price はこの後ロビー側仕様を決めてから渡す
     });
     location.href = `./lobby.html?${p.toString()}`;
   };
@@ -127,7 +128,9 @@ function renderTools(card){
       title: card.dataset.title,
       start: card.dataset.start,
       limit: card.dataset.limit,
-      target: card.dataset.url
+      target: card.dataset.url,
+      eventType: card.dataset.eventType || 'free',
+      price: card.dataset.price || ''
     });
     tools.appendChild(b);
   }
@@ -153,6 +156,9 @@ function upsertCard(item){
   card.dataset.start=item.start;
   card.dataset.url=item.target;
   card.dataset.limit=item.limit;
+  // ★ イベント種別と金額も data-* に保存
+  card.dataset.eventType = item.eventType || 'free';
+  card.dataset.price     = (item.price ?? '').toString();
 
   if (card.parentElement !== grid) grid.prepend(card);
   initCountdown(card);
@@ -183,6 +189,10 @@ const mStartFallback = $('#mStartFallback');
 const mMonth = $('#mMonth'), mDay = $('#mDay'), mHour = $('#mHour'), mMinute = $('#mMinute');
 const statusMsg=$('#statusMsg');
 const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
+
+// ★ 追加: イベント種別ラジオと金額入力
+const mEventTypeRadios = document.querySelectorAll("input[name='mEventType']");
+const mPrice = $('#mPrice');
 
 // Quest / datetime-local 非対応検出
 const isQuest = /\b(OculusBrowser|Meta Quest Browser|MetaQuestBrowser|Quest)\b/i.test(navigator.userAgent);
@@ -282,6 +292,27 @@ function initStartInput(){
   }
 }
 
+// ★ イベント種別 UI 用ヘルパ
+function setEventTypeInModal(type, price){
+  const val = (type === 'paid') ? 'paid' : 'free';
+  if (mEventTypeRadios && mEventTypeRadios.length){
+    mEventTypeRadios.forEach(r=>{
+      r.checked = (r.value === val);
+    });
+  }
+  if (mPrice){
+    if (val === 'paid'){
+      mPrice.disabled = false;
+      if (price !== undefined && price !== null){
+        mPrice.value = String(price);
+      }
+    }else{
+      mPrice.disabled = true;
+      mPrice.value = '';
+    }
+  }
+}
+
 let mode='create';
 let editingRoomId=null;
 let editingTarget=null;
@@ -309,6 +340,8 @@ function openModal(m='create', payload=null){
     editingRoomId=null;
     editingTarget=null;
     initStartInput();
+    // ★ 新規作成時は無料イベント＋価格クリア
+    setEventTypeInModal('free', '');
   }else{
     const owners=readOwners();
     if(!payload || !owners[payload.roomId]){
@@ -359,6 +392,11 @@ function openModal(m='create', payload=null){
       mStart.value=(payload.start||'').slice(0,16);
     }
     mTarget.value=payload.target||'';
+
+    // ★ 編集時：保存済みの種別・金額を反映（なければ無料扱い）
+    const existingType  = payload.eventType || 'free';
+    const existingPrice = payload.price || '';
+    setEventTypeInModal(existingType, existingPrice);
   }
   backdrop.style.display='flex';
 }
@@ -414,7 +452,18 @@ async function postRegistry(item){
     await fetch(REGISTRY_API, {
       method: "POST",
       headers: {"content-type":"application/json"},
-      body: JSON.stringify({ roomId: item.roomId, title: item.title, start: item.start, limit: item.limit, target: item.target, owner, ownerKey })
+      body: JSON.stringify({
+        roomId: item.roomId,
+        title: item.title,
+        start: item.start,
+        limit: item.limit,
+        target: item.target,
+        owner,
+        ownerKey,
+        // ★ 新フィールドもサーバーに送っておく（サーバー側で未使用なら無視される）
+        eventType: item.eventType || 'free',
+        price: item.price ?? ''
+      })
     });
   }catch(e){ console.warn('[registry]', e); }
 }
@@ -492,6 +541,17 @@ async function onSubmit(){
     return;
   }
 
+  // ★ イベント種別と金額取得
+  let eventType = 'free';
+  if (mEventTypeRadios && mEventTypeRadios.length){
+    const checked = Array.from(mEventTypeRadios).find(r=>r.checked);
+    if (checked && checked.value === 'paid') eventType = 'paid';
+  }
+  let price = '';
+  if (eventType === 'paid' && mPrice && mPrice.value){
+    price = mPrice.value.trim();
+  }
+
   if(mode==='create'){
     target=(mTarget.value||'').trim();
 
@@ -516,7 +576,10 @@ async function onSubmit(){
     limit: String(limit),
     target,
     updatedAt: nowIso,
-    createdAt: prev?.createdAt || nowIso
+    createdAt: prev?.createdAt || nowIso,
+    // ★ 新フィールド
+    eventType,
+    price
   };
 
   upsertCard(item);
@@ -542,6 +605,18 @@ function onDuplicate(){
 
   const startISO = composeStartISO() || new Date().toISOString();
   const nowIso = new Date().toISOString();
+
+  // ★ 現在モーダルに入っている種別と金額を取得して複製にも反映
+  let eventType = 'free';
+  if (mEventTypeRadios && mEventTypeRadios.length){
+    const checked = Array.from(mEventTypeRadios).find(r=>r.checked);
+    if (checked && checked.value === 'paid') eventType = 'paid';
+  }
+  let price = '';
+  if (eventType === 'paid' && mPrice && mPrice.value){
+    price = mPrice.value.trim();
+  }
+
   const item={
     roomId:newId,
     title:(mTitle.value||'Meetup').trim(),
@@ -549,7 +624,9 @@ function onDuplicate(){
     limit:String(parseInt(mLimit.value,10)||10),
     target:editingTarget,
     updatedAt:nowIso,
-    createdAt:nowIso
+    createdAt:nowIso,
+    eventType,
+    price
   };
   upsertCard(item);
   persist(item);
@@ -622,6 +699,23 @@ function startApp(){
       const monthNum   = parseInt(mMonth.value || '1',10) || 1;
       updateDayOptions(year, monthNum, currentDay);
     });
+  }
+
+  // ★ イベント種別ラジオの挙動（無料なら金額入力を無効化）
+  if (mEventTypeRadios && mEventTypeRadios.length){
+    mEventTypeRadios.forEach(r=>{
+      r.addEventListener('change', ()=>{
+        if (!mPrice) return;
+        if (r.value === 'free' && r.checked){
+          mPrice.disabled = true;
+          mPrice.value = '';
+        }else if (r.value === 'paid' && r.checked){
+          mPrice.disabled = false;
+        }
+      });
+    });
+    // 起動時は無料状態に揃える
+    setEventTypeInModal('free', '');
   }
 
   // タイトル右の作成ボタン
@@ -786,6 +880,7 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       if (lblTarget && t.modal.form.targetLabel) lblTarget.textContent = t.modal.form.targetLabel;
       const note = document.querySelector('.note');
       if (note && t.modal.form.targetNote) note.textContent = t.modal.form.targetNote;
+      // ※ Event type / Price のラベルは後で i18n に追加予定
     }
 
     // 作成/編集モーダル（ボタン類）
