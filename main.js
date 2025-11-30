@@ -147,6 +147,7 @@ function upsertCard(item){
     const enterLabel = t.enterLobby || 'Enter Lobby';
     card.innerHTML=`
       <div class="title"></div>
+      <div class="event-type" data-event-type></div>
       <div class="meta"><span data-countdown>${startLabel}: --:--:--</span></div>
       <div><a class="btn" data-enter>${enterLabel}</a></div>`;
   }
@@ -156,9 +157,23 @@ function upsertCard(item){
   card.dataset.start=item.start;
   card.dataset.url=item.target;
   card.dataset.limit=item.limit;
-  // ★ イベント種別と金額も data-* に保存
+  // イベント種別と金額も data-* に保存
   card.dataset.eventType = item.eventType || 'free';
   card.dataset.price     = (item.price ?? '').toString();
+
+  // ★ イベント種別表示文言
+  const etEl = card.querySelector('[data-event-type]');
+  if (etEl){
+    const type  = item.eventType || 'free';
+    const price = (item.price ?? '').toString().trim();
+    let label = '';
+    if (type === 'paid'){
+      label = price ? `Paid event (${price})` : 'Paid event';
+    } else {
+      label = 'Free event';
+    }
+    etEl.textContent = label;
+  }
 
   if (card.parentElement !== grid) grid.prepend(card);
   initCountdown(card);
@@ -190,7 +205,7 @@ const mMonth = $('#mMonth'), mDay = $('#mDay'), mHour = $('#mHour'), mMinute = $
 const statusMsg=$('#statusMsg');
 const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
 
-// ★ Free/Paid ラジオ＋金額入力
+// Free/Paid ラジオ＋金額入力
 const mEventTypeRadios = document.querySelectorAll("input[name='mEventType']");
 const mPrice = $('#mPrice');
 const priceWrapper = $('#priceWrapper');
@@ -293,7 +308,7 @@ function initStartInput(){
   }
 }
 
-// ★ EventType + Price UI
+// EventType + Price UI
 function setEventTypeInModal(type, price){
   const val = (type === 'paid') ? 'paid' : 'free';
   if (mEventTypeRadios && mEventTypeRadios.length){
@@ -733,7 +748,10 @@ function startApp(){
 // （将来用）管理者パスワード関連
 const ADMIN_HASH="27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
 function toHex(buf){return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");}
-async function sha256(s){const buf=await_crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));return toHex(buf);}
+async function sha256(s){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return toHex(buf);
+}
 function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i);return r===0;}
 
 // ===== iframe ホバー時のスクロールロック =====
@@ -875,7 +893,7 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       if (lblTarget && t.modal.form.targetLabel) lblTarget.textContent = t.modal.form.targetLabel;
       const note = document.querySelector('.note');
       if (note && t.modal.form.targetNote) note.textContent = t.modal.form.targetNote;
-      // ※ Free/Paid/Price のラベル i18n は必要なら後で追加
+      // Free/Paid/Price のラベル i18n は必要なら後で追加
     }
 
     // 作成/編集モーダル（ボタン類）
