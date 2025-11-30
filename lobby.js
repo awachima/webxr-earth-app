@@ -24,92 +24,57 @@ const urlParams = new URLSearchParams(location.search);
 // ===== 言語判定 & html 属性設定 =====
 const langParam  = urlParams.get("lang");
 const storedLang = localStorage.getItem("lang");
-let currentLang  = langParam || storedLang || "en";
+let currentLang  = langParam || storedLang || (navigator.language || "ja").slice(0, 2) || "ja";
 
-window.currentLang = currentLang;
-try {
-  localStorage.setItem("lang", currentLang);
-} catch (e) {}
-
-document.documentElement.lang = currentLang;
-if (currentLang === "fa" || currentLang === "he") {
-  document.documentElement.dir = "rtl";
-} else {
-  document.documentElement.dir = "ltr";
+if (!["en", "ja", "zh", "fa", "hi", "he"].includes(currentLang)) {
+  currentLang = "ja";
 }
 
-// ===== i18n ヘルパー =====
-function t(path, fallback) {
-  const root = window.i18n || {};
-  const parts = path.split(".");
-  let cur = root;
-  for (const k of parts) {
-    if (!cur || typeof cur !== "object" || !(k in cur)) return fallback;
-    cur = cur[k];
+document.documentElement.lang = currentLang;
+document.documentElement.dir  = (currentLang === "fa" || currentLang === "he") ? "rtl" : "ltr";
+
+// ===== i18n ロード =====
+const LOBBY_LANG_FILES = {
+  en: "./lang/lobby-en.json",
+  ja: "./lang/lobby-ja.json",
+  zh: "./lang/lobby-zh.json",
+  fa: "./lang/lobby-fa.json",
+  hi: "./lang/lobby-hi.json",
+  he: "./lang/lobby-he.json"
+};
+
+let i18nLobby = null;
+
+async function loadLobbyLanguage(lang) {
+  const url = LOBBY_LANG_FILES[lang] || LOBBY_LANG_FILES["ja"];
+  if (!url) return;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    i18nLobby = await res.json();
+  } catch (e) {
+    console.warn("Failed to load lobby i18n", e);
+  }
+}
+
+function t(keyPath, fallback) {
+  if (!i18nLobby) return fallback;
+  const parts = keyPath.split(".");
+  let cur = i18nLobby;
+  for (const p of parts) {
+    if (cur && typeof cur === "object" && p in cur) {
+      cur = cur[p];
+    } else {
+      return fallback;
+    }
   }
   return typeof cur === "string" ? cur : fallback;
 }
 
-function applyLobbyTexts() {
-  const headerTitle = $("#lobbyHeaderTitle");
-  if (headerTitle) headerTitle.textContent = t("lobby.headerTitle", "待ち合わせロビー");
-
-  const setNameBtn = $("#setName");
-  if (setNameBtn) setNameBtn.textContent = t("lobby.nicknameButton", "ニックネーム");
-
-  const backBtn = $("#backToIndex");
-  if (backBtn) backBtn.textContent = t("lobby.backButton", "← 戻る");
-
-  const countdownLabel = $("#countdownLabel");
-  if (countdownLabel) countdownLabel.textContent = t("lobby.countdownLabel", "カウントダウン");
-
-  const voiceSectionTitle = $("#voiceSectionTitle");
-  if (voiceSectionTitle) voiceSectionTitle.textContent = t("lobby.voiceSectionTitle", "ボイスチャット");
-
-  const voiceControlLabel = $("#voiceControlLabel");
-  if (voiceControlLabel) voiceControlLabel.textContent = t("lobby.voiceControlLabel", "ボイスチャット");
-
-  const textChatLabel = $("#textChatLabel");
-  if (textChatLabel) textChatLabel.textContent = t("lobby.textChatLabel", "テキストチャット");
-
-  const copyBtn = $("#copy");
-  if (copyBtn) copyBtn.textContent = t("lobby.copyRoomUrl", "この待合室のURLをコピー");
-
-  const enterBtn = $("#enter");
-  if (enterBtn) enterBtn.textContent = t("lobby.enterButton", "ツアーに行く");
-
-  const chatSend = $("#chatSend");
-  if (chatSend) chatSend.textContent = t("lobby.chatSend", "送信");
-
-  const chatInput = $("#chatInput");
-  if (chatInput) chatInput.placeholder = t("lobby.chatPlaceholder", "メッセージを入力…");
-
-  const enableSound = $("#enableSound");
-  if (enableSound) enableSound.textContent = t("lobby.enableSound", "スマホで音を有効化");
-
-  const footer = $("#lobbyFooter");
-  if (footer) footer.textContent = t("lobby.footer", "© DokodemoDoors");
+function pad(n) {
+  return String(n).padStart(2, "0");
 }
 
-async function loadLobbyLanguage(lang) {
-  let data = {};
-  try {
-    const res = await fetch("./lang/" + lang + ".json");
-    if (!res.ok) throw new Error("Failed to load language: " + lang);
-    data = await res.json();
-  } catch (e) {
-    console.error("[lobby i18n]", e);
-    data = window.i18n || {};
-  }
-  window.i18n = data || {};
-  window.currentLang = lang;
-  try {
-    localStorage.setItem("lang", lang);
-  } catch (e) {}
-  applyLobbyTexts();
-}
-
-// ===== URL 自動リンク化 =====
 function linkify(text) {
   if (!text) return "";
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -117,6 +82,22 @@ function linkify(text) {
     const safeUrl = url.replace(/"/g, "&quot;");
     return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
   });
+}
+
+function formatFeeLabelFromParams(feeType, feeAmount){
+  const type = feeType || 'free';
+  const amount = (feeAmount || '').trim();
+  const lang = (window.currentLang || document.documentElement.lang || 'en').toLowerCase();
+  const isJa = lang.startsWith('ja');
+  if (type === 'paid'){
+    if (isJa){
+      return amount ? `有料イベント（${amount}円）` : '有料イベント';
+    } else {
+      return amount ? `Paid event (${amount})` : 'Paid event';
+    }
+  } else {
+    return isJa ? '無料イベント' : 'Free event';
+  }
 }
 
 // ===== メイン初期化（i18n 読み込み後に実行） =====
@@ -128,6 +109,8 @@ function linkify(text) {
   const limitParam  = parseInt(urlParams.get("limit") || "10", 10);
   const targetParam = urlParams.get("target") || "";
   const roomId      = urlParams.get("roomId") || "";
+  const feeTypeParam   = urlParams.get("feeType") || "free";
+  const feeAmountParam = urlParams.get("feeAmount") || "";
 
   const storedNick  = localStorage.getItem("nickname");
   const user        = storedNick || `Guest-${Math.random().toString(16).slice(2, 6)}`;
@@ -139,11 +122,19 @@ function linkify(text) {
   document.title = titleParam + " | " + t("lobby.pageTitleSuffix", "待ち合わせロビー");
 
   let startDate = null;
+  const startLabel = t("lobby.startLabel", "開始時刻：");
+  let baseMeta = "";
   if (startParam) {
     startDate = new Date(startParam);
-    $("#meta").textContent = t("lobby.startLabel", "開始時刻：") + startDate.toLocaleString();
+    baseMeta = startLabel + startDate.toLocaleString();
   } else {
-    $("#meta").textContent = t("lobby.startLabel", "開始時刻：") + "—";
+    baseMeta = startLabel + "—";
+  }
+  const feeText = formatFeeLabelFromParams(feeTypeParam, feeAmountParam);
+  if (feeText) {
+    $("#meta").textContent = `${baseMeta}   ${feeText}`;
+  } else {
+    $("#meta").textContent = baseMeta;
   }
 
   if (Number.isFinite(limitParam) && limitParam > 0) {
@@ -158,21 +149,33 @@ function linkify(text) {
   const enterBtn = $("#enter");
   const validTarget = /^https?:\/\//i.test(targetParam);
   if (validTarget) {
-    enterBtn.href = targetParam;
+    enterBtn.disabled = false;
+    enterBtn.onclick = () => {
+      location.href = targetParam;
+    };
+    $("#statusNote").innerHTML = t(
+      "lobby.statusNoteValid",
+      "※ボタンを押すと Dokodemo Doors のツアー／ワールドページに移動します。"
+    );
   } else {
-    enterBtn.style.display = "none";
+    enterBtn.disabled = true;
+    $("#statusNote").innerHTML = t(
+      "lobby.statusNoteInvalid",
+      "有効なツアー／ワールド URL が設定されていません。"
+    );
   }
 
-  const pad = (n) => String(n).padStart(2, "0");
+  // カウントダウン
+  const countEl = $("#count");
+  const statusEl = $("#status");
 
   function tick() {
     if (!startDate) {
-      $("#count").textContent = "--:--:--";
-      $("#status").innerHTML =
-        `<span style="color:#b00020">${t("lobby.statusNoStart", "開始時刻未設定")}</span>`;
-      requestAnimationFrame(tick);
+      countEl.textContent = "--:--:--";
+      statusEl.textContent = t("lobby.statusNoTime", "開始時刻が設定されていません。");
       return;
     }
+
     const now = new Date();
     const diff = startDate - now;
 
@@ -188,16 +191,12 @@ function linkify(text) {
 
     const expireAt = new Date(startDate.getTime() + NEGATIVE_LIMIT_MS);
     const remainMs = expireAt - now;
+
     if (remainMs > 0) {
-      const remainMin = Math.ceil(remainMs / 60000);
-      const label = t("lobby.statusDuring", "消滅まで後{minutes}分").replace(
-        "{minutes}",
-        pad(remainMin)
-      );
-      $("#count").textContent = label;
+      $("#count").textContent = t("lobby.statusStartedShort", "開始しました");
       $("#status").textContent = t(
-        "lobby.statusStarted",
-        "開始済み：入室できます（20分以内）"
+        "lobby.statusStartedDetail",
+        "動画ページに移動して、ツアー／ワールドにご参加ください。"
       );
       requestAnimationFrame(tick);
     } else {
@@ -222,11 +221,63 @@ function linkify(text) {
       setTimeout(() => ($("#copy").textContent = labelDefault), 1200);
     } catch (e) {
       const msg = t("lobby.manualCopyPrompt", "手動コピー：");
-      prompt(msg, url);
+      alert(msg + " " + url);
     }
   };
 
-  // デバッグ情報（画面には非表示）
+  // 名前変更
+  $("#setName").onclick = () => {
+    const placeholder = t("lobby.namePromptPlaceholder", "表示名を入力してください");
+    const newName = prompt(placeholder, user);
+    if (newName && newName.trim()) {
+      localStorage.setItem("nickname", newName.trim());
+      location.reload();
+    }
+  };
+
+  // チャット
+  const messagesEl = $("#messages");
+  const inputEl    = $("#messageInput");
+  const sendBtn    = $("#sendBtn");
+  const botToggle  = $("#botToggle");
+
+  function appendMessage(author, text, isSystem = false) {
+    const div = document.createElement("div");
+    div.className = "message";
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "author";
+    nameSpan.textContent = author + "：";
+    const bodySpan = document.createElement("span");
+    bodySpan.className = "body";
+    bodySpan.innerHTML = isSystem ? text : linkify(text);
+    div.appendChild(nameSpan);
+    div.appendChild(bodySpan);
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  appendMessage("システム", t("lobby.systemWelcome", "この待ち合わせロビーへようこそ。"));
+
+  function sendUserMessage() {
+    const text = inputEl.value.trim();
+    if (!text) return;
+    appendMessage(user, text);
+    inputEl.value = "";
+    if (botToggle.checked) {
+      const reply = t("lobby.botEchoPrefix", "ロボ：") + text;
+      setTimeout(() => appendMessage("ロボ", reply), 500);
+    }
+  }
+
+  sendBtn.onclick = sendUserMessage;
+  inputEl.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.isComposing) {
+      ev.preventDefault();
+      sendUserMessage();
+    }
+  });
+
+  // デバッグ情報
   $("#debug").textContent = JSON.stringify(
     {
       title: titleParam,
@@ -234,6 +285,8 @@ function linkify(text) {
       limit: limitParam,
       target: targetParam,
       roomId,
+      feeType: feeTypeParam,
+      feeAmount: feeAmountParam,
       user,
       isMobile,
       isIOS,
@@ -242,487 +295,4 @@ function linkify(text) {
     null,
     2
   );
-
-  // ニックネーム設定
-  $("#setName").onclick = function setNickname() {
-    const current = localStorage.getItem("nickname") || user;
-    const promptLabel = t(
-      "lobby.nicknamePrompt",
-      "ニックネームを入力してください："
-    );
-    const savedMsg = t(
-      "lobby.nicknameSaved",
-      "ニックネームを保存しました。ページを再読み込みすると反映されます。"
-    );
-
-    const name = prompt(promptLabel, current);
-    if (!name) return;
-    localStorage.setItem("nickname", name.trim().slice(0, 32));
-    alert(savedMsg);
-  };
-
-  // ===== WebSocket（チャット + シグナリング） =====
-  const WS_BASE = "wss://do-chat.awachima7.workers.dev";
-  const pageParams = new URLSearchParams(location.search);
-  pageParams.set("user", user);
-  const CHAT_URL = `${WS_BASE}/ws/${encodeURIComponent(roomId)}?${pageParams.toString()}`;
-
-  const chatLog = $("#chatLog");
-  const chatInput = $("#chatInput");
-  const chatSend = $("#chatSend");
-  const chatStatus = $("#chatStatus");
-
-  const membersEl = $("#members");
-  function renderMembers(list) {
-    membersEl.innerHTML = "";
-    if (!list || list.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "status";
-      empty.textContent = t("lobby.membersEmpty", "参加者はいません。");
-      membersEl.appendChild(empty);
-      return;
-    }
-    list.forEach((m, idx) => {
-      const row = document.createElement("div");
-      row.className = "member";
-      const badge = document.createElement("div");
-      badge.className = "badge";
-      badge.textContent = String(idx + 1);
-      const label = document.createElement("div");
-      const labelTemplate = t("lobby.memberLabel", "{name} ({id})");
-      const idShort = m.id ? m.id.slice(0, 6) : "";
-      label.textContent = labelTemplate
-        .replace("{name}", m.name || "")
-        .replace("{id}", idShort || "");
-      row.appendChild(badge);
-      row.appendChild(label);
-      membersEl.appendChild(row);
-    });
-  }
-
-  function addMsg(elClass, text) {
-    const div = document.createElement("div");
-    div.className = "msg " + elClass;
-    div.innerHTML = linkify(text);
-    chatLog.appendChild(div);
-    chatLog.scrollTop = chatLog.scrollHeight;
-  }
-  function addSys(text) {
-    const div = document.createElement("div");
-    div.className = "msg sys";
-    div.innerHTML = linkify(text);
-    chatLog.appendChild(div);
-    chatLog.scrollTop = chatLog.scrollHeight;
-  }
-
-  let ws,
-    focused = true;
-  window.addEventListener("focus", () => (focused = true));
-  window.addEventListener("blur", () => (focused = false));
-
-  let myId = null;
-  let rosterMembers = [];
-
-  function connect() {
-    try {
-      ws = new WebSocket(CHAT_URL);
-      ws.onopen = () => {
-        chatStatus.textContent = t("lobby.chatConnected", "接続しました");
-      };
-      ws.onclose = () => {
-        chatStatus.textContent = t(
-          "lobby.chatReconnecting",
-          "切断されました。再接続を試みます…"
-        );
-        setTimeout(connect, 1500);
-      };
-      ws.onerror = () => {
-        chatStatus.textContent = t("lobby.chatError", "エラーが発生しました");
-      };
-      ws.onmessage = (ev) => {
-        try {
-          const data = JSON.parse(ev.data);
-
-          // WebRTC シグナリング
-          if (data.rtc) {
-            onRtcSignal(data);
-            return;
-          }
-
-          // システムメッセージ
-          if (data.sys) {
-            if (data.type === "welcome") {
-              myId = data.id;
-            } else if (data.type === "history" && Array.isArray(data.messages)) {
-              data.messages.forEach((line) => {
-                try {
-                  const obj = JSON.parse(line);
-                  const klass = obj.name === user ? "me" : "other";
-                  const text = t("lobby.chatLine", "{name}: {text}")
-                    .replace("{name}", obj.name || "")
-                    .replace("{text}", obj.text || "");
-                  addMsg(klass, text);
-                } catch {}
-              });
-              addSys(t("lobby.historyLoaded", "— 過去のメッセージを読み込みました —"));
-            } else if (data.type === "roster") {
-              rosterMembers = Array.isArray(data.members) ? data.members : [];
-              renderMembers(rosterMembers);
-              if (localStream) startCalls(rosterMembers);
-            } else if (data.type === "join") {
-              const tpl = t(
-                "lobby.joined",
-                "{name} が参加しました（合計 {count} 名）"
-              );
-              addSys(
-                tpl
-                  .replace("{name}", data.name || "")
-                  .replace("{count}", String(data.count || 0))
-              );
-            } else if (data.type === "leave") {
-              const tpl = t(
-                "lobby.left",
-                "{name} が退出しました（合計 {count} 名）"
-              );
-              addSys(
-                tpl
-                  .replace("{name}", data.name || "")
-                  .replace("{count}", String(data.count || 0))
-              );
-              if (data.id) cleanupPeer(data.id);
-            }
-            return;
-          }
-
-          // 通常チャット
-          const obj = data;
-          const klass = obj.name === user ? "me" : "other";
-          const label = t("lobby.chatLine", "{name}: {text}")
-            .replace("{name}", obj.name || "")
-            .replace("{text}", obj.text || "");
-          addMsg(klass, label);
-        } catch {
-          // 非 JSON は無視
-        }
-      };
-    } catch (e) {
-      chatStatus.textContent = t("lobby.chatConnectFailed", "接続に失敗しました");
-      console.error(e);
-    }
-  }
-  connect();
-
-  chatSend.onclick = () => {
-    const tval = (chatInput.value || "").trim();
-    if (!tval || !ws || ws.readyState !== 1) return;
-    ws.send(tval);
-    chatInput.value = "";
-  };
-  chatInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      chatSend.click();
-    }
-  });
-
-  // ========= WebRTC (voice) =========
-  const iceServers = [
-    {
-      urls: [
-        "stun:stun.l.google.com:19302",
-        "stun:stun1.l.google.com:19302"
-      ]
-    }
-  ];
-  const pcConfig = { iceServers };
-
-  let localStream = null;
-  const peers = new Map();
-  const audios = new Map();
-
-  let audioCtx = null;
-  function getAudioCtx() {
-    try {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      return audioCtx;
-    } catch (_) {
-      return null;
-    }
-  }
-  function bindRemoteToAudioCtx(stream) {
-    try {
-      const ctx = getAudioCtx();
-      if (!ctx) return;
-      const src = ctx.createMediaStreamSource(stream);
-      src.connect(ctx.destination);
-    } catch (e) {}
-  }
-  function wsSend(obj) {
-    try {
-      ws?.readyState === 1 && ws.send(JSON.stringify(obj));
-    } catch {}
-  }
-
-  function createPeer(peerId) {
-    const pc = new RTCPeerConnection(pcConfig);
-    pc.ontrack = (ev) => {
-      let el = audios.get(peerId);
-      if (!el) {
-        el = document.createElement("audio");
-        el.autoplay = true;
-        el.playsInline = true;
-        el.muted = false;
-        el.volume = 1;
-        audios.set(peerId, el);
-        document.body.appendChild(el);
-      }
-      el.srcObject = ev.streams[0];
-      try {
-        el.play();
-      } catch (e) {}
-      bindRemoteToAudioCtx(ev.streams[0]);
-      maybeShowEnableButton();
-    };
-    pc.onicecandidate = (ev) => {
-      if (ev.candidate)
-        wsSend({ rtc: { to: peerId, type: "candidate", data: ev.candidate } });
-    };
-    pc.oniceconnectionstatechange = () =>
-      console.info("[ICE]", peerId, pc.iceConnectionState);
-    pc.onconnectionstatechange = () =>
-      console.info("[PC]", peerId, pc.connectionState);
-    if (localStream && localStream.getAudioTracks().length) {
-      for (const track of localStream.getAudioTracks()) pc.addTrack(track, localStream);
-    } else {
-      try {
-        pc.addTransceiver("audio", { direction: "recvonly" });
-      } catch {}
-    }
-    peers.set(peerId, pc);
-    return pc;
-  }
-
-  async function callPeer(peerId) {
-    const pc = createPeer(peerId);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    wsSend({ rtc: { to: peerId, type: "offer", data: offer } });
-  }
-
-  function startCalls(memberList) {
-    if (!localStream) return;
-    const others = (memberList || []).filter((m) => m.id && m.id !== myId);
-    for (const m of others) if (!peers.has(m.id)) callPeer(m.id);
-  }
-
-  function cleanupPeer(peerId) {
-    const pc = peers.get(peerId);
-    if (pc) {
-      try {
-        pc.close();
-      } catch {}
-      peers.delete(peerId);
-    }
-    const el = audios.get(peerId);
-    if (el) {
-      try {
-        el.srcObject = null;
-        el.remove();
-      } catch {}
-      audios.delete(peerId);
-    }
-  }
-
-  function onRtcSignal(msg) {
-    const { from, type, data } = msg.rtc;
-    if (!from || from === myId) return;
-    let pc = peers.get(from);
-    if (!pc) pc = createPeer(from);
-    if (type === "offer") {
-      pc.setRemoteDescription(new RTCSessionDescription(data))
-        .then(() => pc.createAnswer())
-        .then((ans) =>
-          pc.setLocalDescription(ans).then(() =>
-            wsSend({ rtc: { to: from, type: "answer", data: ans } })
-          )
-        )
-        .catch(console.error);
-    } else if (type === "answer") {
-      pc.setRemoteDescription(new RTCSessionDescription(data)).catch(console.error);
-    } else if (type === "candidate") {
-      pc.addIceCandidate(new RTCIceCandidate(data)).catch(console.error);
-    }
-  }
-
-  const voicePowerBtn = document.getElementById("voicePower");
-  const micToggleBtn  = document.getElementById("micToggle");
-  const voiceHint     = document.getElementById("voiceHint");
-
-  function isMicEnabled() {
-    if (!localStream) return false;
-    const ttrack = localStream.getAudioTracks()[0];
-    return !!(ttrack && ttrack.enabled);
-  }
-
-  function updateVoiceUI() {
-    const on = !!localStream;
-    const labelOn  = t("lobby.voiceOn", "音声ON");
-    const labelOff = t("lobby.voiceOff", "音声OFF");
-    const muteLabel   = t("lobby.mute", "ミュート");
-    const unmuteLabel = t("lobby.unmute", "ミュート解除");
-    const statusJoin  = t(
-      "lobby.voiceJoined",
-      "音声: 参加中（マイク{state}）"
-    );
-    const statusNone  = t("lobby.voiceNone", "音声: 未参加");
-
-    voicePowerBtn.textContent = on ? labelOff : labelOn;
-    voicePowerBtn.classList.toggle("ghost", !on);
-    micToggleBtn.style.display = on ? "" : "none";
-
-    if (on) {
-      const enabled = isMicEnabled();
-      micToggleBtn.textContent = enabled ? muteLabel : unmuteLabel;
-      voiceHint.textContent = statusJoin.replace("{state}", enabled ? "ON" : "OFF");
-    } else {
-      micToggleBtn.textContent = muteLabel;
-      voiceHint.textContent = statusNone;
-    }
-  }
-
-  async function startVoice() {
-    try {
-      if (localStream) {
-        stopVoice();
-      }
-      const errorMsg = t(
-        "lobby.micErrorMsg",
-        "マイクへのアクセスを許可してください。ブラウザの設定を確認するか、ページを再読み込みしてください。"
-      );
-
-      localStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      startCalls(rosterMembers);
-      updateVoiceUI();
-      await tryPlayAllAudios();
-      await resumeAudioContext();
-    } catch (e) {
-      console.error("mic error", e);
-      voiceHint.textContent = errorMsg;
-      alert(errorMsg);
-      stopVoice();
-    }
-  }
-
-  function stopVoice() {
-    for (const id of Array.from(peers.keys())) cleanupPeer(id);
-    if (localStream) {
-      localStream.getTracks().forEach((t) => t.stop());
-      localStream = null;
-    }
-    updateVoiceUI();
-  }
-
-  voicePowerBtn.onclick = async () => {
-    if (!localStream) {
-      await startVoice();
-    } else {
-      stopVoice();
-    }
-    maybeShowEnableButton();
-  };
-
-  micToggleBtn.onclick = () => {
-    if (!localStream) return;
-    const tr = localStream.getAudioTracks()[0];
-    if (!tr) return;
-    tr.enabled = !tr.enabled;
-    updateVoiceUI();
-  };
-
-  // ===== モバイル音声再生ゲート =====
-  const enableBtn = document.getElementById("enableSound");
-  function anyAudioPlaying() {
-    let ok = false;
-    audios.forEach((el) => {
-      if (!el.paused) ok = true;
-    });
-    return ok;
-  }
-  async function tryPlayAllAudios() {
-    for (const el of audios.values()) {
-      try {
-        el.volume = 1;
-        el.muted = false;
-        await el.play();
-      } catch (e) {}
-    }
-    document.querySelectorAll("audio").forEach(async (el) => {
-      try {
-        el.volume = 1;
-        el.muted = false;
-        await el.play();
-      } catch (e) {}
-    });
-  }
-  async function resumeAudioContext() {
-    try {
-      const ctx = getAudioCtx();
-      if (!ctx) return false;
-      if (ctx.state !== "running") {
-        await ctx.resume();
-      }
-      return ctx.state === "running";
-    } catch (_) {
-      return false;
-    }
-  }
-  async function enableSound() {
-    const labelRetry = t(
-      "lobby.enableSoundRetry",
-      "音が出ない？もう一度有効化"
-    );
-    const r1 = await resumeAudioContext();
-    await tryPlayAllAudios();
-    if (r1 || anyAudioPlaying()) {
-      enableBtn.style.display = "none";
-    } else {
-      enableBtn.textContent = labelRetry;
-      enableBtn.style.display = "";
-    }
-  }
-  function maybeShowEnableButton() {
-    if (!isMobile) return;
-    const ctxOk = audioCtx && audioCtx.state === "running";
-    if (ctxOk || anyAudioPlaying()) {
-      enableBtn.style.display = "none";
-    } else {
-      enableBtn.style.display = "";
-    }
-  }
-  function setupMobileAudioGate() {
-    if (!isMobile) return;
-    enableBtn.style.display = "";
-    enableBtn.onclick = enableSound;
-    const retry = async () => {
-      await enableSound();
-    };
-    document.addEventListener("touchend", retry);
-    document.addEventListener("click", retry);
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) maybeShowEnableButton();
-    });
-  }
-  setupMobileAudioGate();
-
-  // 初期状態メッセージ（接続前）
-  chatStatus.textContent = t("lobby.chatInitial", "接続していません");
-  updateVoiceUI();
 })();

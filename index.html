@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="./styles.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+San...y=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="wrap">
@@ -26,104 +26,91 @@
       </div>
     </header>
 
-    <div class="stage">
-      <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+    <main>
+      <section class="hero">
+        <div class="hero-inner">
+          <div class="hero-text">
+            <div class="site-logo-row">
+              <img src="./images/fansitelogo.png" alt="Dokodemo Doors Fan Site Logo" class="site-logo">
+              <div class="site-title-wrapper">
+                <h1 class="site-title" id="siteTitle">
+                  VR Travel Meetup Fan Site
+                </h1>
+              </div>
+            </div>
 
-      <!-- 白線の下に表示するボタン群 -->
-      <div class="intro-bar">
-        <button type="button" id="aboutBtn" class="intro-bar__button">
-          What is Dokodemo Doors?
-        </button>
-        <button type="button" id="guideBtn" class="intro-bar__button">
-          What is this fan site?
-        </button>
-      </div>
+            <p class="site-lead" id="siteLead">
+              1700+ VR travel videos to share the same moment, even when you are apart.
+            </p>
 
-      <iframe
-        id="webxr-iframe"
-        title="WebXR Earth"
-        src="./earth.html"
-        allow="xr-spatial-tracking; fullscreen"
-        scrolling="no">
-      </iframe>
-    </div>
+            <div class="hero-actions">
+              <a href="https://dokodemodoors.com/" target="_blank" rel="noopener noreferrer" class="btn primary" id="officialSiteBtn">
+                Visit Dokodemo Doors
+              </a>
+              <button type="button" class="btn secondary" id="aboutBtn">
+                What is Dokodemo Doors?
+              </button>
+              <button type="button" class="btn secondary" id="howtoBtn">
+                How to use Meetup Rooms?
+              </button>
+            </div>
+          </div>
 
-    <section class="meetups">
-      <div class="meetups__head">
-        <h2 class="meetups__title">Meetup Rooms</h2>
-        <button class="btn ghost head-create" id="openCreate">Create a room</button>
-      </div>
-      <div id="grid" class="grid"></div>
-    </section>
+          <div class="hero-image-wrapper">
+            <img src="./images/sky.jpg" alt="Sky background" class="hero-image">
+            <div class="hero-overlay">
+              <div class="hero-overlay-text" id="heroOverlayText">
+                Share the same world,<br>at the same moment.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="description">
+        <div class="description-inner">
+          <h2 id="descriptionTitle">About this fan site</h2>
+          <p id="descriptionBody">
+            This is an unofficial fan-made site for the online VR space &quot;Dokodemo Doors&quot;.
+            You can create meetup rooms, gather friends, and watch 360° VR travel videos together in sync.
+          </p>
+        </div>
+      </section>
+
+      <section class="meetups">
+        <div class="meetups-header">
+          <div>
+            <h2 id="meetupsTitle">Meetup Rooms</h2>
+            <p id="meetupsLead">
+              Create a waiting room, share the URL, and enjoy the same VR travel video together.
+            </p>
+          </div>
+          <button class="btn" id="open">Create new meetup room</button>
+        </div>
+
+        <div class="grid" id="grid">
+          <!-- Cards will be injected by main.js -->
+        </div>
+      </section>
+
+      <section class="notes">
+        <div class="notes-inner">
+          <h2 id="notesTitle">Notes</h2>
+          <ul id="notesList">
+            <li>This fan site is not an official service of Dokodemo Doors.</li>
+            <li>Meetup rooms are stored locally in your browser and may be deleted if storage is cleared.</li>
+            <li>For the actual VR travel videos and worlds, please visit the official Dokodemo Doors site.</li>
+          </ul>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <!-- Site description modal -->
-  <div class="backdrop" id="aboutBackdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-labelledby="aboutTitle" aria-describedby="aboutBody">
-      <header>
-        <div id="aboutTitle">What is Dokodemo Doors?</div>
-        <div class="close" id="aboutClose" aria-label="Close">×</div>
-      </header>
-      <div class="body" id="aboutBody">
-        <p class="heading-large">A place where you can explore the world together, even when you're far apart</p>
-        <p style="padding-left: 1em;">
-          <a href="https://dokodemodoors.com/" target="_blank">Dokodemo Doors</a> is an online VR platform that offers a wide collection of 360-degree VR travel videos from around the world.
-        </p>
-        <p class="heading-strong">More than 1,700 videos available</p>
-        <p style="padding-left: 1em;">
-          Although YouTube also has VR content, no other site gathers this many VR travel videos in one place.
-        </p>
-        <p class="heading-strong">Watch together in perfect sync</p>
-        <p style="padding-left: 1em;">
-          By starting the video at the same time, you can share the exact same scenery while talking or using gestures.
-        </p>
-        <p>
-          Learn more
-          <a href="https://dokodemodoors.com/info/about-dokodemodoor" target="_blank">here</a>.
-        </p>
-      </div>
-      <div class="actions">
-        <button class="btn" id="aboutOk">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Fan site guide modal -->
-  <div class="backdrop" id="guideBackdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-labelledby="guideTitle" aria-describedby="guideBody">
-      <header>
-        <div id="guideTitle">What is this fan site?</div>
-        <div class="close" id="guideClose" aria-label="Close">×</div>
-      </header>
-      <div class="body" id="guideBody">
-        <p class="heading-large">An unofficial fan-made site that lets you choose destinations from a 3D globe</p>
-        <p>
-          I created this site with official permission because I wanted to pick destinations visually on a globe instead of from a traditional list view on the
-          <a href="https://dokodemodoors.com/" target="_blank">official site</a>.
-        </p>
-        <p class="heading-strong">1. Subscription required</p>
-        <p style="padding-left: 1em;">
-          Viewing each world requires a subscription through the official website. If you're not subscribed, entering a world will redirect you to the subscription page.<br>
-          Some worlds are available for free during limited periods, and those are easiest to find from the
-          <a href="https://dokodemodoors.com/" target="_blank">official homepage</a>
-          under “Recommended Worlds.”
-        </p>
-        <p class="heading-strong">2. Meta Quest 2 or higher recommended</p>
-        <p style="padding-left: 1em;">
-          Although the service works on various devices, the VR experience is overwhelmingly superior. For best results, Meta Quest 2 or higher is recommended.
-        </p>
-      </div>
-      <div class="actions">
-        <button class="btn" id="guideOk">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Create / Edit modal -->
-  <div class="backdrop" id="backdrop">
+  <!-- Meetup creation modal -->
+  <div class="backdrop" id="backdrop" style="display:none">
     <div class="modal">
       <header>
-        <div id="modalTitle">Create a meetup room</div>
+        <h2 id="modalTitle">Create meetup</h2>
         <div class="close" id="close">×</div>
       </header>
       <div class="body">
@@ -162,6 +149,15 @@
               After creation, the URL cannot be changed. To change it, duplicate the room and create a new one.
             </div>
           </div>
+
+          <div>
+            <label>Event fee</label>
+            <div class="fee-row">
+              <label><input type="radio" name="mFeeType" id="mFeeFree" value="free" checked> Free event</label>
+              <label style="margin-left:12px;"><input type="radio" name="mFeeType" id="mFeePaid" value="paid"> Paid event</label>
+              <input id="mFeeAmount" type="number" inputmode="decimal" min="0" step="1" placeholder="Amount (JPY)" style="margin-left:12px; max-width:160px;">
+            </div>
+          </div>
         </div>
       </div>
       <div class="actions">
@@ -170,18 +166,19 @@
         </div>
         <button class="btn ghost" id="duplicate" style="display:none">Duplicate this room</button>
         <button class="btn ghost" id="close2">Close</button>
-        <button class="btn" id="submit">Create</button>
+        <button class="btn" 
+id="submit">Create meetup</button>
       </div>
-      <div class="status" id="statusMsg">Room created</div>
+      <div id="statusMsg" style="display:none; margin-top:8px; font-size:0.9rem;"></div>
     </div>
   </div>
 
-  <!-- Custom alert (destination URL info) -->
-  <div class="backdrop" id="alertBackdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
+  <!-- URL エラー用カスタムアラート -->
+  <div class="backdrop" id="alertBackdrop" style="display:none">
+    <div class="modal small">
       <header>
-        <div id="alertTitle">About the URL</div>
-        <div class="close" id="alertClose" aria-label="Close">×</div>
+        <h2 id="alertTitle">Invalid URL</h2>
+        <div class="close" id="alertClose">×</div>
       </header>
       <div class="body" id="alertBody">
         Please enter a Dokodemo Doors tour or world URL.
@@ -191,6 +188,60 @@
       </div>
     </div>
   </div>
+
+  <!-- サイト説明モーダル -->
+  <div class="backdrop" id="aboutBackdrop" style="display:none">
+    <div class="modal">
+      <header>
+        <h2 id="aboutTitle">What is Dokodemo Doors?</h2>
+        <div class="close" id="aboutClose">×</div>
+      </header>
+      <div class="body" id="aboutBody">
+          <span style="font-size: 24px; font-weight: bold">離れていても、共に旅ができる場所がある</span><br>
+		  <span style="text-indent: 2em;">オンラインVR空間「どこでもドア」は、世界の360度VR動画を公開するサイトです。</span><br>
+		  <span style="font-size: 34px; font-weight: bold">掲載動画数1,700以上</span>（2025年11月現在）<br>
+		  <span style="text-indent: 2em;">Youtubeにも多くのVR動画があります<br>しかし、これだけの数が一か所に集まっているのはここだけです。</span><br>
+		  <span style="font-size: 34px; font-weight: bold">「今、この場所から世界に出かけたい」を叶えます。</span><br>
+		  <span style="text-indent: 2em;">大切な人との旅行の計画を立てるのも、なかなか会えない相手と一緒に世界の景色を見に行くのも自由です。</span><br><br>
+		  <span style="text-indent: 2em;">このファンサイトでは、待合室（Meetup Room）を作り、誰かと一緒に同じタイミングでVR旅行に出かけるためのお手伝いをします。</span>
+      </div>
+      <div class="actions">
+        <button class="btn" id="aboutOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- How to use Meetup Rooms モーダル -->
+  <div class="backdrop" id="howtoBackdrop" style="display:none">
+    <div class="modal">
+      <header>
+        <h2 id="howtoTitle">How to use Meetup Rooms</h2>
+        <div class="close" id="howtoClose">×</div>
+      </header>
+      <div class="body" id="howtoBody">
+        <ol>
+          <li>Create a meetup room from this page and share the URL with your friends.</li>
+          <li>At the meeting time, everyone opens the meetup URL and presses &quot;Enter Lobby&quot; to move to the waiting room.</li>
+          <li>From the lobby, join the Dokodemo Doors tour or world together and enjoy the VR travel in sync.</li>
+        </ol>
+      </div>
+      <div class="actions">
+        <button class="btn" id="howtoOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 言語別テキスト（JSON） -->
+  <script>
+    window.LANG_FILES = {
+      en: "./lang/en.json",
+      ja: "./lang/ja.json",
+      zh: "./lang/zh.json",
+      fa: "./lang/fa.json",
+      hi: "./lang/hi.json",
+      he: "./lang/he.json"
+    };
+  </script>
 
   <!-- ここから下はすべて main.js にまとめてあります -->
   <script src="./main.js"></script>
