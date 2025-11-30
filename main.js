@@ -103,7 +103,7 @@ function attachEnter(card){
       limit : card.dataset.limit,
       target: card.dataset.url,
       lang  : currentLang
-      // eventType / price はこの後ロビー側仕様を決めてから渡す
+      // eventType / price は後でロビー側に渡すタイミングで追加予定
     });
     location.href = `./lobby.html?${p.toString()}`;
   };
@@ -190,9 +190,10 @@ const mMonth = $('#mMonth'), mDay = $('#mDay'), mHour = $('#mHour'), mMinute = $
 const statusMsg=$('#statusMsg');
 const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
 
-// ★ 追加: イベント種別ラジオと金額入力
+// ★ Free/Paid ラジオ＋金額入力
 const mEventTypeRadios = document.querySelectorAll("input[name='mEventType']");
 const mPrice = $('#mPrice');
+const priceWrapper = $('#priceWrapper');
 
 // Quest / datetime-local 非対応検出
 const isQuest = /\b(OculusBrowser|Meta Quest Browser|MetaQuestBrowser|Quest)\b/i.test(navigator.userAgent);
@@ -292,7 +293,7 @@ function initStartInput(){
   }
 }
 
-// ★ イベント種別 UI 用ヘルパ
+// ★ EventType + Price UI
 function setEventTypeInModal(type, price){
   const val = (type === 'paid') ? 'paid' : 'free';
   if (mEventTypeRadios && mEventTypeRadios.length){
@@ -300,14 +301,14 @@ function setEventTypeInModal(type, price){
       r.checked = (r.value === val);
     });
   }
-  if (mPrice){
+  if (priceWrapper && mPrice){
     if (val === 'paid'){
-      mPrice.disabled = false;
+      priceWrapper.style.display = 'block';
       if (price !== undefined && price !== null){
         mPrice.value = String(price);
       }
     }else{
-      mPrice.disabled = true;
+      priceWrapper.style.display = 'none';
       mPrice.value = '';
     }
   }
@@ -340,7 +341,7 @@ function openModal(m='create', payload=null){
     editingRoomId=null;
     editingTarget=null;
     initStartInput();
-    // ★ 新規作成時は無料イベント＋価格クリア
+    // 新規作成時は無料扱い＆Price 非表示
     setEventTypeInModal('free', '');
   }else{
     const owners=readOwners();
@@ -393,7 +394,7 @@ function openModal(m='create', payload=null){
     }
     mTarget.value=payload.target||'';
 
-    // ★ 編集時：保存済みの種別・金額を反映（なければ無料扱い）
+    // 既存データの種別・金額を反映（無ければ free）
     const existingType  = payload.eventType || 'free';
     const existingPrice = payload.price || '';
     setEventTypeInModal(existingType, existingPrice);
@@ -460,7 +461,6 @@ async function postRegistry(item){
         target: item.target,
         owner,
         ownerKey,
-        // ★ 新フィールドもサーバーに送っておく（サーバー側で未使用なら無視される）
         eventType: item.eventType || 'free',
         price: item.price ?? ''
       })
@@ -541,7 +541,7 @@ async function onSubmit(){
     return;
   }
 
-  // ★ イベント種別と金額取得
+  // イベント種別と金額取得
   let eventType = 'free';
   if (mEventTypeRadios && mEventTypeRadios.length){
     const checked = Array.from(mEventTypeRadios).find(r=>r.checked);
@@ -577,7 +577,6 @@ async function onSubmit(){
     target,
     updatedAt: nowIso,
     createdAt: prev?.createdAt || nowIso,
-    // ★ 新フィールド
     eventType,
     price
   };
@@ -606,7 +605,7 @@ function onDuplicate(){
   const startISO = composeStartISO() || new Date().toISOString();
   const nowIso = new Date().toISOString();
 
-  // ★ 現在モーダルに入っている種別と金額を取得して複製にも反映
+  // 現在モーダルに入っている種別と金額を取得して複製にも反映
   let eventType = 'free';
   if (mEventTypeRadios && mEventTypeRadios.length){
     const checked = Array.from(mEventTypeRadios).find(r=>r.checked);
@@ -701,20 +700,16 @@ function startApp(){
     });
   }
 
-  // ★ イベント種別ラジオの挙動（無料なら金額入力を無効化）
+  // EventType ラジオの挙動（paid で Price 表示）
   if (mEventTypeRadios && mEventTypeRadios.length){
     mEventTypeRadios.forEach(r=>{
       r.addEventListener('change', ()=>{
-        if (!mPrice) return;
-        if (r.value === 'free' && r.checked){
-          mPrice.disabled = true;
-          mPrice.value = '';
-        }else if (r.value === 'paid' && r.checked){
-          mPrice.disabled = false;
-        }
+        if (!r.checked) return;
+        const newType = (r.value === 'paid') ? 'paid' : 'free';
+        setEventTypeInModal(newType, mPrice ? mPrice.value : '');
       });
     });
-    // 起動時は無料状態に揃える
+    // 起動時は free
     setEventTypeInModal('free', '');
   }
 
@@ -738,7 +733,7 @@ function startApp(){
 // （将来用）管理者パスワード関連
 const ADMIN_HASH="27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
 function toHex(buf){return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");}
-async function sha256(s){const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));return toHex(buf);}
+async function sha256(s){const buf=await_crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));return toHex(buf);}
 function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i);return r===0;}
 
 // ===== iframe ホバー時のスクロールロック =====
@@ -880,7 +875,7 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       if (lblTarget && t.modal.form.targetLabel) lblTarget.textContent = t.modal.form.targetLabel;
       const note = document.querySelector('.note');
       if (note && t.modal.form.targetNote) note.textContent = t.modal.form.targetNote;
-      // ※ Event type / Price のラベルは後で i18n に追加予定
+      // ※ Free/Paid/Price のラベル i18n は必要なら後で追加
     }
 
     // 作成/編集モーダル（ボタン類）
