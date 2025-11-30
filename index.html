@@ -7,15 +7,15 @@
   <link rel="stylesheet" href="./styles.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+J...&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="wrap">
     <header>
       <div class="brand-logo-text">Dokodemo Doors Fan Site</div>
       <div class="lang-switch">
-        <button type="button" class="lang-switch__toggle" id="langToggle">Language</button>
-        <div class="lang-switch__menu" id="langMenu" hidden>
+        <div class="lang-current" id="currentLangLabel">English</div>
+        <div class="lang-dropdown" id="langDropdown">
           <button type="button" data-lang="en">English</button>
           <button type="button" data-lang="ja">日本語</button>
           <button type="button" data-lang="zh">中文</button>
@@ -26,100 +26,61 @@
       </div>
     </header>
 
-    <div class="stage">
-      <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+    <main>
+      <section class="hero">
+        <div class="hero-inner">
+          <div class="hero-main">
+            <div class="hero-copy">
+              <p class="tagline" id="tagline">
+                1700+ VR travel videos to share the same moment, even when you are apart.
+              </p>
+              <div class="hero-buttons">
+                <a href="https://dokodemodoors.com" target="_blank" rel="noopener noreferrer" class="btn primary" id="visitSiteBtn">
+                  Visit Dokodemo Doors
+                </a>
+                <button class="btn ghost" id="aboutBtn">What is Dokodemo Doors?</button>
+                <button class="btn ghost" id="guideBtn">How to use Meetup Rooms?</button>
+              </div>
+            </div>
+            <div class="hero-logo">
+              <img src="./fansitelogo.png" alt="Dokodemo Doors Fan Site Logo">
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <!-- 白線の下に表示するボタン群 -->
-      <div class="intro-bar">
-        <button type="button" id="aboutBtn" class="intro-bar__button">
-          What is Dokodemo Doors?
-        </button>
-        <button type="button" id="guideBtn" class="intro-bar__button">
-          What is this fan site?
-        </button>
-      </div>
+      <section class="description">
+        <div class="description-inner">
+          <h2 id="aboutTitle">About this fan site</h2>
+          <p id="aboutLead">
+            This is an unofficial fan-made site for the online VR space "Dokodemo Doors".
+            You can create meetup rooms, gather friends, and watch 360° VR travel videos together in sync.
+          </p>
+        </div>
+      </section>
 
-      <iframe
-        id="webxr-iframe"
-        title="WebXR Earth"
-        src="./earth.html"
-        allow="xr-spatial-tracking; fullscreen"
-        scrolling="no">
-      </iframe>
-    </div>
+      <section class="meetups">
+        <div class="meetups-inner">
+          <div class="meetups-header">
+            <h2 id="meetupsTitle">待合室一覧</h2>
+            <p id="meetupsDescription">
+              Create a waiting room, share the URL, and enjoy the same VR travel video together.
+            </p>
+          </div>
 
-    <section class="meetups">
-      <div class="meetups__head">
-        <h2 class="meetups__title">Meetup Rooms</h2>
-        <button class="btn ghost head-create" id="openCreate">Create a room</button>
-      </div>
-      <div id="grid" class="grid"></div>
-    </section>
+          <div class="meetups-controls">
+            <button class="btn" id="create">Create new meetup room</button>
+          </div>
+
+          <div id="status" class="status-text" aria-live="polite"></div>
+
+          <div id="grid" class="grid"></div>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <!-- Site description modal -->
-  <div class="backdrop" id="aboutBackdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-labelledby="aboutTitle" aria-describedby="aboutBody">
-      <header>
-        <div id="aboutTitle">What is Dokodemo Doors?</div>
-        <div class="close" id="aboutClose" aria-label="Close">×</div>
-      </header>
-      <div class="body" id="aboutBody">
-        <p class="heading-large">A place where you can explore the world together, even when you're far apart</p>
-        <p style="padding-left: 1em;">
-          <a href="https://dokodemodoors.com/" target="_blank">Dokodemo Doors</a> is an online VR platform that offers a wide collection of 360-degree VR travel videos from around the world.
-        </p>
-        <p class="heading-strong">More than 1,700 videos available</p>
-        <p style="padding-left: 1em;">
-          Although YouTube also has VR content, no other site gathers this many VR travel videos in one place.
-        </p>
-        <p class="heading-strong">Watch together in perfect sync</p>
-        <p style="padding-left: 1em;">
-          By starting the video at the same time, you can share the exact same scenery while talking or using gestures.
-        </p>
-        <p>
-          Learn more
-          <a href="https://dokodemodoors.com/info/about-dokodemodoor" target="_blank">here</a>.
-        </p>
-      </div>
-      <div class="actions">
-        <button class="btn" id="aboutOk">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Fan site guide modal -->
-  <div class="backdrop" id="guideBackdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-labelledby="guideTitle" aria-describedby="guideBody">
-      <header>
-        <div id="guideTitle">What is this fan site?</div>
-        <div class="close" id="guideClose" aria-label="Close">×</div>
-      </header>
-      <div class="body" id="guideBody">
-        <p class="heading-large">An unofficial fan-made site that lets you choose destinations from a 3D globe</p>
-        <p>
-          I created this site with official permission because I wanted to pick destinations visually on a globe instead of from a traditional list view on the
-          <a href="https://dokodemodoors.com/" target="_blank">official site</a>.
-        </p>
-        <p class="heading-strong">1. Subscription required</p>
-        <p style="padding-left: 1em;">
-          Viewing each world requires a subscription through the official website. If you're not subscribed, entering a world will redirect you to the subscription page.<br>
-          Some worlds are available for free during limited periods, and those are easiest to find from the
-          <a href="https://dokodemodoors.com/" target="_blank">official homepage</a>
-          under “Recommended Worlds.”
-        </p>
-        <p class="heading-strong">2. Meta Quest 2 or higher recommended</p>
-        <p style="padding-left: 1em;">
-          Although the service works on various devices, the VR experience is overwhelmingly superior. For best results, Meta Quest 2 or higher is recommended.
-        </p>
-      </div>
-      <div class="actions">
-        <button class="btn" id="guideOk">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Create / Edit modal -->
+  <!-- Create / Edit room modal -->
   <div class="backdrop" id="backdrop">
     <div class="modal">
       <header>
@@ -157,11 +118,38 @@
 
           <div>
             <label for="mTarget">Tour / world URL</label>
-            <input id="mTarget" placeholder="https://dokodemodoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
+            <input id="mTarget" placeholder="https://dokodemodoo...url" spellcheck="false" autocapitalize="off" autocomplete="off">
             <div class="note">
               After creation, the URL cannot be changed. To change it, duplicate the room and create a new one.
+  
             </div>
           </div>
+
+          <!-- ▼ 追加：有料/無料 と金額入力 -->
+          <div>
+            <label>Event fee</label>
+            <div class="fee-row">
+              <label>
+                <input type="radio" name="mFeeType" id="mFeeFree" value="free" checked>
+                Free event
+              </label>
+              <label style="margin-left:12px;">
+                <input type="radio" name="mFeeType" id="mFeePaid" value="paid">
+                Paid event
+              </label>
+              <input
+                id="mFeeAmount"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="1"
+                placeholder="Amount (JPY)"
+                style="margin-left:12px; max-width:160px;"
+              >
+            </div>
+          </div>
+          <!-- ▲ 追加ここまで -->
+
         </div>
       </div>
       <div class="actions">
@@ -176,14 +164,65 @@
     </div>
   </div>
 
+  <!-- About Dokodemo Doors modal -->
+  <div class="backdrop" id="aboutBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="aboutTitle" aria-describedby="aboutBody">
+      <header>
+        <div id="aboutModalTitle">What is Dokodemo Doors?</div>
+        <div class="close" id="aboutClose" aria-label="Close">×</div>
+      </header>
+      <div class="body" id="aboutBody">
+        <span style="font-size: 24px; font-weight: bold">会えなくても、共に旅を分かち合える場所がある</span><br>
+        <span style="text-indent: 2em;">オンラインVR空間「どこでもドア」は、世界の360度VR旅行動画を集めたVR旅行サイトです。</span><br>
+        <span style="font-size: 34px; font-weight: bold">掲載動画数1,700本以上</span>（2025年11月現在）<br>
+        <span style="text-indent: 2em;">YouTubeにも多くのVR動画がありますが、世界中のVR旅行動画がここまで一つの場所に集まっているのは「どこでもドア」だけです。</span><br>
+        <span style="text-indent: 2em;">PC、スマートフォン、VRヘッドセットからアクセスでき、行きたい場所のVR旅行動画を選んでお楽しみいただけます。</span><br>
+        <br>
+        <span style="font-size: 24px; font-weight: bold">同じ瞬間を、離れた誰かと一緒に</span><br>
+        <span style="text-indent: 2em;">一人でじっくり旅するのも良いですが、「どこでもドア」では、離れた相手と同じVR動画を、完全に同期した状態で一緒に体験できます。</span><br>
+        <span style="text-indent: 2em;">まるで同じ場所を歩いているかのように、同じタイミングで同じ景色を共有できる──それが「どこでもドア」の特長です。</span><br>
+      </div>
+      <div class="actions">
+        <button class="btn" id="aboutOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fan site guide modal -->
+  <div class="backdrop" id="guideBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="guideTitle" aria-describedby="guideBody">
+      <header>
+        <div id="guideTitle">What is this fan site?</div>
+        <div class="close" id="guideClose" aria-label="Close">×</div>
+      </header>
+      <div class="body" id="guideBody">
+        <p>
+          This site is an unofficial fan-made hub for arranging meetups in the online VR space
+          <strong>“Dokodemo Doors”</strong>.
+        </p>
+        <p>
+          You can create a <strong>waiting room</strong>, share its URL with friends or family,
+          and enjoy the same 360° VR travel video at exactly the same timing.
+        </p>
+        <p>
+          This site only provides the meetup coordination function.
+          The VR videos themselves are streamed from the official Dokodemo Doors website.
+        </p>
+      </div>
+      <div class="actions">
+        <button class="btn" id="guideOk">OK</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Custom alert (destination URL info) -->
-  <div class="backdrop" id="alertBackdrop" aria-hidden="true">
+  <div class="backdrop" id="alertBackdrop">
     <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
       <header>
-        <div id="alertTitle">About the URL</div>
-        <div class="close" id="alertClose" aria-label="Close">×</div>
+        <div id="alertTitle">About the destination URL</div>
       </header>
       <div class="body" id="alertBody">
+        The waiting room URL will take participants to the VR travel content on the Dokodemo Doors website.
         Please enter a Dokodemo Doors tour or world URL.
       </div>
       <div class="actions">
