@@ -129,6 +129,16 @@ function linkify(text) {
   const targetParam = urlParams.get("target") || "";
   const roomId      = urlParams.get("roomId") || "";
 
+  // ★ meetups-store からも eventType / price を取得
+  const storeItem   = roomId ? readStore().find((x) => x.roomId === roomId) : null;
+  const eventTypeParam = urlParams.get("eventType");
+  const priceParam     = urlParams.get("price");
+
+  let eventType = eventTypeParam || (storeItem && storeItem.eventType) || "free";
+  let price     = priceParam     || (storeItem && storeItem.price)     || "";
+  eventType = eventType === "paid" ? "paid" : "free";
+  price = (price || "").toString().trim();
+
   const storedNick  = localStorage.getItem("nickname");
   const user        = storedNick || `Guest-${Math.random().toString(16).slice(2, 6)}`;
   const isMobile    = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -139,11 +149,43 @@ function linkify(text) {
   document.title = titleParam + " | " + t("lobby.pageTitleSuffix", "待ち合わせロビー");
 
   let startDate = null;
+  const metaEl = $("#meta");
+
+  // ★ イベント種別の表示文言（i18n対応しやすいよう t() 経由、フォールバック英語）
+  let eventLabel = "";
+  if (eventType === "paid") {
+    if (price) {
+      const tpl = t("lobby.eventPaidWithPrice", "Paid event ({price})");
+      eventLabel = tpl.replace("{price}", price);
+    } else {
+      eventLabel = t("lobby.eventPaid", "Paid event");
+    }
+  } else {
+    eventLabel = t("lobby.eventFree", "Free event");
+  }
+
   if (startParam) {
     startDate = new Date(startParam);
-    $("#meta").textContent = t("lobby.startLabel", "開始時刻：") + startDate.toLocaleString();
+    const baseText = t("lobby.startLabel", "開始時刻：") + startDate.toLocaleString();
+
+    if (metaEl) {
+      // テキスト部分
+      metaEl.textContent = baseText;
+
+      // 開始時刻の「後ろに隙間を開けて」イベント種別を表示
+      const span = document.createElement("span");
+      span.style.marginLeft = "1.5rem";
+      span.textContent = eventLabel;
+      metaEl.appendChild(span);
+    }
   } else {
-    $("#meta").textContent = t("lobby.startLabel", "開始時刻：") + "—";
+    if (metaEl) {
+      metaEl.textContent = t("lobby.startLabel", "開始時刻：") + "—";
+      const span = document.createElement("span");
+      span.style.marginLeft = "1.5rem";
+      span.textContent = eventLabel;
+      metaEl.appendChild(span);
+    }
   }
 
   if (Number.isFinite(limitParam) && limitParam > 0) {
@@ -237,7 +279,9 @@ function linkify(text) {
       user,
       isMobile,
       isIOS,
-      lang: currentLang
+      lang: currentLang,
+      eventType,
+      price
     },
     null,
     2
@@ -429,8 +473,8 @@ function linkify(text) {
   const iceServers = [
     {
       urls: [
-        "stun:stun.l.google.com:19302",
-        "stun:stun1.l.google.com:19302"
+      "stun:stun.l.google.com:19302",
+      "stun:stun1.l.google.com:19302"
       ]
     }
   ];
