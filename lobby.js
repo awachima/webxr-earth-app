@@ -89,6 +89,15 @@ function applyLobbyTexts() {
 
   const footer = $("#lobbyFooter");
   if (footer) footer.textContent = t("lobby.footer", "© DokodemoDoors");
+
+  // ★ 追加：執事に質問（音声）ボタンのテキスト
+  const voiceAskBtn = $("#voiceAskBtn");
+  if (voiceAskBtn) {
+    voiceAskBtn.textContent = t(
+      "lobby.voiceAskButton",
+      "執事に質問（音声）"
+    );
+  }
 }
 
 async function loadLobbyLanguage(lang) {
@@ -469,6 +478,138 @@ function linkify(text) {
     }
   });
 
+  // ========= 「執事に質問（音声）」 Push-to-Talk 音声認識 =========
+  const voiceAskBtn = $("#voiceAskBtn");
+  const voiceAskStatus = $("#voiceAskStatus");
+
+  let recognition = null;
+  let recognizing = false;
+  let gotResult = false;
+
+  function setupVoiceAsk() {
+    if (!voiceAskBtn || !voiceAskStatus) return;
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      // 未対応ブラウザ：ボタン非表示＆メッセージ表示
+      voiceAskBtn.style.display = "none";
+      voiceAskStatus.textContent = t(
+        "lobby.voiceAskNotSupported",
+        "お使いのブラウザでは音声での質問機能はご利用いただけません。"
+      );
+      return;
+    }
+
+    recognition = new SR();
+    // 言語はとりあえず ja / en の2択運用
+    recognition.lang =
+      currentLang === "ja" || currentLang === "ja-JP" ? "ja-JP" : "en-US";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      recognizing = true;
+      gotResult = false;
+      voiceAskBtn.classList.add("active");
+      voiceAskStatus.textContent = t(
+        "lobby.voiceAskListening",
+        "「執事に質問」をお話しください…（ボタンから指を離すと終了します）"
+      );
+    };
+
+    recognition.onerror = (ev) => {
+      console.error("speech error", ev);
+      voiceAskStatus.textContent = t(
+        "lobby.voiceAskError",
+        "音声認識中にエラーが発生しました。もう一度お試しください。"
+      );
+    };
+
+    recognition.onresult = (ev) => {
+      gotResult = true;
+      let text = "";
+      for (let i = 0; i < ev.results.length; i++) {
+        text += ev.results[i][0].transcript;
+      }
+      text = (text || "").trim();
+      if (text) {
+        // 認識結果をそのままチャットに送信（Reginaldへの質問として扱われる）
+        chatInput.value = text;
+        chatSend.click();
+        voiceAskStatus.textContent = t(
+          "lobby.voiceAskSent",
+          "音声でのご質問を送信しました。"
+        );
+      } else {
+        voiceAskStatus.textContent = t(
+          "lobby.voiceAskNoText",
+          "音声が認識できませんでした。もう一度お試しください。"
+        );
+      }
+    };
+
+    recognition.onend = () => {
+      recognizing = false;
+      voiceAskBtn.classList.remove("active");
+      if (!gotResult) {
+        // 無言だった・短すぎた等
+        voiceAskStatus.textContent = t(
+          "lobby.voiceAskStopped",
+          "音声入力を終了しました。"
+        );
+      }
+    };
+
+    const startRec = () => {
+      if (!recognition) return;
+      if (recognizing) {
+        try {
+          recognition.stop();
+        } catch (_) {}
+        return;
+      }
+      try {
+        recognition.start();
+      } catch (e) {
+        console.error("speech start error", e);
+      }
+    };
+
+    const stopRec = () => {
+      if (!recognition) return;
+      if (!recognizing) return;
+      try {
+        recognition.stop();
+      } catch (e) {
+        console.error("speech stop error", e);
+      }
+    };
+
+    // Pointerベースで「押している間」を表現（マウス・タッチ共通）
+    voiceAskBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      startRec();
+    });
+    voiceAskBtn.addEventListener("pointerup", (e) => {
+      e.preventDefault();
+      stopRec();
+    });
+    voiceAskBtn.addEventListener("pointercancel", () => {
+      stopRec();
+    });
+    voiceAskBtn.addEventListener("pointerleave", () => {
+      // 押したまま外に出たときも止める
+      stopRec();
+    });
+
+    // キーボード操作向け（Space/Enter押下）での click フォールバック
+    voiceAskBtn.addEventListener("click", (e) => {
+      // pointerdown / pointerup が来ている場合は二重起動になるので、簡易防御
+      if (e.detail === 0) return; // キーボード由来などはそのまま
+      // クリック連打対策で何もしない（pointer系で処理）
+    });
+  }
+
   // ========= WebRTC (voice) =========
   const iceServers = [
     {
@@ -769,4 +910,7 @@ function linkify(text) {
   // 初期状態メッセージ（接続前）
   chatStatus.textContent = t("lobby.chatInitial", "接続していません");
   updateVoiceUI();
+
+  // ★ 最後に「執事に質問（音声）」機能を初期化
+  setupVoiceAsk();
 })();

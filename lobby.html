@@ -59,6 +59,13 @@
               <input id="chatInput" placeholder="メッセージを入力…" maxlength="2000">
               <button id="chatSend" class="btn" type="button">送信</button>
             </div>
+            <!-- ★ 追加：執事に質問（音声）ボタンとステータス表示 -->
+            <div class="chat-voice-ask" style="margin-top:8px;">
+              <button id="voiceAskBtn" class="btn ghost" type="button">
+                執事に質問（音声）
+              </button>
+              <div id="voiceAskStatus" class="status" style="margin-top:4px;"></div>
+            </div>
           </div>
           <div class="status" id="chatStatus" style="margin-top:8px;color:#0a7f3f">接続していません</div>
         </div>
