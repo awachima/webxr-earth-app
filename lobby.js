@@ -152,7 +152,6 @@ function linkify(text) {
   const storedNick  = localStorage.getItem("nickname");
   const user        = storedNick || `Guest-${Math.random().toString(16).slice(2, 6)}`;
   const isMobile    = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  const isIOS       = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   $("#title").textContent = titleParam;
   document.title = titleParam + " | " + t("lobby.pageTitleSuffix", "待ち合わせロビー");
@@ -199,7 +198,10 @@ function linkify(text) {
     const tpl = t("lobby.participantLimit", "参加上限 {limit} 名");
     pill.textContent = tpl.replace("{limit}", String(limitParam));
     pill.style.display = "inline-flex";
-    $("#limitPill").replaceWith(pill);
+    const old = $("#limitPill");
+    if (old && old.parentNode) {
+      old.parentNode.replaceChild(pill, old);
+    }
   }
 
   const enterBtn = $("#enter");
@@ -281,7 +283,6 @@ function linkify(text) {
       roomId,
       user,
       isMobile,
-      isIOS,
       lang: currentLang,
       eventType,
       price
@@ -466,18 +467,15 @@ function linkify(text) {
     }
   });
 
-  // ========= 「執事に質問（音声）」 STT (Workers AI Whisper) 版 =========
+  // ========= 「執事に質問（音声）」 STT Worker 版 =========
   const voiceAskBtn = $("#voiceAskBtn");
   const voiceAskStatus = $("#voiceAskStatus");
 
-  // ★ STT Worker のエンドポイント
+  // STT Worker のエンドポイント（必要に応じて ?lang=ja などを付与）
   const STT_ENDPOINT = "https://do-stt.awachima7.workers.dev/";
 
   function setupVoiceAsk() {
     if (!voiceAskBtn || !voiceAskStatus) return;
-
-    const baseLabel = t("lobby.voiceAskButton", "執事に質問（音声）");
-    const recordingLabel = t("lobby.voiceAskRecordingBtn", "録音停止");
 
     const hasMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
     const hasRecorder = typeof window.MediaRecorder !== "undefined";
@@ -491,10 +489,14 @@ function linkify(text) {
       return;
     }
 
+    const baseLabel = t("lobby.voiceAskButton", "執事に質問（音声）");
+    const recordingLabel = t("lobby.voiceAskRecordingBtn", "録音停止");
+
     let mediaRecorder = null;
     let audioChunks = [];
     let isRecording = false;
     let isBusy = false;
+    let recordStartTime = 0;
 
     async function sendAudioToServer(blob) {
       const processingText = t(
@@ -565,6 +567,7 @@ function linkify(text) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
+            channelCount: 1,
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true
@@ -573,6 +576,7 @@ function linkify(text) {
 
         audioChunks = [];
         mediaRecorder = new MediaRecorder(stream);
+        recordStartTime = performance.now();
 
         mediaRecorder.ondataavailable = (ev) => {
           if (ev.data && ev.data.size > 0) {
@@ -581,29 +585,43 @@ function linkify(text) {
         };
 
         mediaRecorder.onstop = async () => {
+          const durationMs = performance.now() - recordStartTime;
+
           try {
-            try {
-              stream.getTracks().forEach((t) => t.stop());
-            } catch (e) {}
+            stream.getTracks().forEach((t) => t.stop());
+          } catch (e) {}
 
-            if (!audioChunks.length) {
-              const stoppedText = t(
-                "lobby.voiceAskStopped",
-                "音声入力を終了しました。"
-              );
-              voiceAskStatus.textContent = stoppedText;
-              return;
-            }
-
-            const blobType = mediaRecorder.mimeType || "audio/webm";
-            const blob = new Blob(audioChunks, { type: blobType });
-
-            await sendAudioToServer(blob);
-          } finally {
+          if (durationMs < 800) {
+            const tooShortText = t(
+              "lobby.voiceAskTooShort",
+              "音声が短すぎました。1〜2秒ほどはっきりとお話しください。"
+            );
+            voiceAskStatus.textContent = tooShortText;
             mediaRecorder = null;
             audioChunks = [];
             isBusy = false;
+            return;
           }
+
+          if (!audioChunks.length) {
+            const stoppedText = t(
+              "lobby.voiceAskStopped",
+              "音声入力を終了しました。"
+            );
+            voiceAskStatus.textContent = stoppedText;
+            mediaRecorder = null;
+            isBusy = false;
+            return;
+          }
+
+          const mime = mediaRecorder.mimeType || "audio/webm";
+          const blob = new Blob(audioChunks, { type: mime });
+
+          await sendAudioToServer(blob);
+
+          mediaRecorder = null;
+          audioChunks = [];
+          isBusy = false;
         };
 
         mediaRecorder.start();
@@ -614,7 +632,7 @@ function linkify(text) {
         console.error("voiceAsk getUserMedia error", e);
         const micError = t(
           "lobby.voiceAskMicError",
-          "マイクが使用できません。ブラウザの設定をご確認ください。"
+          "マイクが使用できません。ブラウザや端末の設定をご確認ください。"
         );
         voiceAskStatus.textContent = micError;
         isRecording = false;
@@ -659,7 +677,7 @@ function linkify(text) {
 
     const readyText = t(
       "lobby.voiceAskReady",
-      "ボタンを押すと、執事への質問を音声で録音します。"
+      "ボタンを押してから、1〜3秒ほど「執事への質問」をお話しください。"
     );
     voiceAskStatus.textContent = readyText;
   }
@@ -668,8 +686,8 @@ function linkify(text) {
   const iceServers = [
     {
       urls: [
-        "stun:stun.l.google.com:19302",
-        "stun:stun1.l.google.com:19302"
+      "stun:stun.l.google.com:19302",
+      "stun:stun1.l.google.com:19302"
       ]
     }
   ];
@@ -960,8 +978,10 @@ function linkify(text) {
   }
   setupMobileAudioGate();
 
+  // 初期状態メッセージ（接続前）
   chatStatus.textContent = t("lobby.chatInitial", "接続していません");
   updateVoiceUI();
 
+  // ★ 最後に「執事に質問（音声）」機能を初期化
   setupVoiceAsk();
 })();
