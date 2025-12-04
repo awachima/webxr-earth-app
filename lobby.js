@@ -1,10 +1,10 @@
 // ===== 共通ヘルパー・定数 =====
-const $  = (s) => document.querySelector(s);
-const S  = "meetups-store";
-const O  = "meetups-owners";
+const $ = (s) => document.querySelector(s);
+const S = "meetups-store";
+const O = "meetups-owners";
 const NEGATIVE_LIMIT_MS = 20 * 60 * 1000;
 
-const readStore  = () => JSON.parse(localStorage.getItem(S) || "[]");
+const readStore = () => JSON.parse(localStorage.getItem(S) || "[]");
 const writeStore = (arr) => localStorage.setItem(S, JSON.stringify(arr));
 const readOwners = () => JSON.parse(localStorage.getItem(O) || "{}");
 const writeOwners = (map) => localStorage.setItem(O, JSON.stringify(map));
@@ -45,7 +45,11 @@ function detectLang() {
   let currentLang = (function () {
     try {
       const saved = localStorage.getItem("lang");
-      if (saved) return saved;
+      if (saved) {
+        // ★ 互換性対応: "ja" は "ja-JP" とみなす
+        if (saved === "ja") return "ja-JP";
+        return saved;
+      }
     } catch (e) {}
     return detectLang();
   })();
@@ -84,7 +88,10 @@ function detectLang() {
 
     const countdownLabel = $("#countdownLabel");
     if (countdownLabel)
-      countdownLabel.textContent = t("lobby.countdownLabel", "開始までの時間");
+      countdownLabel.textContent = t(
+        "lobby.countdownLabel",
+        "開始までの時間"
+      );
 
     const infoLabel = $("#infoLabel");
     if (infoLabel)
@@ -102,7 +109,10 @@ function detectLang() {
 
     const eventTypeLabel = $("#eventTypeLabel");
     if (eventTypeLabel)
-      eventTypeLabel.textContent = t("lobby.eventTypeLabel", "イベント種別");
+      eventTypeLabel.textContent = t(
+        "lobby.eventTypeLabel",
+        "イベント種別"
+      );
 
     const priceLabel = $("#priceLabel");
     if (priceLabel)
@@ -168,7 +178,11 @@ function detectLang() {
 
     const voiceAskBtn = $("#voiceAskBtn");
     if (voiceAskBtn)
-      voiceAskBtn.textContent = t("lobby.voiceAskBtn", "押して話す");
+      // ★ デフォルト文言を「執事に質問（音声）」に統一
+      voiceAskBtn.textContent = t(
+        "lobby.voiceAskBtn",
+        "執事に質問（音声）"
+      );
 
     const langSelect = $("#langSelect");
     if (langSelect) {
@@ -197,7 +211,8 @@ function detectLang() {
 
   async function loadLangData(lang) {
     let url = "./lang/en.json";
-    if (lang === "ja-JP") url = "./lang/ja.json";
+    // ★ "ja" も "ja-JP" と同じ扱いにする
+    if (lang === "ja-JP" || lang === "ja") url = "./lang/ja.json";
     else if (lang === "zh-CN") url = "./lang/zh.json";
     else if (lang === "fa") url = "./lang/fa.json";
     else if (lang === "hi") url = "./lang/hi.json";
@@ -286,7 +301,10 @@ function detectLang() {
 
   if (eventTypeValue) {
     if (eventType === "free") {
-      eventTypeValue.textContent = t("lobby.eventTypeFree", "無料イベント");
+      eventTypeValue.textContent = t(
+        "lobby.eventTypeFree",
+        "無料イベント"
+      );
     } else if (eventType === "paid") {
       eventTypeValue.textContent = t("lobby.eventTypePaid", "有料イベント");
     } else {
@@ -331,7 +349,10 @@ function detectLang() {
         const m = Math.floor((totalSec % 3600) / 60);
         const s = totalSec % 60;
         $("#count").textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
-        $("#status").textContent = t("lobby.statusWaiting", "開始までお待ちください。");
+        $("#status").textContent = t(
+          "lobby.statusWaiting",
+          "開始までお待ちください。"
+        );
         requestAnimationFrame(update);
         return;
       }
@@ -340,10 +361,10 @@ function detectLang() {
       const remainMs = expireAt - now;
       if (remainMs > 0) {
         const remainMin = Math.ceil(remainMs / 60000);
-        const label = t("lobby.statusDuring", "消滅まで後{minutes}分").replace(
-          "{minutes}",
-          pad(remainMin)
-        );
+        const label = t(
+          "lobby.statusDuring",
+          "消滅まで後{minutes}分"
+        ).replace("{minutes}", pad(remainMin));
         $("#count").textContent = label;
         $("#status").textContent = t(
           "lobby.statusOngoing",
@@ -353,7 +374,10 @@ function detectLang() {
         return;
       }
 
-      $("#count").textContent = t("lobby.statusExpired", "この待合室は終了しました");
+      $("#count").textContent = t(
+        "lobby.statusExpired",
+        "この待合室は終了しました"
+      );
       $("#status").textContent = t(
         "lobby.statusExpiredDetail",
         "イベントは終了し、待合室は無効になっています。"
@@ -390,11 +414,14 @@ function detectLang() {
     return "Guest";
   })();
 
-  const setNameBtn = $("#setName");
-  if (setNameBtn) {
-    setNameBtn.addEventListener("click", () => {
+  const setNameBtn2 = $("#setName");
+  if (setNameBtn2) {
+    setNameBtn2.addEventListener("click", () => {
       const newName = prompt(
-        t("lobby.setNamePrompt", "チャット用のニックネームを入力してください。"),
+        t(
+          "lobby.setNamePrompt",
+          "チャット用のニックネームを入力してください。"
+        ),
         user || ""
       );
       if (!newName) return;
@@ -446,6 +473,16 @@ function detectLang() {
 
   const chatLog = $("#chatLog");
 
+  function linkify(text) {
+    if (!text) return "";
+    const urlRegex =
+      /(https?:\/\/[^\s]+)/g;
+    return text.replace(
+      urlRegex,
+      '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
+  }
+
   function addMsg(elClass, text) {
     const div = document.createElement("div");
     div.className = "msg " + elClass;
@@ -469,7 +506,11 @@ function detectLang() {
     if (thinkingElem) return;
     const div = document.createElement("div");
     div.className = "msg sys thinking";
-    div.textContent = t("lobby.botThinking", "Reginald is thinking…");
+    // ★ フォールバックを日本語に
+    div.textContent = t(
+      "lobby.botThinking",
+      "Reginald が考え中です…"
+    );
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
     thinkingElem = div;
@@ -513,7 +554,10 @@ function detectLang() {
     try {
       ws = new WebSocket(CHAT_URL);
       ws.onopen = () => {
-        chatStatus.textContent = t("lobby.chatConnected", "接続しました");
+        chatStatus.textContent = t(
+          "lobby.chatConnected",
+          "接続しました"
+        );
         logDebug("WebSocket connected");
       };
       ws.onclose = () => {
@@ -525,7 +569,10 @@ function detectLang() {
         setTimeout(connect, 1500);
       };
       ws.onerror = (e) => {
-        chatStatus.textContent = t("lobby.chatError", "エラーが発生しました");
+        chatStatus.textContent = t(
+          "lobby.chatError",
+          "エラーが発生しました"
+        );
         logDebug("WebSocket error: " + e?.message);
       };
       ws.onmessage = (ev) => {
@@ -558,7 +605,10 @@ function detectLang() {
                     hideThinking();
                   }
                   const klass = obj.name === user ? "me" : "other";
-                  const text = t("lobby.chatLine", "{name}: {text}")
+                  const text = t(
+                    "lobby.chatLine",
+                    "{name}: {text}"
+                  )
                     .replace("{name}", obj.name || "")
                     .replace("{text}", obj.text || "");
                   addMsg(klass, text);
@@ -1058,4 +1108,3 @@ function detectLang() {
   }
   setupVoiceAsk();
 })();
-
