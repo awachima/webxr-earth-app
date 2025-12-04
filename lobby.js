@@ -90,7 +90,6 @@ function applyLobbyTexts() {
   const footer = $("#lobbyFooter");
   if (footer) footer.textContent = t("lobby.footer", "© DokodemoDoors");
 
-  // ★ 追加：執事に質問（音声）ボタンのテキスト
   const voiceAskBtn = $("#voiceAskBtn");
   if (voiceAskBtn) {
     voiceAskBtn.textContent = t(
@@ -138,34 +137,34 @@ function linkify(text) {
   const targetParam = urlParams.get("target") || "";
   const roomId      = urlParams.get("roomId") || "";
 
-  // ★ meetups-store からも eventType / price を取得
   const storeItem   = roomId ? readStore().find((x) => x.roomId === roomId) : null;
   const eventTypeParam = urlParams.get("eventType");
-  const priceParam     = urlParams.get("price");
+  const priceParam     = parseInt(urlParams.get("price") || "0", 10);
 
   let eventType = eventTypeParam || (storeItem && storeItem.eventType) || "free";
-  let price     = priceParam     || (storeItem && storeItem.price)     || "";
+  let price     = Number.isFinite(priceParam)
+    ? priceParam
+    : (storeItem && storeItem.price) || 0;
+
   eventType = eventType === "paid" ? "paid" : "free";
-  price = (price || "").toString().trim();
+  price = price || 0;
 
   const storedNick  = localStorage.getItem("nickname");
   const user        = storedNick || `Guest-${Math.random().toString(16).slice(2, 6)}`;
   const isMobile    = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   const isIOS       = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-  // タイトル・meta
   $("#title").textContent = titleParam;
   document.title = titleParam + " | " + t("lobby.pageTitleSuffix", "待ち合わせロビー");
 
   let startDate = null;
   const metaEl = $("#meta");
 
-  // ★ イベント種別の表示文言（i18n対応しやすいよう t() 経由、フォールバック英語）
   let eventLabel = "";
   if (eventType === "paid") {
-    if (price) {
-      const tpl = t("lobby.eventPaidWithPrice", "Paid event ({price})");
-      eventLabel = tpl.replace("{price}", price);
+    if (price > 0) {
+      const base = t("lobby.eventPaidWithPrice", "Paid event ({price} JPY)");
+      eventLabel = base.replace("{price}", String(price));
     } else {
       eventLabel = t("lobby.eventPaid", "Paid event");
     }
@@ -178,10 +177,7 @@ function linkify(text) {
     const baseText = t("lobby.startLabel", "開始時刻：") + startDate.toLocaleString();
 
     if (metaEl) {
-      // テキスト部分
       metaEl.textContent = baseText;
-
-      // 開始時刻の「後ろに隙間を開けて」イベント種別を表示
       const span = document.createElement("span");
       span.style.marginLeft = "1.5rem";
       span.textContent = eventLabel;
@@ -262,7 +258,6 @@ function linkify(text) {
   }
   requestAnimationFrame(tick);
 
-  // URL コピー
   $("#copy").onclick = async () => {
     const url = location.href;
     try {
@@ -277,7 +272,6 @@ function linkify(text) {
     }
   };
 
-  // デバッグ情報（画面には非表示）
   $("#debug").textContent = JSON.stringify(
     {
       title: titleParam,
@@ -296,7 +290,6 @@ function linkify(text) {
     2
   );
 
-  // ニックネーム設定
   $("#setName").onclick = function setNickname() {
     const current = localStorage.getItem("nickname") || user;
     const promptLabel = t(
@@ -314,7 +307,6 @@ function linkify(text) {
     alert(savedMsg);
   };
 
-  // ===== WebSocket（チャット + シグナリング） =====
   const WS_BASE = "wss://do-chat.awachima7.workers.dev";
   const pageParams = new URLSearchParams(location.search);
   pageParams.set("user", user);
@@ -396,13 +388,11 @@ function linkify(text) {
         try {
           const data = JSON.parse(ev.data);
 
-          // WebRTC シグナリング
           if (data.rtc) {
             onRtcSignal(data);
             return;
           }
 
-          // システムメッセージ
           if (data.sys) {
             if (data.type === "welcome") {
               myId = data.id;
@@ -447,7 +437,6 @@ function linkify(text) {
             return;
           }
 
-          // 通常チャット
           const obj = data;
           const klass = obj.name === user ? "me" : "other";
           const label = t("lobby.chatLine", "{name}: {text}")
@@ -455,7 +444,6 @@ function linkify(text) {
             .replace("{text}", obj.text || "");
           addMsg(klass, label);
         } catch {
-          // 非 JSON は無視
         }
       };
     } catch (e) {
@@ -478,20 +466,23 @@ function linkify(text) {
     }
   });
 
-  // ========= 「執事に質問（音声）」 Push-to-Talk 音声認識 =========
+  // ========= 「執事に質問（音声）」 STT (Workers AI Whisper) 版 =========
   const voiceAskBtn = $("#voiceAskBtn");
   const voiceAskStatus = $("#voiceAskStatus");
 
-  let recognition = null;
-  let recognizing = false;
-  let gotResult = false;
+  // ★ STT Worker のエンドポイント
+  const STT_ENDPOINT = "https://do-stt.awachima7.workers.dev/";
 
   function setupVoiceAsk() {
     if (!voiceAskBtn || !voiceAskStatus) return;
 
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      // 未対応ブラウザ：ボタン非表示＆メッセージ表示
+    const baseLabel = t("lobby.voiceAskButton", "執事に質問（音声）");
+    const recordingLabel = t("lobby.voiceAskRecordingBtn", "録音停止");
+
+    const hasMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    const hasRecorder = typeof window.MediaRecorder !== "undefined";
+
+    if (!hasMedia || !hasRecorder) {
       voiceAskBtn.style.display = "none";
       voiceAskStatus.textContent = t(
         "lobby.voiceAskNotSupported",
@@ -500,122 +491,185 @@ function linkify(text) {
       return;
     }
 
-    recognition = new SR();
-    // 言語はとりあえず ja / en の2択運用
-    recognition.lang =
-      currentLang === "ja" || currentLang === "ja-JP" ? "ja-JP" : "en-US";
-    recognition.interimResults = false;
-    recognition.continuous = false;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let isBusy = false;
 
-    recognition.onstart = () => {
-      recognizing = true;
-      gotResult = false;
-      voiceAskBtn.classList.add("active");
-      voiceAskStatus.textContent = t(
-        "lobby.voiceAskListening",
-        "「執事に質問」をお話しください…（ボタンから指を離すと終了します）"
+    async function sendAudioToServer(blob) {
+      const processingText = t(
+        "lobby.voiceAskProcessing",
+        "音声をテキストに変換しています…"
       );
-    };
-
-    recognition.onerror = (ev) => {
-      console.error("speech error", ev);
-      voiceAskStatus.textContent = t(
+      const sentText = t(
+        "lobby.voiceAskSent",
+        "音声でのご質問を送信しました。"
+      );
+      const noText = t(
+        "lobby.voiceAskNoText",
+        "音声が認識できませんでした。もう一度お試しください。"
+      );
+      const errorText = t(
         "lobby.voiceAskError",
         "音声認識中にエラーが発生しました。もう一度お試しください。"
       );
-    };
 
-    recognition.onresult = (ev) => {
-      gotResult = true;
-      let text = "";
-      for (let i = 0; i < ev.results.length; i++) {
-        text += ev.results[i][0].transcript;
-      }
-      text = (text || "").trim();
-      if (text) {
-        // 認識結果をそのままチャットに送信（Reginaldへの質問として扱われる）
-        chatInput.value = text;
-        chatSend.click();
-        voiceAskStatus.textContent = t(
-          "lobby.voiceAskSent",
-          "音声でのご質問を送信しました。"
-        );
-      } else {
-        voiceAskStatus.textContent = t(
-          "lobby.voiceAskNoText",
-          "音声が認識できませんでした。もう一度お試しください。"
-        );
-      }
-    };
+      voiceAskStatus.textContent = processingText;
 
-    recognition.onend = () => {
-      recognizing = false;
-      voiceAskBtn.classList.remove("active");
-      if (!gotResult) {
-        // 無言だった・短すぎた等
-        voiceAskStatus.textContent = t(
-          "lobby.voiceAskStopped",
-          "音声入力を終了しました。"
-        );
-      }
-    };
+      try {
+        const res = await fetch(STT_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": blob.type || "application/octet-stream"
+          },
+          body: blob
+        });
 
-    const startRec = () => {
-      if (!recognition) return;
-      if (recognizing) {
+        if (!res.ok) {
+          console.error("STT response not ok:", res.status, await res.text());
+          voiceAskStatus.textContent = errorText;
+          return;
+        }
+
+        let data = null;
         try {
-          recognition.stop();
-        } catch (_) {}
+          data = await res.json();
+        } catch (e) {
+          console.error("STT json parse error", e);
+        }
+
+        const text = (data && typeof data.text === "string" ? data.text : "").trim();
+
+        if (text) {
+          chatInput.value = text;
+          chatSend.click();
+          voiceAskStatus.textContent = sentText;
+        } else {
+          voiceAskStatus.textContent = noText;
+        }
+      } catch (e) {
+        console.error("STT fetch error", e);
+        voiceAskStatus.textContent = errorText;
+      }
+    }
+
+    async function startRecording() {
+      if (isRecording || isBusy) return;
+
+      const listeningText = t(
+        "lobby.voiceAskListening",
+        "「執事に質問」をお話しください。もう一度ボタンを押すと終了します。"
+      );
+      voiceAskStatus.textContent = listeningText;
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (ev) => {
+          if (ev.data && ev.data.size > 0) {
+            audioChunks.push(ev.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          try {
+            try {
+              stream.getTracks().forEach((t) => t.stop());
+            } catch (e) {}
+
+            if (!audioChunks.length) {
+              const stoppedText = t(
+                "lobby.voiceAskStopped",
+                "音声入力を終了しました。"
+              );
+              voiceAskStatus.textContent = stoppedText;
+              return;
+            }
+
+            const blobType = mediaRecorder.mimeType || "audio/webm";
+            const blob = new Blob(audioChunks, { type: blobType });
+
+            await sendAudioToServer(blob);
+          } finally {
+            mediaRecorder = null;
+            audioChunks = [];
+            isBusy = false;
+          }
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        voiceAskBtn.classList.add("active");
+        voiceAskBtn.textContent = recordingLabel;
+      } catch (e) {
+        console.error("voiceAsk getUserMedia error", e);
+        const micError = t(
+          "lobby.voiceAskMicError",
+          "マイクが使用できません。ブラウザの設定をご確認ください。"
+        );
+        voiceAskStatus.textContent = micError;
+        isRecording = false;
+        isBusy = false;
+        voiceAskBtn.classList.remove("active");
+        voiceAskBtn.textContent = baseLabel;
+      }
+    }
+
+    async function stopRecording() {
+      if (!isRecording || !mediaRecorder) {
+        isRecording = false;
+        voiceAskBtn.classList.remove("active");
+        voiceAskBtn.textContent = baseLabel;
         return;
       }
+      if (isBusy) return;
+
+      isBusy = true;
+      isRecording = false;
+      voiceAskBtn.classList.remove("active");
+      voiceAskBtn.textContent = baseLabel;
+
       try {
-        recognition.start();
+        if (mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+        }
       } catch (e) {
-        console.error("speech start error", e);
+        console.error("mediaRecorder stop error", e);
+        isBusy = false;
       }
-    };
+    }
 
-    const stopRec = () => {
-      if (!recognition) return;
-      if (!recognizing) return;
-      try {
-        recognition.stop();
-      } catch (e) {
-        console.error("speech stop error", e);
+    voiceAskBtn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      if (!isRecording) {
+        startRecording();
+      } else {
+        stopRecording();
       }
-    };
-
-    // Pointerベースで「押している間」を表現（マウス・タッチ共通）
-    voiceAskBtn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      startRec();
-    });
-    voiceAskBtn.addEventListener("pointerup", (e) => {
-      e.preventDefault();
-      stopRec();
-    });
-    voiceAskBtn.addEventListener("pointercancel", () => {
-      stopRec();
-    });
-    voiceAskBtn.addEventListener("pointerleave", () => {
-      // 押したまま外に出たときも止める
-      stopRec();
     });
 
-    // キーボード操作向け（Space/Enter押下）での click フォールバック
-    voiceAskBtn.addEventListener("click", (e) => {
-      // pointerdown / pointerup が来ている場合は二重起動になるので、簡易防御
-      if (e.detail === 0) return; // キーボード由来などはそのまま
-      // クリック連打対策で何もしない（pointer系で処理）
-    });
+    const readyText = t(
+      "lobby.voiceAskReady",
+      "ボタンを押すと、執事への質問を音声で録音します。"
+    );
+    voiceAskStatus.textContent = readyText;
   }
 
   // ========= WebRTC (voice) =========
   const iceServers = [
     {
       urls: [
-      "stun:stun.l.google.com:19302",
-      "stun:stun1.l.google.com:19302"
+        "stun:stun.l.google.com:19302",
+        "stun:stun1.l.google.com:19302"
       ]
     }
   ];
@@ -832,7 +886,6 @@ function linkify(text) {
     updateVoiceUI();
   };
 
-  // ===== モバイル音声再生ゲート =====
   const enableBtn = document.getElementById("enableSound");
   function anyAudioPlaying() {
     let ok = false;
@@ -907,10 +960,8 @@ function linkify(text) {
   }
   setupMobileAudioGate();
 
-  // 初期状態メッセージ（接続前）
   chatStatus.textContent = t("lobby.chatInitial", "接続していません");
   updateVoiceUI();
 
-  // ★ 最後に「執事に質問（音声）」機能を初期化
   setupVoiceAsk();
 })();
