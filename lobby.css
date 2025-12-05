@@ -243,3 +243,10 @@ footer#lobbyFooter {
   color: #555;
   white-space: pre-wrap;
 }
+
+/* ★ 追加: 小さな注意書き（アイコン付き用） */
+.notice-small {
+  font-size: 11px;
+  color: #777;
+  margin-top: 4px;
+}
