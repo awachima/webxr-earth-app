@@ -692,7 +692,7 @@ function detectLang() {
 
   // ===== WebRTC 音声通話（簡易版） =====
   let localStream = null;
-  const peers = new Map();
+  const peers =  new Map();
   const audios = new Map();
 
   async function getLocalStream() {
@@ -988,7 +988,7 @@ function detectLang() {
   chatStatus.textContent = t("lobby.chatInitial", "接続していません");
   updateVoiceUI();
 
-  // ========= 「執事に質問（音声）」 Push-to-Talk 音声認識 =========
+  // ========= 「執事に質問（音声）」 音声認識（クリックで開始／クリックで停止） =========
   const voiceAskBtn = $("#voiceAskBtn");
   const voiceAskStatus = $("#voiceAskStatus");
 
@@ -1021,7 +1021,7 @@ function detectLang() {
       voiceAskBtn.classList.add("active");
       voiceAskStatus.textContent = t(
         "lobby.voiceAskRecording",
-        "お話しください（ボタンを離すと送信されます）"
+        "お話しください（もう一度ボタンを押すと終了します）"
       );
     };
 
@@ -1058,9 +1058,10 @@ function detectLang() {
     };
 
     recognition.onend = () => {
+      const wasRecognizing = recognizing;
       recognizing = false;
       voiceAskBtn.classList.remove("active");
-      if (!gotResult) {
+      if (!gotResult && wasRecognizing) {
         voiceAskStatus.textContent = t(
           "lobby.voiceAskTooShort",
           "音声が短すぎるか、認識できませんでした。"
@@ -1068,42 +1069,23 @@ function detectLang() {
       }
     };
 
-    const startRec = () => {
+    const toggleRec = () => {
       if (!recognition) return;
-      if (recognizing) {
-        try {
+      try {
+        if (recognizing) {
           recognition.stop();
-        } catch (_) {}
-        return;
-      }
-      try {
-        recognition.start();
+        } else {
+          recognition.start();
+        }
       } catch (e) {
-        console.error("speech start error", e);
+        console.error("speech toggle error", e);
       }
     };
 
-    const stopRec = () => {
-      if (!recognition) return;
-      if (!recognizing) return;
-      try {
-        recognition.stop();
-      } catch (e) {
-        console.error("speech stop error", e);
-      }
-    };
-
-    voiceAskBtn.addEventListener("pointerdown", (e) => {
+    // ★ クリックするたびに開始／停止をトグル
+    voiceAskBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      startRec();
-    });
-    voiceAskBtn.addEventListener("pointerup", (e) => {
-      e.preventDefault();
-      stopRec();
-    });
-    voiceAskBtn.addEventListener("pointerleave", (e) => {
-      e.preventDefault();
-      stopRec();
+      toggleRec();
     });
   }
   setupVoiceAsk();
