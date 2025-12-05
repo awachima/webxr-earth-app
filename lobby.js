@@ -1143,7 +1143,7 @@ function detectLang() {
 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    // ---- PC/スマホ: Web Speech API （押している間だけ録音）----
+    // ---- PC/スマホ: Web Speech API （1回押しで開始／もう1回押しで停止）----
     if (SR && !isQuest) {
       recognition = new SR();
       recognition.lang =
@@ -1157,7 +1157,7 @@ function detectLang() {
         voiceAskBtn.classList.add("active");
         voiceAskStatus.textContent = t(
           "lobby.voiceAskRecording",
-          "お話しください（ボタンを押している間だけ録音されます）"
+          "お話しください（もう一度ボタンを押すと終了します）"
         );
       };
 
@@ -1204,42 +1204,26 @@ function detectLang() {
         }
       };
 
-      const startRec = () => {
+      const toggleRec = () => {
         if (!recognition) return;
-        if (recognizing) {
+        if (!recognizing) {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.error("speech start error", e);
+          }
+        } else {
           try {
             recognition.stop();
-          } catch (_) {}
-          return;
-        }
-        try {
-          recognition.start();
-        } catch (e) {
-          console.error("speech start error", e);
+          } catch (e) {
+            console.error("speech stop error", e);
+          }
         }
       };
 
-      const stopRec = () => {
-        if (!recognition) return;
-        if (!recognizing) return;
-        try {
-          recognition.stop();
-        } catch (e) {
-          console.error("speech stop error", e);
-        }
-      };
-
-      voiceAskBtn.addEventListener("pointerdown", (e) => {
+      voiceAskBtn.addEventListener("click", (e) => {
         e.preventDefault();
-        startRec();
-      });
-      voiceAskBtn.addEventListener("pointerup", (e) => {
-        e.preventDefault();
-        stopRec();
-      });
-      voiceAskBtn.addEventListener("pointerleave", (e) => {
-        e.preventDefault();
-        stopRec();
+        toggleRec();
       });
 
       return;
