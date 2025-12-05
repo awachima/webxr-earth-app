@@ -389,9 +389,9 @@ function detectLang() {
   setupCountdown();
 
   // ===== 入室ボタン =====
-  const enterBtn = $("#enterBtn");
-  if (enterBtn) {
-    enterBtn.addEventListener("click", () => {
+  const enterBtn2 = $("#enterBtn");
+  if (enterBtn2) {
+    enterBtn2.addEventListener("click", () => {
       if (!target) {
         alert(
           t(
@@ -692,7 +692,7 @@ function detectLang() {
 
   // ===== WebRTC 音声通話（簡易版） =====
   let localStream = null;
-  const peers =  new Map();
+  const peers = new Map();
   const audios = new Map();
 
   async function getLocalStream() {
@@ -988,20 +988,23 @@ function detectLang() {
   chatStatus.textContent = t("lobby.chatInitial", "接続していません");
   updateVoiceUI();
 
-  // ========= 「執事に質問（音声）」 音声認識（クリックで開始／クリックで停止） =========
+  // ========= 「執事に質問（音声）」 音声質問（PC/スマホ: Web Speech / Quest: Workers STT） =========
   const voiceAskBtn = $("#voiceAskBtn");
   const voiceAskStatus = $("#voiceAskStatus");
+
+  const ua2 = navigator.userAgent || "";
+  const isQuest =
+    /OculusBrowser|Meta Quest|Quest 2|Quest 3/i.test(ua2);
 
   let recognition = null;
   let recognizing = false;
   let gotResult = false;
 
-  function setupVoiceAsk() {
-    if (!voiceAskBtn || !voiceAskStatus) return;
+  // ---- Workers STT 用の設定（Quest 向けフォールバック） ----
+  const STT_ENDPOINT = "https://do-stt.awachima7.workers.dev/stt";
 
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      voiceAskBtn.style.display = "none";
+  async function runWorkersSTT() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       voiceAskStatus.textContent = t(
         "lobby.voiceAskNotSupported",
         "お使いのブラウザでは音声での質問機能はご利用いただけません。"
@@ -1009,84 +1012,259 @@ function detectLang() {
       return;
     }
 
-    recognition = new SR();
-    recognition.lang =
-      currentLang === "ja" || currentLang === "ja-JP" ? "ja-JP" : "en-US";
-    recognition.interimResults = false;
-    recognition.continuous = false;
+    voiceAskBtn.classList.add("active");
+    voiceAskStatus.textContent = t(
+      "lobby.voiceAskRecording",
+      "お話しください（もう一度ボタンを押すと終了します）"
+    );
 
-    recognition.onstart = () => {
-      recognizing = true;
-      gotResult = false;
-      voiceAskBtn.classList.add("active");
-      voiceAskStatus.textContent = t(
-        "lobby.voiceAskRecording",
-        "お話しください（もう一度ボタンを押すと終了します）"
-      );
-    };
-
-    recognition.onresult = (ev) => {
-      gotResult = true;
-      let text = "";
-      for (let i = 0; i < ev.results.length; i++) {
-        text += ev.results[i][0].transcript;
-      }
-      text = (text || "").trim();
-      if (text) {
-        chatInput.value = text;
-        chatSend.click();
-        voiceAskStatus.textContent = t(
-          "lobby.voiceAskSent",
-          "音声でのご質問を送信しました。"
-        );
-      } else {
-        voiceAskStatus.textContent = t(
-          "lobby.voiceAskNoText",
-          "音声が認識できませんでした。もう一度お試しください。"
-        );
-      }
-    };
-
-    recognition.onerror = (ev) => {
-      console.error("speech error", ev);
-      recognizing = false;
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+    } catch (e) {
+      console.error("Quest STT getUserMedia error", e);
       voiceAskBtn.classList.remove("active");
       voiceAskStatus.textContent = t(
-        "lobby.voiceAskError",
-        "音声認識中にエラーが発生しました。"
+        "lobby.micDenied",
+        "マイクへのアクセスが拒否されたか、利用できません。"
       );
-    };
+      return;
+    }
 
-    recognition.onend = () => {
-      const wasRecognizing = recognizing;
-      recognizing = false;
-      voiceAskBtn.classList.remove("active");
-      if (!gotResult && wasRecognizing) {
-        voiceAskStatus.textContent = t(
-          "lobby.voiceAskTooShort",
-          "音声が短すぎるか、認識できませんでした。"
-        );
-      }
-    };
+    return new Promise((resolve) => {
+      const chunks = [];
+      const recorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm",
+      });
 
-    const toggleRec = () => {
-      if (!recognition) return;
-      try {
-        if (recognizing) {
-          recognition.stop();
-        } else {
-          recognition.start();
+      let stopped = false;
+
+      const stopAll = () => {
+        if (stopped) return;
+        stopped = true;
+        try {
+          recorder.stop();
+        } catch {}
+        stream.getTracks().forEach((tr) => tr.stop());
+      };
+
+      const finish = async () => {
+        voiceAskBtn.classList.remove("active");
+
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        if (blob.size === 0) {
+          voiceAskStatus.textContent = t(
+            "lobby.voiceAskTooShort",
+            "音声が短すぎるか、認識できませんでした。"
+          );
+          resolve();
+          return;
         }
-      } catch (e) {
-        console.error("speech toggle error", e);
-      }
-    };
 
-    // ★ クリックするたびに開始／停止をトグル
-    voiceAskBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      toggleRec();
+        voiceAskStatus.textContent = t(
+          "lobby.voiceAskSending",
+          "音声を解析しています…"
+        );
+
+        try {
+          const res = await fetch(STT_ENDPOINT, {
+            method: "POST",
+            body: blob,
+            headers: {
+              "content-type": "audio/webm",
+            },
+          });
+
+          const textJson = await res.json().catch(() => ({}));
+          const recognized =
+            textJson.text ||
+            textJson.result ||
+            textJson.transcript ||
+            "";
+
+          const finalText = (recognized || "").trim();
+          if (!finalText) {
+            voiceAskStatus.textContent = t(
+              "lobby.voiceAskNoText",
+              "音声が認識できませんでした。もう一度お試しください。"
+            );
+            resolve();
+            return;
+          }
+
+          chatInput.value = finalText;
+          chatSend.click();
+          voiceAskStatus.textContent = t(
+            "lobby.voiceAskSent",
+            "音声でのご質問を送信しました。"
+          );
+        } catch (e) {
+          console.error("Quest STT fetch error", e);
+          voiceAskStatus.textContent = t(
+            "lobby.voiceAskError",
+            "音声認識中にエラーが発生しました。"
+          );
+        } finally {
+          resolve();
+        }
+      };
+
+      recorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) {
+          chunks.push(ev.data);
+        }
+      };
+      recorder.onerror = (ev) => {
+        console.error("MediaRecorder error", ev.error || ev);
+        voiceAskStatus.textContent = t(
+          "lobby.voiceAskError",
+          "音声認識中にエラーが発生しました。"
+        );
+      };
+      recorder.onstop = finish;
+
+      recorder.start();
+
+      // ボタンをもう一度押したら録音終了
+      const onClickStop = (e) => {
+        e.preventDefault();
+        voiceAskBtn.removeEventListener("click", onClickStop);
+        stopAll();
+      };
+      voiceAskBtn.addEventListener("click", onClickStop);
     });
   }
+
+  function setupVoiceAsk() {
+    if (!voiceAskBtn || !voiceAskStatus) return;
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    // ---- PC/スマホ: Web Speech API （押している間だけ録音）----
+    if (SR && !isQuest) {
+      recognition = new SR();
+      recognition.lang =
+        currentLang === "ja" || currentLang === "ja-JP" ? "ja-JP" : "en-US";
+      recognition.interimResults = false;
+      recognition.continuous = false;
+
+      recognition.onstart = () => {
+        recognizing = true;
+        gotResult = false;
+        voiceAskBtn.classList.add("active");
+        voiceAskStatus.textContent = t(
+          "lobby.voiceAskRecording",
+          "お話しください（ボタンを押している間だけ録音されます）"
+        );
+      };
+
+      recognition.onresult = (ev) => {
+        gotResult = true;
+        let text = "";
+        for (let i = 0; i < ev.results.length; i++) {
+          text += ev.results[i][0].transcript;
+        }
+        text = (text || "").trim();
+        if (text) {
+          chatInput.value = text;
+          chatSend.click();
+          voiceAskStatus.textContent = t(
+            "lobby.voiceAskSent",
+            "音声でのご質問を送信しました。"
+          );
+        } else {
+          voiceAskStatus.textContent = t(
+            "lobby.voiceAskNoText",
+            "音声が認識できませんでした。もう一度お試しください。"
+          );
+        }
+      };
+
+      recognition.onerror = (ev) => {
+        console.error("speech error", ev);
+        recognizing = false;
+        voiceAskBtn.classList.remove("active");
+        voiceAskStatus.textContent = t(
+          "lobby.voiceAskError",
+          "音声認識中にエラーが発生しました。"
+        );
+      };
+
+      recognition.onend = () => {
+        recognizing = false;
+        voiceAskBtn.classList.remove("active");
+        if (!gotResult) {
+          voiceAskStatus.textContent = t(
+            "lobby.voiceAskTooShort",
+            "音声が短すぎるか、認識できませんでした。"
+          );
+        }
+      };
+
+      const startRec = () => {
+        if (!recognition) return;
+        if (recognizing) {
+          try {
+            recognition.stop();
+          } catch (_) {}
+          return;
+        }
+        try {
+          recognition.start();
+        } catch (e) {
+          console.error("speech start error", e);
+        }
+      };
+
+      const stopRec = () => {
+        if (!recognition) return;
+        if (!recognizing) return;
+        try {
+          recognition.stop();
+        } catch (e) {
+          console.error("speech stop error", e);
+        }
+      };
+
+      voiceAskBtn.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        startRec();
+      });
+      voiceAskBtn.addEventListener("pointerup", (e) => {
+        e.preventDefault();
+        stopRec();
+      });
+      voiceAskBtn.addEventListener("pointerleave", (e) => {
+        e.preventDefault();
+        stopRec();
+      });
+
+      return;
+    }
+
+    // ---- Quest ブラウザ: Workers STT フォールバック ----
+    if (isQuest) {
+      voiceAskBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        if (voiceAskBtn.classList.contains("active")) {
+          // 録音中は runWorkersSTT 内の click ハンドラが処理する
+          return;
+        }
+        await runWorkersSTT();
+      });
+      return;
+    }
+
+    // ---- それ以外のブラウザで Web Speech もない場合 ----
+    voiceAskBtn.style.display = "none";
+    voiceAskStatus.textContent = t(
+      "lobby.voiceAskNotSupported",
+      "お使いのブラウザでは音声での質問機能はご利用いただけません。"
+    );
+  }
+
   setupVoiceAsk();
 })();
