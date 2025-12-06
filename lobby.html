@@ -24,10 +24,9 @@
       </div>
 
       <div class="grid">
-        <!-- ▼ 左パネル：カウントダウン / URLコピー -->
         <div class="panel">
           <div class="label" id="countdownLabel">カウントダウン</div>
-          <div class="count" id="count">--:--:--</div>
+          <div class="count" id="count" style="display:inline-block; min-width:9ch;">--:--:--</div>
           <div class="status" id="status">開始までお待ちください。</div>
           <div class="row">
             <!-- ★ id を enterBtn に変更（JS と一致させる） -->
@@ -40,9 +39,8 @@
           </div>
         </div>
 
-        <!-- ▼ 中央パネル：ボイスチャット / テキストチャット -->
         <div class="panel">
-          <div class="label" id="membersLabel">参加者</div>
+          <div class="label" id="voiceSectionTitle">ボイスチャット</div>
           <div id="members" class="members"></div>
 
           <div class="sep"></div>
@@ -51,12 +49,10 @@
             <button id="voicePower" class="btn" type="button">音声ON</button>
             <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
           </div>
-          <!-- ★ 音声ON/OFF 注意書き（多言語化対応済み） -->
+          <!-- ★ 音声ON/OFF 注意書きに id を付与して多言語化 -->
           <div class="notice-small" id="voiceOnOffHint">🔊 音声はON/OFFで改善することがあります。</div>
 
-          <button id="enableSound" class="btn ghost" type="button" style="display:none;margin-top:6px">
-            スマホで音を有効化
-          </button>
+          <button id="enableSound" class="btn ghost" type="button" style="display:none;margin-top:6px">スマホで音を有効化</button>
 
           <div class="sep"></div>
           <div class="label" id="textChatLabel">テキストチャット</div>
@@ -72,16 +68,53 @@
                 執事に質問（音声）
               </button>
               <div id="voiceAskStatus" class="status" style="margin-top:4px;"></div>
-              <!-- ★ 執事向け注意書き（多言語化対応済み） -->
-              <div class="notice-small" id="voiceSpeakHint">
-                🤵 ゆっくり・はっきり話すと認識が安定します。
-              </div>
+              <!-- ★ 執事向け注意書きに id を付与して多言語化 -->
+              <div class="notice-small" id="voiceSpeakHint">🤵 ゆっくり・はっきり話すと認識が安定します。</div>
             </div>
           </div>
           <div class="status" id="chatStatus" style="margin-top:4px;"></div>
         </div>
 
-        <!-- 右側の「待合室の情報」「音声・会話設定」パネルは削除しました -->
+        <div class="panel">
+          <div class="label" id="infoPanelLabel">待合室の情報</div>
+          <table class="info-table">
+            <tr>
+              <th id="dateLabel">開始日時</th>
+              <td id="dateValue">—</td>
+            </tr>
+            <tr>
+              <th id="limitLabel">人数制限</th>
+              <td id="limitValue">—</td>
+            </tr>
+            <tr>
+              <th id="urlLabel">ツアーURL</th>
+              <td id="urlValue">—</td>
+            </tr>
+            <tr>
+              <th id="eventTypeLabel">種別</th>
+              <td id="eventTypeValue">—</td>
+            </tr>
+            <tr>
+              <th id="priceLabel">料金</th>
+              <td id="priceValue">—</td>
+            </tr>
+          </table>
+
+          <div class="sep"></div>
+          <div class="label" id="voicePanelLabel">音声・会話設定</div>
+          <div class="row">
+            <label>
+              <input type="checkbox" id="selfEcho" />
+              <span id="selfEchoLabel">自分の声を自分にも流す</span>
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              <input type="checkbox" id="voiceAutoJoin" />
+              <span id="voiceAutoJoinLabel">入室時に自動で音声接続する</span>
+            </label>
+          </div>
+        </div>
       </div>
 
       <div class="sep"></div>
