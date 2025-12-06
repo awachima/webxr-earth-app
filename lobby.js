@@ -109,8 +109,7 @@ function detectLang() {
       setNameBtn.textContent = t("lobby.nicknameButton", "ニックネーム");
 
     const backBtn = $("#backToIndex");
-    if (backBtn)
-      backBtn.textContent = t("lobby.backButton", "← 戻る");
+    if (backBtn) backBtn.textContent = t("lobby.backButton", "← 戻る");
 
     const countdownLabel = $("#countdownLabel");
     if (countdownLabel)
@@ -148,6 +147,7 @@ function detectLang() {
         "スマホで音を有効化"
       );
 
+    // 状態に応じてテキストを変える
     const chatStatus = $("#chatStatus");
     if (chatStatus) {
       if (chatStatusMode === "initial") {
@@ -156,17 +156,17 @@ function detectLang() {
           "接続していません"
         );
       } else if (chatStatusMode === "connected") {
-        chatStatus.textContent = t(
-          "lobby.chatConnected",
-          "接続しました"
-        );
+        chatStatus.textContent = t("lobby.chatConnected", "接続しました");
       } else if (chatStatusMode === "reconnecting") {
         chatStatus.textContent = t(
           "lobby.chatReconnecting",
           "切断されました。再接続を試みます…"
         );
       } else if (chatStatusMode === "error") {
-        chatStatus.textContent = t("lobby.chatError", "エラーが発生しました");
+        chatStatus.textContent = t(
+          "lobby.chatError",
+          "エラーが発生しました"
+        );
       }
     }
 
@@ -183,10 +183,7 @@ function detectLang() {
 
     const voicePanelLabel = $("#voicePanelLabel");
     if (voicePanelLabel)
-      voicePanelLabel.textContent = t(
-        "lobby.voicePanelLabel",
-        "音声・会話設定"
-      );
+      voicePanelLabel.textContent = t("lobby.voicePanelLabel", "音声・会話設定");
 
     const micToggle = $("#micToggle");
     if (micToggle) micToggle.textContent = t("lobby.mute", "ミュート");
@@ -195,9 +192,9 @@ function detectLang() {
     if (voicePower)
       voicePower.textContent = t("lobby.voiceOn", "音声ON");
 
-    const membersElLabel = $("#membersLabel");
-    if (membersElLabel)
-      membersElLabel.textContent = t("lobby.membersLabel", "参加者");
+    const voiceStatus = $("#voiceStatus");
+    if (voiceStatus)
+      voiceStatus.textContent = t("lobby.voiceNone", "音声: 未参加");
 
     const voiceAskBtn = $("#voiceAskBtn");
     if (voiceAskBtn)
@@ -205,21 +202,6 @@ function detectLang() {
         "lobby.voiceAskBtn",
         "執事に質問（音声）"
       );
-
-    // 🔊 / 🤵 の注意書きも多言語化する
-    const noticeSmalls = document.querySelectorAll(".notice-small");
-    if (noticeSmalls[0]) {
-      noticeSmalls[0].textContent = t(
-        "lobby.voiceOnOffNotice",
-        "🔊 音声はON/OFFで改善することがあります。"
-      );
-    }
-    if (noticeSmalls[1]) {
-      noticeSmalls[1].textContent = t(
-        "lobby.voiceAskNotice",
-        "🤵 ゆっくり・はっきり話すと認識が安定します。"
-      );
-    }
 
     const dateLabel = $("#dateLabel");
     if (dateLabel) {
@@ -245,13 +227,19 @@ function detectLang() {
     if (priceLabel)
       priceLabel.textContent = t("lobby.priceLabel", "参加費");
 
+    const eventTypeValue = $("#eventTypeValue");
+    if (eventTypeValue)
+      eventTypeValue.textContent = t("lobby.eventTypeUnknown", "不明");
+
+    const priceValue = $("#priceValue");
+    if (priceValue) priceValue.textContent = "-";
+
     const enterBtn = $("#enterBtn");
     if (enterBtn)
       enterBtn.textContent = t("lobby.enterButton", "ツアーに行く");
 
     const chatSend = $("#chatSend");
-    if (chatSend)
-      chatSend.textContent = t("lobby.chatSend", "送信");
+    if (chatSend) chatSend.textContent = t("lobby.chatSend", "送信");
 
     const lobbyFooter = $("#lobbyFooter");
     if (lobbyFooter)
@@ -270,6 +258,7 @@ function detectLang() {
     if (code.startsWith("ja")) {
       url = "./lang/ja.json";
     } else if (code.startsWith("zh")) {
+      // zh, zh-CN どちらでも OK
       url = "./lang/zh.json";
     } else if (code === "fa") {
       url = "./lang/fa.json";
@@ -289,6 +278,8 @@ function detectLang() {
       window.i18n = {};
     }
     applyLobbyTexts();
+    // ★ 言語読み込み後に開始時刻ラベルも再描画
+    updateMeta();
   }
 
   // 言語データ読み込み
@@ -303,7 +294,7 @@ function detectLang() {
       currentLang = value;
       try {
         localStorage.setItem("lang", value);
-      } catch (e2) {}
+      } catch (e) {}
       if (value === "fa" || value === "he") {
         document.documentElement.dir = "rtl";
       } else {
@@ -336,8 +327,9 @@ function detectLang() {
   const eventTypeValue = $("#eventTypeValue");
   const priceValue = $("#priceValue");
 
-  // 上部「開始時刻：…」の表示
-  if (metaEl) {
+  // 上部「開始時刻：…」の表示を更新する関数
+  function updateMeta() {
+    if (!metaEl) return;
     const defaultLabel =
       currentLang && currentLang.startsWith("ja")
         ? "開始時刻："
@@ -358,6 +350,9 @@ function detectLang() {
       metaEl.textContent = label + "—";
     }
   }
+
+  // 初回描画
+  updateMeta();
 
   // 右側の詳細パネル用
   if (dateValue) {
@@ -524,7 +519,7 @@ function detectLang() {
       user = newName.trim().slice(0, 32) || "Guest";
       try {
         localStorage.setItem("nickname", user);
-      } catch (e2) {}
+      } catch (e) {}
       alert(t("lobby.nicknameSaved", "ニックネームを保存しました。"));
     });
   }
@@ -617,7 +612,7 @@ function detectLang() {
     chatLog.scrollTop = chatLog.scrollHeight;
   }
 
-  const chatStatusEl = $("#chatStatus");
+  const chatStatus = $("#chatStatus");
   const debugEl = $("#debug");
 
   function logDebug(msg) {
@@ -646,8 +641,8 @@ function detectLang() {
     thinkingElem = null;
   }
 
-  let ws;
-  let focused = true;
+  let ws,
+    focused = true;
   window.addEventListener("focus", () => (focused = true));
   window.addEventListener("blur", () => (focused = false));
 
@@ -667,15 +662,15 @@ function detectLang() {
       ws = new WebSocket(CHAT_URL);
       ws.onopen = () => {
         chatStatusMode = "connected";
-        if (chatStatusEl) {
-          chatStatusEl.textContent = t("lobby.chatConnected", "接続しました");
+        if (chatStatus) {
+          chatStatus.textContent = t("lobby.chatConnected", "接続しました");
         }
         logDebug("WebSocket connected");
       };
       ws.onclose = () => {
         chatStatusMode = "reconnecting";
-        if (chatStatusEl) {
-          chatStatusEl.textContent = t(
+        if (chatStatus) {
+          chatStatus.textContent = t(
             "lobby.chatReconnecting",
             "切断されました。再接続を試みます…"
           );
@@ -685,8 +680,8 @@ function detectLang() {
       };
       ws.onerror = (e) => {
         chatStatusMode = "error";
-        if (chatStatusEl) {
-          chatStatusEl.textContent = t(
+        if (chatStatus) {
+          chatStatus.textContent = t(
             "lobby.chatError",
             "エラーが発生しました"
           );
@@ -728,7 +723,7 @@ function detectLang() {
                     .replace("{name}", obj.name || "")
                     .replace("{text}", body);
                   addMsg(klass, text);
-                } catch (e2) {}
+                } catch {}
               });
               addSys(
                 t(
@@ -787,11 +782,8 @@ function detectLang() {
       };
     } catch (e) {
       chatStatusMode = "error";
-      if (chatStatusEl) {
-        chatStatusEl.textContent = t(
-          "lobby.chatError",
-          "エラーが発生しました"
-        );
+      if (chatStatus) {
+        chatStatus.textContent = t("lobby.chatError", "エラーが発生しました");
       }
       logDebug("WebSocket init error: " + (e?.message || ""));
     }
@@ -833,7 +825,7 @@ function detectLang() {
   }
 
   // ===== WebRTC 音声チャット =====
-  const voiceStatus = $("#voiceStatus"); // HTML には無くても問題なし
+  const voiceStatus = $("#voiceStatus");
   const voicePowerBtn = $("#voicePower");
   const micToggleBtn = $("#micToggle");
   const voiceHintEl = $("#voiceHint");
@@ -915,7 +907,7 @@ function detectLang() {
     updateVoiceUI();
 
     if (localStream) {
-      localStream.getTracks().forEach((t2) => t2.stop());
+      localStream.getTracks().forEach((t) => t.stop());
       localStream = null;
     }
     for (const pc of peers.values()) {
@@ -1116,39 +1108,26 @@ function detectLang() {
       if (ev.data.size > 0) chunks.push(ev.data);
     };
     mediaRecorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: "audio/webm" });
-      chunks = [];
-      if (!blob || blob.size === 0) {
-        setVoiceAskStatus(
-          "micErrorMsg",
-          "音声データが取得できませんでした。もう一度お試しください。"
-        );
-        return;
-      }
-      setVoiceAskStatus("sending", "音声を送信しています…");
-
+      setVoiceAskStatus(
+        "processing",
+        "音声を解析中です。しばらくお待ちください…"
+      );
       try {
-        const formData = new FormData();
-        formData.append("roomId", roomId || "default");
-        formData.append("audio", blob, "voice.webm");
-
-        const res = await fetch("/do-chat/voice", {
-          method: "POST",
-          body: formData,
-        });
-        if (!res.ok) {
-          throw new Error("voice api error: " + res.status);
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        chunks = [];
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((t) => t.stop());
+          mediaStream = null;
         }
-        setVoiceAskStatus(
-          "voiceAskSent",
-          "執事に音声を送信しました。回答をお待ちください。"
-        );
+        await sendAudioForTranscription(blob);
       } catch (e) {
         console.error(e);
         setVoiceAskStatus(
-          "voiceAskError",
-          "執事への音声送信に失敗しました。時間をおいて再度お試しください。"
+          "voiceError",
+          "音声の送信中にエラーが発生しました。時間をおいて再度お試しください。"
         );
+      } finally {
+        isRecording = false;
       }
     };
 
@@ -1158,12 +1137,76 @@ function detectLang() {
   function stopRecording() {
     if (!isRecording) return;
     isRecording = false;
-
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      mediaRecorder.stop();
+    try {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+    } catch (e) {
+      console.error(e);
+      setVoiceAskStatus(
+        "voiceError",
+        "録音の停止中にエラーが発生しました。"
+      );
     }
-    if (mediaStream) {
-      mediaStream.getTracks().forEach((t2) => t2.stop());
+  }
+
+  async function sendAudioForTranscription(blob) {
+    setVoiceAskStatus(
+      "sending",
+      "音声をサーバーに送信しています…"
+    );
+    try {
+      const formData = new FormData();
+      formData.append("file", blob, "voice.webm");
+      formData.append("roomId", roomId);
+      formData.append("name", user || "Guest");
+
+      // 現状のエンドポイント（必要なら後で do-chat Worker 用に変更）
+      const res = await fetch("/db-chat/voice", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        console.error("voice api error:", res.status);
+        setVoiceAskStatus(
+          "voiceApiError",
+          `音声APIでエラーが発生しました。（${res.status}）`
+        );
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      if (data && data.text) {
+        const msg = data.text;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "chat",
+              text: msg,
+              name: user || "Guest",
+            })
+          );
+        }
+        if (chatInput2) {
+          chatInput2.value = msg;
+        }
+        setVoiceAskStatus(
+          "voiceDone",
+          "音声の認識が完了しました。必要ならテキストを編集して送信してください。"
+        );
+      } else {
+        setVoiceAskStatus(
+          "voiceNoText",
+          "音声を認識できませんでした。もう一度お試しください。"
+        );
+      }
+    } catch (e) {
+      console.error("voice api error:", e);
+      setVoiceAskStatus(
+        "voiceApiError",
+        "音声APIとの通信に失敗しました。"
+      );
     }
   }
 
@@ -1176,22 +1219,4 @@ function detectLang() {
       }
     });
   }
-
-  // ===== iOS / Safari 向け AudioContext 初期化 =====
-  (function initAudioContextOnce() {
-    if (window._audioContext) return;
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      window._audioContext = ctx;
-      const resume = () => {
-        if (ctx.state === "suspended") {
-          ctx.resume();
-        }
-        window.removeEventListener("touchstart", resume);
-        window.removeEventListener("click", resume);
-      };
-      window.addEventListener("touchstart", resume);
-      window.addEventListener("click", resume);
-    } catch (e) {}
-  })();
 })();
