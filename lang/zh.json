@@ -122,7 +122,7 @@
     "voiceAskNoWs": "尚未连接到聊天服务器。请重新加载页面。",
     "voiceAskListening": "管家正在聆听您的声音…",
     "voiceOnOffHint": "多次切换语音 ON / OFF 有时可以改善音质。",
-    "voiceSpeakHint": "慢慢地、清晰地说话能提高识别准确率。"
+    "voiceSpeakHint": "慢慢、清晰地说话可以提高识别准确率。",
   },
   "aria": {
     "close": "关闭",
