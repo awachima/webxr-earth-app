@@ -148,7 +148,6 @@ function detectLang() {
         "スマホで音を有効化"
       );
 
-    // 状態に応じてテキストを変える
     const chatStatus = $("#chatStatus");
     if (chatStatus) {
       if (chatStatusMode === "initial") {
@@ -167,10 +166,7 @@ function detectLang() {
           "切断されました。再接続を試みます…"
         );
       } else if (chatStatusMode === "error") {
-        chatStatus.textContent = t(
-          "lobby.chatError",
-          "エラーが発生しました"
-        );
+        chatStatus.textContent = t("lobby.chatError", "エラーが発生しました");
       }
     }
 
@@ -193,16 +189,15 @@ function detectLang() {
       );
 
     const micToggle = $("#micToggle");
-    if (micToggle)
-      micToggle.textContent = t("lobby.mute", "ミュート");
+    if (micToggle) micToggle.textContent = t("lobby.mute", "ミュート");
 
     const voicePower = $("#voicePower");
     if (voicePower)
       voicePower.textContent = t("lobby.voiceOn", "音声ON");
 
-    const voiceStatus = $("#voiceStatus");
-    if (voiceStatus)
-      voiceStatus.textContent = t("lobby.voiceNone", "音声: 未参加");
+    const membersElLabel = $("#membersLabel");
+    if (membersElLabel)
+      membersElLabel.textContent = t("lobby.membersLabel", "参加者");
 
     const voiceAskBtn = $("#voiceAskBtn");
     if (voiceAskBtn)
@@ -210,6 +205,21 @@ function detectLang() {
         "lobby.voiceAskBtn",
         "執事に質問（音声）"
       );
+
+    // 🔊 / 🤵 の注意書きも多言語化する
+    const noticeSmalls = document.querySelectorAll(".notice-small");
+    if (noticeSmalls[0]) {
+      noticeSmalls[0].textContent = t(
+        "lobby.voiceOnOffNotice",
+        "🔊 音声はON/OFFで改善することがあります。"
+      );
+    }
+    if (noticeSmalls[1]) {
+      noticeSmalls[1].textContent = t(
+        "lobby.voiceAskNotice",
+        "🤵 ゆっくり・はっきり話すと認識が安定します。"
+      );
+    }
 
     const dateLabel = $("#dateLabel");
     if (dateLabel) {
@@ -225,8 +235,7 @@ function detectLang() {
       limitLabel.textContent = t("lobby.limitLabel", "参加上限");
 
     const urlLabel = $("#urlLabel");
-    if (urlLabel)
-      urlLabel.textContent = t("lobby.urlLabel", "ツアーURL");
+    if (urlLabel) urlLabel.textContent = t("lobby.urlLabel", "ツアーURL");
 
     const eventTypeLabel = $("#eventTypeLabel");
     if (eventTypeLabel)
@@ -236,19 +245,13 @@ function detectLang() {
     if (priceLabel)
       priceLabel.textContent = t("lobby.priceLabel", "参加費");
 
-    const eventTypeValue = $("#eventTypeValue");
-    if (eventTypeValue)
-      eventTypeValue.textContent = t("lobby.eventTypeUnknown", "不明");
-
-    const priceValue = $("#priceValue");
-    if (priceValue) priceValue.textContent = "-";
-
     const enterBtn = $("#enterBtn");
     if (enterBtn)
       enterBtn.textContent = t("lobby.enterButton", "ツアーに行く");
 
     const chatSend = $("#chatSend");
-    if (chatSend) chatSend.textContent = t("lobby.chatSend", "送信");
+    if (chatSend)
+      chatSend.textContent = t("lobby.chatSend", "送信");
 
     const lobbyFooter = $("#lobbyFooter");
     if (lobbyFooter)
@@ -267,7 +270,6 @@ function detectLang() {
     if (code.startsWith("ja")) {
       url = "./lang/ja.json";
     } else if (code.startsWith("zh")) {
-      // zh, zh-CN どちらでも OK
       url = "./lang/zh.json";
     } else if (code === "fa") {
       url = "./lang/fa.json";
@@ -301,7 +303,7 @@ function detectLang() {
       currentLang = value;
       try {
         localStorage.setItem("lang", value);
-      } catch (e) {}
+      } catch (e2) {}
       if (value === "fa" || value === "he") {
         document.documentElement.dir = "rtl";
       } else {
@@ -522,7 +524,7 @@ function detectLang() {
       user = newName.trim().slice(0, 32) || "Guest";
       try {
         localStorage.setItem("nickname", user);
-      } catch (e) {}
+      } catch (e2) {}
       alert(t("lobby.nicknameSaved", "ニックネームを保存しました。"));
     });
   }
@@ -615,7 +617,7 @@ function detectLang() {
     chatLog.scrollTop = chatLog.scrollHeight;
   }
 
-  const chatStatus = $("#chatStatus");
+  const chatStatusEl = $("#chatStatus");
   const debugEl = $("#debug");
 
   function logDebug(msg) {
@@ -644,8 +646,8 @@ function detectLang() {
     thinkingElem = null;
   }
 
-  let ws,
-    focused = true;
+  let ws;
+  let focused = true;
   window.addEventListener("focus", () => (focused = true));
   window.addEventListener("blur", () => (focused = false));
 
@@ -665,15 +667,15 @@ function detectLang() {
       ws = new WebSocket(CHAT_URL);
       ws.onopen = () => {
         chatStatusMode = "connected";
-        if (chatStatus) {
-          chatStatus.textContent = t("lobby.chatConnected", "接続しました");
+        if (chatStatusEl) {
+          chatStatusEl.textContent = t("lobby.chatConnected", "接続しました");
         }
         logDebug("WebSocket connected");
       };
       ws.onclose = () => {
         chatStatusMode = "reconnecting";
-        if (chatStatus) {
-          chatStatus.textContent = t(
+        if (chatStatusEl) {
+          chatStatusEl.textContent = t(
             "lobby.chatReconnecting",
             "切断されました。再接続を試みます…"
           );
@@ -683,8 +685,8 @@ function detectLang() {
       };
       ws.onerror = (e) => {
         chatStatusMode = "error";
-        if (chatStatus) {
-          chatStatus.textContent = t(
+        if (chatStatusEl) {
+          chatStatusEl.textContent = t(
             "lobby.chatError",
             "エラーが発生しました"
           );
@@ -726,7 +728,7 @@ function detectLang() {
                     .replace("{name}", obj.name || "")
                     .replace("{text}", body);
                   addMsg(klass, text);
-                } catch {}
+                } catch (e2) {}
               });
               addSys(
                 t(
@@ -785,8 +787,11 @@ function detectLang() {
       };
     } catch (e) {
       chatStatusMode = "error";
-      if (chatStatus) {
-        chatStatus.textContent = t("lobby.chatError", "エラーが発生しました");
+      if (chatStatusEl) {
+        chatStatusEl.textContent = t(
+          "lobby.chatError",
+          "エラーが発生しました"
+        );
       }
       logDebug("WebSocket init error: " + (e?.message || ""));
     }
@@ -828,7 +833,7 @@ function detectLang() {
   }
 
   // ===== WebRTC 音声チャット =====
-  const voiceStatus = $("#voiceStatus");
+  const voiceStatus = $("#voiceStatus"); // HTML には無くても問題なし
   const voicePowerBtn = $("#voicePower");
   const micToggleBtn = $("#micToggle");
   const voiceHintEl = $("#voiceHint");
@@ -910,7 +915,7 @@ function detectLang() {
     updateVoiceUI();
 
     if (localStream) {
-      localStream.getTracks().forEach((t) => t.stop());
+      localStream.getTracks().forEach((t2) => t2.stop());
       localStream = null;
     }
     for (const pc of peers.values()) {
@@ -1158,7 +1163,7 @@ function detectLang() {
       mediaRecorder.stop();
     }
     if (mediaStream) {
-      mediaStream.getTracks().forEach((t) => t.stop());
+      mediaStream.getTracks().forEach((t2) => t2.stop());
     }
   }
 
@@ -1190,4 +1195,3 @@ function detectLang() {
     } catch (e) {}
   })();
 })();
-
