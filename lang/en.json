@@ -97,6 +97,7 @@
     "nicknamePrompt": "Please enter your nickname.",
     "nicknameSaved": "Nickname saved. It will apply after reloading the page.",
     "membersEmpty": "No participants yet.",
+    "membersLabel": "Participants",
     "memberLabel": "{name} ({id})",
     "chatLine": "{name}: {text}",
     "historyLoaded": "— Loaded previous messages —",
@@ -121,9 +122,10 @@
     "voiceAskNeedJoin": "Please join the voice chat first.",
     "voiceAskNoWs": "Not connected to the chat server. Please reload this page.",
     "voiceAskListening": "The butler is now listening to your voice…",
-
     "voiceOnOffHint": "Audio quality may improve if you toggle voice chat OFF and ON again.",
-    "voiceSpeakHint": "Speaking slowly and clearly improves recognition accuracy."
+    "voiceSpeakHint": "Speaking slowly and clearly improves recognition accuracy.",
+    "voiceOnOffNotice": "🔊 Audio quality may improve if you toggle voice chat OFF and ON again.",
+    "voiceAskNotice": "🤵 Speaking slowly and clearly improves recognition accuracy."
   },
   "aria": {
     "close": "Close",
