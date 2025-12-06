@@ -1,78 +1,138 @@
 {
+  "pageTitle": "Dokodemo Doors फ़ैन साइट",
+  "siteTitle": "Dokodemo Doors फ़ैन साइट",
+  "buttons": {
+    "about": "Dokodemo Doors क्या है?",
+    "guide": "यह फ़ैन साइट क्या है?"
+  },
+  "about": {
+    "title": "Dokodemo Doors क्या है?",
+    "bodyHtml": "<p class='heading-large'>दूर रहते हुए भी साथ में दुनिया देखने की जगह</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors</a> दुनिया भर के 360° VR यात्रा वीडियो का बड़ा संग्रह प्रदान करने वाला एक ऑनलाइन VR प्लेटफ़ॉर्म है।</p><p class='heading-strong'>1,700 से अधिक वीडियो उपलब्ध</p><p style='padding-left: 1em;'>हालाँकि YouTube पर भी VR वीडियो मिलते हैं, लेकिन इतने अधिक VR यात्रा वीडियो एक ही स्थान पर उपलब्ध कराने वाली साइटें बहुत कम हैं।</p><p class='heading-strong'>एकदम समान क्षण साझा करें</p><p style='padding-left: 1em;'>वीडियो को एक ही समय पर शुरू करके, दूर रहने वाले लोग भी बिल्कुल एक ही दृश्य को उसी क्षण साझा कर सकते हैं और बातचीत का आनंद ले सकते हैं।</p><p>अधिक जानकारी के लिए <a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>यहाँ क्लिक करें</a>।</p>"
+  },
+  "guide": {
+    "title": "यह फ़ैन साइट क्या है?",
+    "bodyHtml": "<p class='heading-large'>एक अनौपचारिक साइट जहाँ आप 3D ग्लोब से दुनिया चुन सकते हैं</p><p>मैं सूची से नहीं, बल्कि 3D ग्लोब से दुनिया चुनना चाहता था। इसी कारण, <a href='https://dokodemodoors.com/' target='_blank'>आधिकारिक साइट</a> की अनुमति लेकर यह फ़ैन साइट बनाई गई।</p><p class='heading-strong'>1. दुनिया देखने के लिए आधिकारिक साइट पर सदस्यता आवश्यक है</p><p style='padding-left: 1em;'>दुनिया में प्रवेश करने और दृश्य का आनंद लेने के लिए आधिकारिक साइट पर सदस्यता ज़रूरी है। यदि आप सदस्य नहीं हैं और दुनिया में प्रवेश करने की कोशिश करते हैं, तो आपको सदस्यता पेज पर भेज दिया जाएगा।<br>कुछ दुनिया सीमित समय के लिए निःशुल्क उपलब्ध होती हैं और उन्हें <a href='https://dokodemodoors.com/' target='_blank'>होमपेज</a> के \"Recommended Worlds\" में पाया जा सकता है।</p><p class='heading-strong'>2. Meta Quest 2 या उससे ऊपर के हेडसेट की सलाह दी जाती है</p><p style='padding-left: 1em;'>हालाँकि विभिन्न उपकरणों पर वीडियो देखा जा सकता है, लेकिन VR की वास्तविक अनुभूति पाने के लिए Meta Quest 2 या उससे ऊपर का हेडसेट अत्यधिक अनुशंसित है।</p>"
+  },
+  "meetups": {
+    "title": "मीटअप रूम",
+    "createButton": "रूम बनाएँ",
+    "cardStartsLabel": "शुरू होने में",
+    "cardExpiresIn": "ऑटो-डिलीट तक शेष समय",
+    "cardExpired": "समाप्त",
+    "enterLobby": "प्रवेश करें",
+    "freeEvent": "निःशुल्क कार्यक्रम",
+    "paidEvent": "सशुल्क कार्यक्रम",
+    "paidEventWithPrice": "सशुल्क कार्यक्रम ({price})",
+    "editTooltip": "संपादित करें"
+  },
+  "modal": {
+    "createTitle": "मीटअप रूम बनाएँ",
+    "editTitle": "रूम संपादित करें",
+    "form": {
+      "titleLabel": "शीर्षक",
+      "limitLabel": "अधिकतम प्रतिभागी",
+      "startLabel": "प्रारंभ समय (JST)",
+      "targetLabel": "टूर / वर्ल्ड URL",
+      "targetNote": "रूम बनने के बाद URL बदला नहीं जा सकता। बदलने के लिए इस रूम की कॉपी बनाकर नया रूम बनाएँ।",
+      "descriptionHtml": "<p>आप <a href='https://dokodemodoors.com/' target='_blank'>आधिकारिक Dokodemo Doors साइट</a> पर बनाए गए इवेंट के लिए एक मीटअप लॉबी बना सकते हैं। शीर्षक, URL, प्रतिभागी सीमा, निःशुल्क/सशुल्क विकल्प, और शुरू होने का समय भरें और रूम बनाएँ।</p>",
+      "eventTypeLabel": "कार्यक्रम प्रकार",
+      "eventTypeFree": "निःशुल्क कार्यक्रम",
+      "eventTypePaid": "सशुल्क कार्यक्रम",
+      "priceLabel": "मूल्य",
+      "pricePlaceholder": "उदाहरण：1500 JPY / $10 / 10 EUR"
+    },
+    "deleteButton": "इस रूम को हटाएँ",
+    "duplicateButton": "रूम की कॉपी बनाएँ",
+    "closeButton": "बंद करें",
+    "submitCreate": "बनाएँ",
+    "submitUpdate": "अपडेट करें",
+    "statusCreated": "रूम बनाया गया",
+    "statusUpdated": "अपडेट किया गया",
+    "validation": {
+      "startRequired": "कृपया प्रारंभ समय दर्ज करें।",
+      "noPermission": "इस डिवाइस को रूम संपादित करने की अनुमति नहीं है।",
+      "ownerMissing": "निर्माता जानकारी नहीं मिली, रूम हटाया नहीं जा सकता।",
+      "deleteFailedPrefix": "हटाते समय त्रुटि:",
+      "serverError": "सर्वर त्रुटि।",
+      "duplicated": "उसी URL वाला रूम पहले से मौजूद है।"
+    }
+  },
+  "alert": {
+    "title": "URL के बारे में",
+    "body": "कृपया Dokodemo Doors के टूर/वर्ल्ड का URL दर्ज करें।",
+    "ok": "ठीक है"
+  },
+  "aboutModal": {
+    "ok": "ठीक है"
+  },
+  "guideModal": {
+    "ok": "ठीक है"
+  },
   "lobby": {
     "headerTitle": "मीटअप लॉबी",
     "nicknameButton": "निकनेम",
-    "nicknamePrompt": "कृपया अपना निकनेम दर्ज करें।",
     "backButton": "← वापस",
-
     "countdownLabel": "काउंटडाउन",
-    "countdownWaiting": "कृपया टूर शुरू होने तक प्रतीक्षा करें।",
-    "countdownFinished": "टूर शुरू होने का समय हो गया है।",
-    "statusWaiting": "कृपया टूर शुरू होने तक प्रतीक्षा करें।",
-
-    "enterButton": "टूर पर जाएँ",
-    "copyRoomUrl": "इस लॉबी का URL कॉपी करें",
-    "copiedUrl": "लॉबी URL कॉपी हो गया।",
-    "copyFailed": "कॉपी करने में विफल।",
-
+    "voiceSectionTitle": "वॉयस चैट",
+    "voiceControlLabel": "वॉयस चैट",
     "textChatLabel": "टेक्स्ट चैट",
+    "copyRoomUrl": "इस रूम का URL कॉपी करें",
+    "enterButton": "टूर में जाएँ",
     "chatSend": "भेजें",
-    "chatConnected": "कनेक्ट हो गया।",
-    "chatDisconnected": "कनेक्शन टूट गया। कृपया पेज रीफ़्रेश करें।",
-    "chatError": "त्रुटि हुई। कृपया पुनः प्रयास करें।",
     "chatPlaceholder": "संदेश लिखें…",
-
-    "connConnected": "कनेक्टेड",
-    "connDisconnected": "डिसकनेक्टेड",
-    "connError": "त्रुटि",
-
-    "startLabel": "शुरू होने का समय: ",
-    "dateLabel": "तारीख और समय",
-    "dateUnknown": "सेट नहीं",
-    "limitLabel": "प्रतिभागी सीमा",
-    "limitNone": "कोई सीमा नहीं",
-    "peopleUnit": "लोग",
-    "urlLabel": "टूर URL",
-    "urlUnknown": "सेट नहीं",
-    "eventTypeLabel": "प्रकार",
-    "eventTypeUnknown": "अज्ञात",
-    "priceLabel": "शुल्क",
-    "priceUnknown": "अज्ञात",
-
-    "infoPanelLabel": "लॉबी जानकारी",
-    "voicePanelLabel": "आवाज़ सेटिंग्स",
-    "voiceSectionTitle": "वॉइस चैट",
-    "voiceControlLabel": "वॉइस चैट",
-
-    "selfEchoLabel": "अपनी आवाज़ खुद को सुनाएं",
-    "voiceAutoJoinLabel": "प्रवेश पर ऑटो वॉइस कनेक्शन",
-
-    "voiceOn": "आवाज़ ON",
-    "voiceOff": "आवाज़ OFF",
-    "voiceJoined": "वॉइस: जुड़ा हुआ",
-    "voiceNone": "वॉइस: कनेक्ट नहीं",
+    "enableSound": "स्मार्टफ़ोन पर ध्वनि सक्षम करें",
+    "enableSoundRetry": "आवाज़ नहीं आ रही? कृपया फिर से सक्षम करने का प्रयास करें",
+    "footer": "© DokodemoDoors",
+    "pageTitleSuffix": "मीटअप लॉबी",
+    "startLabel": "प्रारंभ समय：",
+    "participantLimit": "अधिकतम {limit} लोग",
+    "statusNoStart": "प्रारंभ समय सेट नहीं है।",
+    "statusWaiting": "टूर शुरू होने तक प्रतीक्षा करें।",
+    "statusDuring": "रूम {minutes} मिनट में ऑटो-डिलीट हो जाएगा।",
+    "statusStarted": "टूर शुरू हो चुका है（20 मिनट तक शामिल हो सकते हैं）。",
+    "statusExpiredShort": "समाप्त",
+    "statusEnded": "यह रूम समाप्त हो चुका है।",
+    "copied": "कॉपी किया गया。",
+    "manualCopyPrompt": "यदि कॉपी नहीं हुआ, तो यहाँ से कॉपी करें：",
+    "nicknamePrompt": "कृपया निकनेम दर्ज करें。",
+    "nicknameSaved": "निकनेम सहेजा गया। पेज रीलोड करने पर लागू होगा。",
+    "membersEmpty": "अभी कोई प्रतिभागी नहीं है。",
+    "membersLabel": "प्रतिभागी",
+    "memberLabel": "{name}（{id}）",
+    "chatLine": "{name}: {text}",
+    "historyLoaded": "— पिछले संदेश लोड किए गए —",
+    "joined": "{name} शामिल हुआ（कुल {count} लोग）",
+    "left": "{name} बाहर गया（कुल {count} लोग）",
+    "chatConnected": "कनेक्टेड。",
+    "chatReconnecting": "कनेक्शन टूट गया। पुनः कनेक्ट कर रहे हैं…",
+    "chatError": "त्रुटि हुई。",
+    "chatConnectFailed": "कनेक्ट नहीं हो पाया。",
+    "chatInitial": "कनेक्ट नहीं है。",
+    "voiceOn": "वॉयस ON",
+    "voiceOff": "वॉयस OFF",
     "mute": "म्यूट",
     "unmute": "म्यूट हटाएँ",
-
-    "voiceOnOffNotice": "🔊 कभी-कभी वॉइस ON/OFF करने से समस्या हल हो जाती है।",
-    "voiceAskNotice": "🤵 धीरे और स्पष्ट बोलने से पहचान की सटीकता बढ़ती है।",
-    "voiceHint": "",
-
-    "enableSound": "मोबाइल पर ध्वनि सक्षम करें",
-    "voicePermissionError": "माइक्रोफोन की अनुमति नहीं मिली।",
-
-    "voiceAskBtn": "बटलर से पूछें (आवाज़)",
-    "voiceAskNeedJoin": "पहले वॉइस चैट से जुड़ें।",
-    "voiceAskNoWs": "चैट सर्वर से कनेक्शन नहीं है।",
-    "voiceAskListening": "बटलर सुन रहा है…",
-
-    "historyLoaded": "— पिछले संदेश लोड हो गए —",
-    "joined": "{name} शामिल हुआ (कुल {count})",
-    "left": "{name} बाहर निकला (कुल {count})",
-
-    "memberLabel": "{name}",
-    "botThinking": "बटलर सोच रहा है…",
-
-    "footer": "© DokodemoDoors"
+    "voiceJoined": "वॉयस：कनेक्टेड（माइक {state}）",
+    "voiceNone": "वॉयस：शामिल नहीं",
+    "micErrorTitle": "माइक एक्सेस विफल：",
+    "micErrorMsg": "कृपया ब्राउज़र सेटिंग में माइक्रोफोन अनुमति सक्षम करें。",
+    "voiceHint": "※ आवाज़ सीधे ब्राउज़र के बीच भेजी जाती है。",
+    "voicePermissionError": "माइक एक्सेस की अनुमति नहीं दी गई。",
+    "voiceAskBtn": "बटलर से पूछें（वॉयस）",
+    "voiceAskNeedJoin": "कृपया पहले वॉयस चैट में शामिल हों。",
+    "voiceAskNoWs": "चैट सर्वर से कनेक्शन नहीं है。",
+    "voiceAskListening": "बटलर आपकी आवाज़ सुन रहा है…",
+    "voiceOnOffHint": "वॉयस ON/OFF बदलने से गुणवत्ता बेहतर हो सकती है。",
+    "voiceSpeakHint": "धीरे और स्पष्ट बोलने से पहचान की सटीकता बढ़ती है。",
+    "voiceOnOffNotice": "🔊 वॉयस ON/OFF बदलने से गुणवत्ता बेहतर हो सकती है。",
+    "voiceAskNotice": "🤵 धीरे और स्पष्ट बोलने से पहचान की सटीकता बढ़ती है。"
+  },
+  "aria": {
+    "close": "बंद करें",
+    "selectMaxParticipants": "अधिकतम प्रतिभागी चुनें",
+    "month": "महीना",
+    "day": "दिन",
+    "hour": "घंटा",
+    "minute": "मिनट"
   }
 }

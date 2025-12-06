@@ -1,93 +1,138 @@
 {
-  "pageTitle": "سایت هواداران Dokodemo Doors",
-  "siteTitle": "سایت هواداران Dokodemo Doors",
+  "pageTitle": "سایت طرفداران Dokodemo Doors",
+  "siteTitle": "سایت طرفداران Dokodemo Doors",
   "buttons": {
     "about": "Dokodemo Doors چیست؟",
-    "guide": "این سایت هواداری چیست؟"
+    "guide": "این سایت طرفداران چیست؟"
   },
   "about": {
     "title": "Dokodemo Doors چیست؟",
-    "bodyHtml": "<p class='heading-large'>جایی که می‌توانید حتی از دور هم با هم سفر کنید</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors</a> یک پلتفرم VR آنلاین است که مجموعه‌ای بزرگ از ویدیوهای ۳۶۰ درجه سفر در جهان را ارائه می‌دهد.</p><p class='heading-strong'>بیش از ۱۷۰۰ ویدیو</p><p style='padding-left: 1em;'>در حالی که یوتیوب نیز ویدیوهای VR دارد، هیچ سایتی به اندازه Dokodemo Doors محتوای متمرکز VR ارائه نمی‌دهد.</p><p class='heading-strong'>تماشای همزمان با دیگران</p><p style='padding-left: 1em;'>با پخش همزمان ویدیو، می‌توانید مناظر یکسان را در یک لحظه مشاهده کرده و گفتگو کنید.</p><p>برای اطلاعات بیشتر <a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>اینجا</a> را ببینید.</p>"
+    "bodyHtml": "<p class='heading-large'>جایی که حتی از دور هم می‌توان جهان را با هم تجربه کرد</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors</a> یک پلتفرم آنلاین واقعیت مجازی است که مجموعه‌ای بزرگ از ویدیوهای سفر ۳۶۰ درجه از سراسر جهان ارائه می‌دهد.</p><p class='heading-strong'>بیش از ۱۷۰۰ ویدیو</p><p style='padding-left: 1em;'>اگرچه در YouTube نیز ویدیوهای VR وجود دارد، اما سایت‌هایی که این تعداد زیاد از ویدیوهای سفر VR را در یک مکان گردآوری کنند بسیار کم هستند.</p><p class='heading-strong'>تماشای کاملاً هم‌زمان</p><p style='padding-left: 1em;'>با شروع هم‌زمان ویدیو، افراد—even در کشورهای مختلف—می‌توانند دقیقاً همان لحظه و همان منظره را با یکدیگر به اشتراک بگذارند.</p><p>برای اطلاعات بیشتر، لطفاً <a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>این صفحه</a> را ببینید.</p>"
   },
   "guide": {
-    "title": "این سایت هواداری چیست؟",
-    "bodyHtml": "<p class='heading-large'>سایتی غیررسمی برای انتخاب مقصد از روی یک کره‌ سه‌بعدی</p><p>چون می‌خواستم مقصدها را از روی یک کره انتخاب کنم و نه فقط از فهرست موجود در <a href='https://dokodemodoors.com/' target='_blank'>سایت رسمی</a>، با کسب اجازه رسمی این سایت را ایجاد کردم.</p><p class='heading-strong'>۱. نیاز به اشتراک</p><p style='padding-left: 1em;'>برای ورود به هر دنیا باید در سایت رسمی اشتراک داشته باشید. اگر اشتراک نداشته باشید، هنگام ورود به دنیا به صفحه اشتراک منتقل می‌شوید.<br>برخی دنیاها در دوره‌های زمانی محدود رایگان هستند و از صفحه اصلی <a href='https://dokodemodoors.com/' target='_blank'>سایت رسمی</a> قابل مشاهده‌اند.</p><p class='heading-strong'>۲. پیشنهاد استفاده از Meta Quest 2 یا بالاتر</p><p style='padding-left: 1em;'>هرچند روی دستگاه‌های مختلف قابل مشاهده است، اما تجربه VR بسیار برتر است. توصیه می‌شود از Meta Quest 2 یا بالاتر استفاده کنید.</p>"
+    "title": "این سایت طرفداران چیست؟",
+    "bodyHtml": "<p class='heading-large'>یک سایت غیررسمی که مقصد را از طریق کره زمین سه‌بعدی انتخاب می‌کنید</p><p>می‌خواستم دنیاها را از طریق یک کره سه‌بعدی انتخاب کنم نه از طریق یک فهرست ساده. به همین دلیل، با کسب اجازه از <a href='https://dokodemodoors.com/' target='_blank'>سایت رسمی</a>، این سایت طرفداران ساخته شد.</p><p class='heading-strong'>1. برای مشاهده دنیاها باید در سایت رسمی اشتراک داشته باشید</p><p style='padding-left: 1em;'>برای ورود به دنیاها و لذت بردن از مناظر، باید در سایت رسمی اشتراک فعال داشته باشید. اگر اشتراک نداشته باشید، تلاش برای ورود شما را به صفحه اشتراک منتقل می‌کند.<br>برخی دنیاها به‌صورت محدود رایگان می‌شوند و می‌توانید آن‌ها را در بخش “Recommended Worlds” بیابید.</p><p class='heading-strong'>2. استفاده از Meta Quest 2 یا بالاتر توصیه می‌شود</p><p style='padding-left: 1em;'>تماشا از طریق رایانه یا تلفن همراه امکان‌پذیر است، اما برای تجربه واقعی VR، به شدت توصیه می‌شود از Meta Quest 2 یا هدست‌های جدیدتر استفاده کنید.</p>"
   },
-
+  "meetups": {
+    "title": "اتاق‌های ملاقات",
+    "createButton": "ایجاد اتاق",
+    "cardStartsLabel": "تا شروع",
+    "cardExpiresIn": "زمان باقی‌مانده تا حذف خودکار",
+    "cardExpired": "منقضی شده",
+    "enterLobby": "ورود",
+    "freeEvent": "رویداد رایگان",
+    "paidEvent": "رویداد پولی",
+    "paidEventWithPrice": "رویداد پولی ({price})",
+    "editTooltip": "ویرایش"
+  },
+  "modal": {
+    "createTitle": "ایجاد اتاق ملاقات",
+    "editTitle": "ویرایش اتاق",
+    "form": {
+      "titleLabel": "عنوان",
+      "limitLabel": "حداکثر شرکت‌کنندگان",
+      "startLabel": "زمان شروع (JST)",
+      "targetLabel": "آدرس URL جهان / تور",
+      "targetNote": "پس از ایجاد، امکان تغییر URL وجود ندارد. برای تغییر، اتاق را کپی کرده و اتاق جدید بسازید.",
+      "descriptionHtml": "<p>می‌توانید برای رویدادی که در <a href='https://dokodemodoors.com/' target='_blank'>سایت رسمی Dokodemo Doors</a> تنظیم کرده‌اید، لابی ملاقات ایجاد کنید. عنوان، URL، سقف شرکت‌کنندگان، رایگان/پولی بودن و زمان شروع را وارد کنید.</p>",
+      "eventTypeLabel": "نوع رویداد",
+      "eventTypeFree": "رایگان",
+      "eventTypePaid": "پولی",
+      "priceLabel": "قیمت",
+      "pricePlaceholder": "مثال: ‎1500 JPY / $10 / 10 EUR"
+    },
+    "deleteButton": "حذف این اتاق",
+    "duplicateButton": "کپی اتاق",
+    "closeButton": "بستن",
+    "submitCreate": "ایجاد",
+    "submitUpdate": "به‌روزرسانی",
+    "statusCreated": "ایجاد شد",
+    "statusUpdated": "به‌روزرسانی شد",
+    "validation": {
+      "startRequired": "لطفاً زمان شروع را وارد کنید.",
+      "noPermission": "این دستگاه اجازه ویرایش اتاق را ندارد.",
+      "ownerMissing": "اطلاعات سازنده یافت نشد؛ حذف ممکن نیست.",
+      "deleteFailedPrefix": "خطا در حذف:",
+      "serverError": "خطای سرور.",
+      "duplicated": "اتاقی با همین URL از قبل وجود دارد."
+    }
+  },
+  "alert": {
+    "title": "درباره URL",
+    "body": "لطفاً آدرس URL یکی از جهان‌ها یا تورهای Dokodemo Doors را وارد کنید.",
+    "ok": "باشه"
+  },
+  "aboutModal": {
+    "ok": "باشه"
+  },
+  "guideModal": {
+    "ok": "باشه"
+  },
   "lobby": {
     "headerTitle": "لابی ملاقات",
-    "nicknameButton": "نام نمایشی",
-    "nicknamePrompt": "لطفاً نام نمایشی خود را وارد کنید.",
+    "nicknameButton": "نام مستعار",
     "backButton": "← بازگشت",
-
     "countdownLabel": "شمارش معکوس",
-    "countdownWaiting": "لطفاً تا شروع تور صبر کنید.",
-    "countdownFinished": "زمان شروع تور رسیده است.",
-    "statusWaiting": "لطفاً تا شروع تور صبر کنید.",
-
-    "enterButton": "ورود به تور",
-    "copyRoomUrl": "کپی لینک این لابی",
-    "copiedUrl": "لینک لابی کپی شد.",
-    "copyFailed": "کپی ناموفق بود.",
-
-    "textChatLabel": "چت متنی",
+    "voiceSectionTitle": "گفتگوی صوتی",
+    "voiceControlLabel": "گفتگوی صوتی",
+    "textChatLabel": "گفتگوی متنی",
+    "copyRoomUrl": "کپی URL این اتاق",
+    "enterButton": "رفتن به تور",
     "chatSend": "ارسال",
-    "chatConnected": "متصل شد.",
-    "chatDisconnected": "ارتباط قطع شد. لطفاً صفحه را دوباره بارگذاری کنید.",
-    "chatError": "خطایی رخ داد. لطفاً دوباره تلاش کنید.",
-    "chatPlaceholder": "پیامی وارد کنید…",
-
-    "connConnected": "متصل",
-    "connDisconnected": "قطع",
-    "connError": "خطا",
-
+    "chatPlaceholder": "پیامی بنویسید…",
+    "enableSound": "فعال‌سازی صدا در موبایل",
+    "enableSoundRetry": "صدا ندارید؟ دوباره تلاش کنید",
+    "footer": "© DokodemoDoors",
+    "pageTitleSuffix": "لابی ملاقات",
     "startLabel": "زمان شروع: ",
-    "dateLabel": "تاریخ و زمان شروع",
-    "dateUnknown": "تنظیم نشده",
-    "limitLabel": "محدودیت نفرات",
-    "limitNone": "بدون محدودیت",
-    "peopleUnit": "نفر",
-    "urlLabel": "لینک تور",
-    "urlUnknown": "نامشخص",
-    "eventTypeLabel": "نوع رویداد",
-    "eventTypeUnknown": "نامشخص",
-    "priceLabel": "قیمت",
-    "priceUnknown": "نامشخص",
-
-    "infoPanelLabel": "اطلاعات لابی",
-    "voicePanelLabel": "تنظیمات صدا",
-    "voiceSectionTitle": "گفت‌وگوی صوتی",
-    "voiceControlLabel": "گفت‌وگوی صوتی",
-
-    "selfEchoLabel": "پخش صدای خودم برای خودم",
-    "voiceAutoJoinLabel": "اتصال خودکار هنگام ورود",
-
-    "voiceOn": "صدا روشن",
-    "voiceOff": "صدا خاموش",
-    "voiceJoined": "صدا: متصل",
-    "voiceNone": "صدا: متصل نیست",
-    "mute": "بی‌صدا",
-    "unmute": "حذف بی‌صدا",
-
-    "voiceOnOffNotice": "🔊 گاهی روشن/خاموش کردن صدا مشکل را حل می‌کند.",
-    "voiceAskNotice": "🤵 آهسته و واضح صحبت کردن دقت تشخیص را افزایش می‌دهد.",
-    "voiceHint": "",
-
-    "enableSound": "فعال‌سازی صدا روی موبایل",
-    "voicePermissionError": "اجازه دسترسی به میکروفون داده نشده است.",
-
-    "voiceAskBtn": "سؤال از پیشخدمت (صوتی)",
-    "voiceAskNeedJoin": "ابتدا به گفت‌وگوی صوتی متصل شوید.",
-    "voiceAskNoWs": "به سرور چت متصل نیستید.",
-    "voiceAskListening": "پیشخدمت در حال گوش دادن…",
-
-    "historyLoaded": "— پیام‌های قبلی بارگذاری شد —",
+    "participantLimit": "حداکثر {limit} نفر",
+    "statusNoStart": "زمان شروع تنظیم نشده است.",
+    "statusWaiting": "لطفاً تا شروع تور منتظر بمانید.",
+    "statusDuring": "این اتاق در {minutes} دقیقه به‌صورت خودکار حذف خواهد شد.",
+    "statusStarted": "تور آغاز شده است. تا ۲۰ دقیقه پس از شروع می‌توانید وارد شوید.",
+    "statusExpiredShort": "منقضی شد",
+    "statusEnded": "این اتاق پایان یافته است.",
+    "copied": "کپی شد.",
+    "manualCopyPrompt": "اگر کپی انجام نشد، دستی کپی کنید:",
+    "nicknamePrompt": "لطفاً نام مستعار وارد کنید.",
+    "nicknameSaved": "نام مستعار ذخیره شد. پس از رفرش اعمال می‌شود.",
+    "membersEmpty": "هنوز هیچ شرکت‌کننده‌ای حاضر نیست.",
+    "membersLabel": "شرکت‌کنندگان",
+    "memberLabel": "{name} ({id})",
+    "chatLine": "{name}: {text}",
+    "historyLoaded": "— پیام‌های قبلی بارگذاری شدند —",
     "joined": "{name} وارد شد (مجموع {count})",
     "left": "{name} خارج شد (مجموع {count})",
-
-    "memberLabel": "{name}",
-    "botThinking": "پیشخدمت در حال فکر کردن است…",
-
-    "footer": "© DokodemoDoors"
+    "chatConnected": "متصل شد.",
+    "chatReconnecting": "اتصال قطع شد، در حال اتصال دوباره…",
+    "chatError": "خطایی رخ داد.",
+    "chatConnectFailed": "اتصال برقرار نشد.",
+    "chatInitial": "متصل نیست.",
+    "voiceOn": "صدا روشن",
+    "voiceOff": "صدا خاموش",
+    "mute": "بی‌صدا",
+    "unmute": "لغو بی‌صدا",
+    "voiceJoined": "صدا: متصل (میکروفون {state})",
+    "voiceNone": "صدا: متصل نیست",
+    "micErrorTitle": "عدم دسترسی به میکروفون:",
+    "micErrorMsg": "لطفاً دسترسی میکروفون را در تنظیمات مرورگر فعال کنید.",
+    "voiceHint": "※ صدا مستقیماً بین مرورگرها منتقل می‌شود.",
+    "voicePermissionError": "اجازه میکروفون داده نشد.",
+    "voiceAskBtn": "پرسش از پیشخدمت (صوتی)",
+    "voiceAskNeedJoin": "لطفاً ابتدا به گفتگوی صوتی بپیوندید.",
+    "voiceAskNoWs": "اتصال به سرور چت برقرار نیست.",
+    "voiceAskListening": "پیشخدمت در حال شنیدن صدای شماست…",
+    "voiceOnOffHint": "روشن/خاموش کردن صدا ممکن است کیفیت را بهبود دهد.",
+    "voiceSpeakHint": "آهسته و واضح صحبت کردن دقت تشخیص را افزایش می‌دهد.",
+    "voiceOnOffNotice": "🔊 روشن/خاموش کردن صدا ممکن است کیفیت را بهتر کند.",
+    "voiceAskNotice": "🤵 آهسته و واضح صحبت کردن دقت تشخیص را افزایش می‌دهد."
+  },
+  "aria": {
+    "close": "بستن",
+    "selectMaxParticipants": "انتخاب حداکثر شرکت‌کنندگان",
+    "month": "ماه",
+    "day": "روز",
+    "hour": "ساعت",
+    "minute": "دقیقه"
   }
 }

@@ -1,78 +1,138 @@
 {
+  "pageTitle": "אתר מעריצים של Dokodemo Doors",
+  "siteTitle": "אתר מעריצים של Dokodemo Doors",
+  "buttons": {
+    "about": "מהו Dokodemo Doors?",
+    "guide": "מהו אתר המעריצים הזה?"
+  },
+  "about": {
+    "title": "מהו Dokodemo Doors?",
+    "bodyHtml": "<p class='heading-large'>מקום שבו ניתן לחוות את העולם יחד—even מרחוק</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors</a> הוא פלטפורמת VR מקוונת המציעה אוסף גדול של סרטוני טיול ב־360 מעלות מרחבי העולם.</p><p class='heading-strong'>מעל 1,700 סרטונים זמינים</p><p style='padding-left: 1em;'>למרות שגם ב־YouTube יש סרטוני VR, כמעט ולא קיימים אתרים המרכזים כמות גדולה כל כך של סרטוני טיול במקום אחד.</p><p class='heading-strong'>צפייה מסונכרנת לחלוטין</p><p style='padding-left: 1em;'>על ידי התחלת הסרטון בו־זמנית, ניתן לחלוק את אותו רגע ואת אותם נופים—even אם נמצאים במדינות שונות.</p><p>למידע נוסף, בקרו ב־<a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>עמוד המידע</a>.</p>"
+  },
+  "guide": {
+    "title": "מהו אתר המעריצים הזה?",
+    "bodyHtml": "<p class='heading-large'>אתר לא רשמי המאפשר לבחור יעדים דרך כדור־ארץ תלת־ממדי</p><p>רציתי לבחור עולמות דרך גלובוס תלת־ממדי ולא מרשימה רגילה. לכן יצרתי את האתר הזה לאחר שקיבלתי רשות מה<a href='https://dokodemodoors.com/' target='_blank'>אתר הרשמי</a>.</p><p class='heading-strong'>1. לצפייה בעולמות נדרש מנוי לאתר הרשמי</p><p style='padding-left: 1em;'>כדי להיכנס לעולמות וליהנות מהנופים, יש להחזיק מנוי פעיל באתר הרשמי. אם אין מנוי, ניסיון כניסה יעביר אתכם לעמוד ההרשמה.<br>חלק מהעולמות פתוחים לצפייה חינם לזמן מוגבל וניתן למצוא אותם במדור “Recommended Worlds”.</p><p class='heading-strong'>2. מומלץ להשתמש ב־Meta Quest 2 או גרסה מתקדמת יותר</p><p style='padding-left: 1em;'>ניתן לצפות בעולמות דרך מחשב או סמארטפון, אבל כדי ליהנות מתחושת ה־VR האמיתית מומלץ מאוד להשתמש ב־Meta Quest 2 או חדש יותר.</p>"
+  },
+  "meetups": {
+    "title": "חדרי מפגש",
+    "createButton": "צור חדר",
+    "cardStartsLabel": "מתחיל בעוד",
+    "cardExpiresIn": "זמן עד מחיקה אוטומטית",
+    "cardExpired": "פג תוקף",
+    "enterLobby": "כניסה",
+    "freeEvent": "אירוע חינמי",
+    "paidEvent": "אירוע בתשלום",
+    "paidEventWithPrice": "אירוע בתשלום ({price})",
+    "editTooltip": "עריכה"
+  },
+  "modal": {
+    "createTitle": "צור חדר מפגש",
+    "editTitle": "ערוך חדר",
+    "form": {
+      "titleLabel": "כותרת",
+      "limitLabel": "מספר משתתפים מקסימלי",
+      "startLabel": "זמן התחלה (JST)",
+      "targetLabel": "כתובת URL של העולם/הסיור",
+      "targetNote": "לא ניתן לשנות את כתובת ה־URL לאחר יצירת החדר. לשינוי, יש לשכפל את החדר וליצור חדש.",
+      "descriptionHtml": "<p>ניתן ליצור לובי מפגש עבור אירוע שהוגדר ב<a href='https://dokodemodoors.com/' target='_blank'>אתר הרשמי</a>. הזינו כותרת, קישור, מספר משתתפים, תשלום/חינם, ושעת התחלה.</p>",
+      "eventTypeLabel": "סוג אירוע",
+      "eventTypeFree": "אירוע חינמי",
+      "eventTypePaid": "אירוע בתשלום",
+      "priceLabel": "מחיר",
+      "pricePlaceholder": "דוגמה: 1500 JPY / $10 / 10 EUR"
+    },
+    "deleteButton": "מחק חדר זה",
+    "duplicateButton": "שכפל חדר",
+    "closeButton": "סגור",
+    "submitCreate": "צור",
+    "submitUpdate": "עדכן",
+    "statusCreated": "נוצר",
+    "statusUpdated": "עודכן",
+    "validation": {
+      "startRequired": "יש להזין זמן התחלה.",
+      "noPermission": "למכשיר זה אין הרשאה לעריכת החדר.",
+      "ownerMissing": "לא נמצאו פרטי יוצר, לא ניתן למחוק.",
+      "deleteFailedPrefix": "שגיאה במחיקה:",
+      "serverError": "שגיאת שרת.",
+      "duplicated": "קיים כבר חדר עם אותה כתובת URL."
+    }
+  },
+  "alert": {
+    "title": "על הכתובת (URL)",
+    "body": "אנא הזינו כתובת URL של סיור או עולם ב־Dokodemo Doors.",
+    "ok": "אישור"
+  },
+  "aboutModal": {
+    "ok": "אישור"
+  },
+  "guideModal": {
+    "ok": "אישור"
+  },
   "lobby": {
     "headerTitle": "לובי מפגש",
-    "nicknameButton": "שם כינוי",
-    "nicknamePrompt": "אנא הזינו שם כינוי.",
+    "nicknameButton": "כינוי",
     "backButton": "← חזרה",
-
     "countdownLabel": "ספירה לאחור",
-    "countdownWaiting": "אנא המתינו לתחילת הסיור.",
-    "countdownFinished": "זמן תחילת הסיור הגיע.",
-    "statusWaiting": "אנא המתינו לתחילת הסיור.",
-
-    "enterButton": "כניסה לסיור",
-    "copyRoomUrl": "העתקת קישור הלובי",
-    "copiedUrl": "הקישור הועתק.",
-    "copyFailed": "העתקה נכשלה.",
-
-    "textChatLabel": "צ׳אט טקסט",
-    "chatSend": "שליחה",
-    "chatConnected": "מחובר.",
-    "chatDisconnected": "החיבור נותק. נא לטעון מחדש.",
-    "chatError": "אירעה שגיאה. נסו שוב.",
-    "chatPlaceholder": "הקלידו הודעה…",
-
-    "connConnected": "מחובר",
-    "connDisconnected": "מנותק",
-    "connError": "שגיאה",
-
-    "startLabel": "זמן התחלה: ",
-    "dateLabel": "תאריך ושעה",
-    "dateUnknown": "לא הוגדר",
-    "limitLabel": "הגבלת משתתפים",
-    "limitNone": "ללא הגבלה",
-    "peopleUnit": "משתתפים",
-    "urlLabel": "קישור לסיור",
-    "urlUnknown": "לא הוגדר",
-    "eventTypeLabel": "סוג אירוע",
-    "eventTypeUnknown": "לא הוגדר",
-    "priceLabel": "מחיר",
-    "priceUnknown": "לא הוגדר",
-
-    "infoPanelLabel": "פרטי הלובי",
-    "voicePanelLabel": "הגדרות קול",
     "voiceSectionTitle": "צ׳אט קולי",
     "voiceControlLabel": "צ׳אט קולי",
-
-    "selfEchoLabel": "נגן את קולי בחזרה אליי",
-    "voiceAutoJoinLabel": "הצטרפות אוטומטית לקול",
-
-    "voiceOn": "קול פועל",
-    "voiceOff": "קול כבוי",
-    "voiceJoined": "קול: מחובר",
-    "voiceNone": "קול: לא מחובר",
-    "mute": "השתקה",
-    "unmute": "בטל השתקה",
-
-    "voiceOnOffNotice": "🔊 כיבוי והדלקה עשויים לשפר את איכות הקול.",
-    "voiceAskNotice": "🤵 דיבור לאט ובבירור משפר את הדיוק.",
-    "voiceHint": "",
-
-    "enableSound": "הפעלת צליל בסמארטפון",
-    "voicePermissionError": "אין הרשאה למיקרופון.",
-
-    "voiceAskBtn": "שאלת המשרת (קול)",
-    "voiceAskNeedJoin": "יש להתחבר לצ'אט קולי קודם.",
-    "voiceAskNoWs": "החיבור לשרת הצ'אט נותק.",
-    "voiceAskListening": "המשרת מאזין…",
-
-    "historyLoaded": "— היסטוריית ההודעות נטענה —",
+    "textChatLabel": "צ׳אט טקסט",
+    "copyRoomUrl": "העתקת כתובת החדר",
+    "enterButton": "עבור לסיור",
+    "chatSend": "שלח",
+    "chatPlaceholder": "הקלד הודעה…",
+    "enableSound": "הפעלת שמע בסמארטפון",
+    "enableSoundRetry": "אין קול? נסו להפעיל מחדש",
+    "footer": "© DokodemoDoors",
+    "pageTitleSuffix": "לובי מפגש",
+    "startLabel": "זמן התחלה: ",
+    "participantLimit": "עד {limit} משתתפים",
+    "statusNoStart": "לא הוגדר זמן התחלה.",
+    "statusWaiting": "אנא המתינו לתחילת הסיור.",
+    "statusDuring": "החדר יימחק אוטומטית בעוד {minutes} דקות.",
+    "statusStarted": "הסיור כבר התחיל. ניתן להצטרף עד 20 דקות מתחילת האירוע.",
+    "statusExpiredShort": "פג תוקף",
+    "statusEnded": "חדר מפגש זה הסתיים.",
+    "copied": "הועתק.",
+    "manualCopyPrompt": "אם ההעתקה נכשלה, העתיקו ידנית:",
+    "nicknamePrompt": "הזינו כינוי.",
+    "nicknameSaved": "הכינוי נשמר. יחול לאחר רענון הדף.",
+    "membersEmpty": "אין משתתפים עדיין.",
+    "membersLabel": "משתתפים",
+    "memberLabel": "{name} ({id})",
+    "chatLine": "{name}: {text}",
+    "historyLoaded": "— נטענו הודעות קודמות —",
     "joined": "{name} הצטרף (סה״כ {count})",
-    "left": "{name} יצא (סה״כ {count})",
-
-    "memberLabel": "{name}",
-    "botThinking": "המשרת חושב…",
-
-    "footer": "© DokodemoDoors"
+    "left": "{name} עזב (סה״כ {count})",
+    "chatConnected": "מחובר.",
+    "chatReconnecting": "החיבור אבד. מתחבר מחדש…",
+    "chatError": "אירעה שגיאה.",
+    "chatConnectFailed": "ההתחברות נכשלה.",
+    "chatInitial": "לא מחובר.",
+    "voiceOn": "קול פעיל",
+    "voiceOff": "קול כבוי",
+    "mute": "השתקה",
+    "unmute": "ביטול השתקה",
+    "voiceJoined": "קול: מחובר (מיקרופון {state})",
+    "voiceNone": "קול: לא מחובר",
+    "micErrorTitle": "גישה למיקרופון נכשלה:",
+    "micErrorMsg": "אנא אפשרו גישה למיקרופון בהגדרות הדפדפן.",
+    "voiceHint": "※ השמע מועבר ישירות בין הדפדפנים.",
+    "voicePermissionError": "לא ניתנה הרשאה למיקרופון.",
+    "voiceAskBtn": "שאל את המשרת (קול)",
+    "voiceAskNeedJoin": "יש להצטרף קודם לצ׳אט הקולי.",
+    "voiceAskNoWs": "לא מחובר לשרת הצ׳אט.",
+    "voiceAskListening": "המשרת מאזין לדיבורכם…",
+    "voiceOnOffHint": "הפעלת וכיבוי הצ׳אט הקולי עשויה לשפר את איכות השמע.",
+    "voiceSpeakHint": "דיבור איטי וברור משפר את דיוק הזיהוי.",
+    "voiceOnOffNotice": "🔊 הפעלה/כיבוי של הצ׳אט הקולי עשויה לשפר את איכות השמע.",
+    "voiceAskNotice": "🤵 דיבור איטי וברור משפר את דיוק הזיהוי."
+  },
+  "aria": {
+    "close": "סגור",
+    "selectMaxParticipants": "בחר מספר משתתפים מקסימלי",
+    "month": "חודש",
+    "day": "יום",
+    "hour": "שעה",
+    "minute": "דקה"
   }
 }
