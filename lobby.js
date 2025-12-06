@@ -33,7 +33,7 @@ function detectLang() {
   const lower = navLang.toLowerCase();
   if (lower.startsWith("ja")) return "ja-JP";
   if (lower.startsWith("en")) return "en";
-  if (lower.startsWith("zh")) return "zh-CN";
+  if (lower.startsWith("zh")) return "zh";
   if (lower.startsWith("fa")) return "fa";
   if (lower.startsWith("hi")) return "hi";
   if (lower.startsWith("he") || lower.startsWith("iw")) return "he";
@@ -50,6 +50,7 @@ function detectLang() {
       const urlLang = urlParams.get("lang");
       if (urlLang) {
         if (urlLang === "ja") return "ja-JP";
+        if (urlLang === "iw") return "he";
         return urlLang;
       }
     } catch (e) {}
@@ -59,6 +60,7 @@ function detectLang() {
       const saved = localStorage.getItem("lang");
       if (saved) {
         if (saved === "ja") return "ja-JP";
+        if (saved === "iw") return "he";
         return saved;
       }
     } catch (e) {}
@@ -253,13 +255,27 @@ function detectLang() {
       lobbyFooter.textContent = t("lobby.footer", "© DokodemoDoors");
   }
 
+  // ★ ここを多言語対応に拡張
   async function loadLangData(lang) {
+    let code = lang || "en";
+
+    // 統一
+    if (code === "ja") code = "ja-JP";
+    if (code === "iw") code = "he";
+
     let url = "./lang/en.json";
-    if (lang === "ja-JP" || lang === "ja") url = "./lang/ja.json";
-    else if (lang === "zh-CN") url = "./lang/zh.json";
-    else if (lang === "fa") url = "./lang/fa.json";
-    else if (lang === "hi") url = "./lang/hi.json";
-    else if (lang === "he") url = "./lang/he.json";
+    if (code.startsWith("ja")) {
+      url = "./lang/ja.json";
+    } else if (code.startsWith("zh")) {
+      // zh, zh-CN どちらでも OK
+      url = "./lang/zh.json";
+    } else if (code === "fa") {
+      url = "./lang/fa.json";
+    } else if (code === "hi") {
+      url = "./lang/hi.json";
+    } else if (code === "he") {
+      url = "./lang/he.json";
+    }
 
     try {
       const res = await fetch(url, { cache: "no-cache" });
@@ -276,7 +292,7 @@ function detectLang() {
   // 言語データ読み込み
   loadLangData(currentLang);
 
-  // 言語セレクト変更
+  // 言語セレクト変更（もしロビーにもセレクタがある場合）
   const langSelect = $("#langSelect");
   if (langSelect) {
     langSelect.value = currentLang;
@@ -286,7 +302,7 @@ function detectLang() {
       try {
         localStorage.setItem("lang", value);
       } catch (e) {}
-      if (value === "he") {
+      if (value === "fa" || value === "he") {
         document.documentElement.dir = "rtl";
       } else {
         document.documentElement.dir = "ltr";
@@ -341,7 +357,7 @@ function detectLang() {
     }
   }
 
-  // 右側の詳細パネル用（対応する要素が無ければ何もしない）
+  // 右側の詳細パネル用
   if (dateValue) {
     if (start) {
       const d = new Date(start);
