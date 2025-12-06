@@ -49,7 +49,6 @@ function detectLang() {
     try {
       const urlLang = urlParams.get("lang");
       if (urlLang) {
-        // ★ 互換性対応: "ja" は "ja-JP" とみなす
         if (urlLang === "ja") return "ja-JP";
         return urlLang;
       }
@@ -59,7 +58,6 @@ function detectLang() {
     try {
       const saved = localStorage.getItem("lang");
       if (saved) {
-        // ★ 互換性対応: "ja" は "ja-JP" とみなす
         if (saved === "ja") return "ja-JP";
         return saved;
       }
@@ -95,11 +93,11 @@ function detectLang() {
   function applyLobbyTexts() {
     const headerTitle = $("#lobbyHeaderTitle");
     if (headerTitle)
-      headerTitle.textContent = t("lobby.title", "待ち合わせロビー");
+      headerTitle.textContent = t("lobby.headerTitle", "待ち合わせロビー");
 
     const setNameBtn = $("#setName");
     if (setNameBtn)
-      setNameBtn.textContent = t("lobby.setName", "ニックネーム");
+      setNameBtn.textContent = t("lobby.nicknameButton", "ニックネーム");
 
     const backBtn = $("#backToIndex");
     if (backBtn)
@@ -107,36 +105,7 @@ function detectLang() {
 
     const countdownLabel = $("#countdownLabel");
     if (countdownLabel)
-      countdownLabel.textContent = t(
-        "lobby.countdownLabel",
-        "開始までの時間"
-      );
-
-    const infoLabel = $("#infoLabel");
-    if (infoLabel)
-      infoLabel.textContent = t("lobby.infoLabel", "待合室情報");
-
-    const dateLabel = $("#dateLabel");
-    if (dateLabel) dateLabel.textContent = t("lobby.dateLabel", "開始日時");
-
-    const limitLabel = $("#limitLabel");
-    if (limitLabel)
-      limitLabel.textContent = t("lobby.limitLabel", "参加上限");
-
-    const urlLabel = $("#urlLabel");
-    if (urlLabel) urlLabel.textContent = t("lobby.urlLabel", "ツアーURL");
-
-    const eventTypeLabel = $("#eventTypeLabel");
-    if (eventTypeLabel)
-      eventTypeLabel.textContent = t("lobby.eventTypeLabel", "種別");
-
-    const priceLabel = $("#priceLabel");
-    if (priceLabel)
-      priceLabel.textContent = t("lobby.priceLabel", "価格");
-
-    const membersLabel = $("#membersLabel");
-    if (membersLabel)
-      membersLabel.textContent = t("lobby.membersLabel", "参加者");
+      countdownLabel.textContent = t("lobby.countdownLabel", "カウントダウン");
 
     const voiceSectionTitle = $("#voiceSectionTitle");
     if (voiceSectionTitle)
@@ -156,6 +125,13 @@ function detectLang() {
     if (textChatLabel)
       textChatLabel.textContent = t("lobby.textChatLabel", "テキストチャット");
 
+    const copyRoomUrlBtn = $("#copyRoomUrl");
+    if (copyRoomUrlBtn)
+      copyRoomUrlBtn.textContent = t(
+        "lobby.copyRoomUrl",
+        "この待合室のURLをコピー"
+      );
+
     const enableSound = $("#enableSound");
     if (enableSound)
       enableSound.textContent = t(
@@ -174,46 +150,55 @@ function detectLang() {
         "メッセージを入力…"
       );
 
+    const membersLabel = $("#membersLabel");
+    if (membersLabel)
+      membersLabel.textContent = t("lobby.membersLabel", "参加者");
+
+    const voicePanelLabel = $("#voicePanelLabel");
+    if (voicePanelLabel)
+      voicePanelLabel.textContent = t(
+        "lobby.voicePanelLabel",
+        "音声・会話設定"
+      );
+
+    const micToggle = $("#micToggle");
+    if (micToggle)
+      micToggle.textContent = t("lobby.mute", "ミュート");
+
+    const voicePower = $("#voicePower");
+    if (voicePower)
+      voicePower.textContent = t("lobby.voiceOn", "音声ON");
+
+    const voiceStatus = $("#voiceStatus");
+    if (voiceStatus)
+      voiceStatus.textContent = t("lobby.voiceNone", "音声: 未参加");
+
     const voiceAskBtn = $("#voiceAskBtn");
     if (voiceAskBtn)
-      // ★ デフォルト文言を「執事に質問（音声）」に統一
       voiceAskBtn.textContent = t(
         "lobby.voiceAskBtn",
         "執事に質問（音声）"
       );
 
-    const langSelect = $("#langSelect");
-    if (langSelect) {
-      const langLabel = $("#langLabel");
-      if (langLabel)
-        langLabel.textContent = t("lobby.languageLabel", "表示言語");
+    const dateLabel = $("#dateLabel");
+    if (dateLabel)
+      dateLabel.textContent = t("lobby.dateLabel", "開始日時");
 
-      langSelect.innerHTML = "";
-      const langs = [
-        { value: "en", label: "English" },
-        { value: "ja-JP", label: "日本語" },
-        { value: "zh-CN", label: "中文" },
-        { value: "fa", label: "فارسی" },
-        { value: "hi", label: "हिन्दी" },
-        { value: "he", label: "עברית" },
-      ];
-      langs.forEach((lng) => {
-        const opt = document.createElement("option");
-        opt.value = lng.value;
-        opt.textContent = lng.label;
-        if (lng.value === currentLang) opt.selected = true;
-        langSelect.appendChild(opt);
-      });
-    }
+    const limitLabel = $("#limitLabel");
+    if (limitLabel)
+      limitLabel.textContent = t("lobby.limitLabel", "参加上限");
 
-    const dateValue = $("#dateValue");
-    if (dateValue) dateValue.textContent = "-";
+    const urlLabel = $("#urlLabel");
+    if (urlLabel)
+      urlLabel.textContent = t("lobby.urlLabel", "ツアーURL");
 
-    const limitValue = $("#limitValue");
-    if (limitValue) limitValue.textContent = "-";
+    const eventTypeLabel = $("#eventTypeLabel");
+    if (eventTypeLabel)
+      eventTypeLabel.textContent = t("lobby.eventTypeLabel", "種別");
 
-    const urlValue = $("#urlValue");
-    if (urlValue) urlValue.textContent = "-";
+    const priceLabel = $("#priceLabel");
+    if (priceLabel)
+      priceLabel.textContent = t("lobby.priceLabel", "参加費");
 
     const eventTypeValue = $("#eventTypeValue");
     if (eventTypeValue)
@@ -260,6 +245,7 @@ function detectLang() {
   // 言語セレクト変更
   const langSelect = $("#langSelect");
   if (langSelect) {
+    langSelect.value = currentLang;
     langSelect.addEventListener("change", (e) => {
       const value = e.target.value;
       currentLang = value;
@@ -276,7 +262,6 @@ function detectLang() {
   }
 
   // ===== URL パラメータ =====
-  // const urlParams = new URLSearchParams(location.search);  // 上部で定義済み
   const roomId = urlParams.get("roomId") || "default";
   const title = urlParams.get("title") || "";
   const start = urlParams.get("start") || "";
@@ -292,63 +277,85 @@ function detectLang() {
   }
 
   // ===== 情報表示 =====
+  const metaEl = $("#meta");
   const dateValue = $("#dateValue");
   const limitValue = $("#limitValue");
   const urlValue = $("#urlValue");
   const eventTypeValue = $("#eventTypeValue");
   const priceValue = $("#priceValue");
 
-  if (start && dateValue) {
-    const d = new Date(start);
-    if (!isNaN(d.getTime())) {
-      const y = d.getFullYear();
-      const mo = d.getMonth() + 1;
-      const da = d.getDate();
-      const hh = pad(d.getHours());
-      const mm = pad(d.getMinutes());
-      dateValue.textContent = `${y}/${mo}/${da} ${hh}:${mm}`;
+  // 上部「開始時刻：…」の表示
+  if (metaEl) {
+    const label = t("lobby.startLabel", "開始時刻：");
+    if (start) {
+      const d = new Date(start);
+      if (!isNaN(d.getTime())) {
+        const dateText = d.toLocaleString(undefined, {
+          timeZone: "Asia/Tokyo",
+        });
+        metaEl.textContent = label + dateText;
+      } else {
+        metaEl.textContent = label + "—";
+      }
     } else {
-      dateValue.textContent = t("lobby.dateUnknown", "未定");
+      metaEl.textContent = label + "—";
+    }
+  }
+
+  // 右側の詳細パネル用（対応する要素が無ければ何もしない）
+  if (dateValue) {
+    if (start) {
+      const d = new Date(start);
+      if (!isNaN(d.getTime())) {
+        dateValue.textContent = d.toLocaleString(undefined, {
+          timeZone: "Asia/Tokyo",
+        });
+      } else {
+        dateValue.textContent = t("lobby.dateUnknown", "未設定");
+      }
+    } else {
+      dateValue.textContent = t("lobby.dateUnknown", "未設定");
     }
   }
 
   if (limitValue) {
-    if (!limit || Number(limit) <= 0) {
-      limitValue.textContent = t("lobby.limitNone", "制限なし");
+    if (limit) {
+      limitValue.textContent = t(
+        "lobby.participantLimit",
+        "最大{limit}人"
+      ).replace("{limit}", String(limit));
     } else {
-      limitValue.textContent = t("lobby.limitValue", "{count}人").replace(
-        "{count}",
-        String(limit)
-      );
+      limitValue.textContent = t("lobby.limitUnknown", "未設定");
     }
   }
 
   if (urlValue) {
-    urlValue.textContent = target || "-";
+    if (target) urlValue.textContent = target;
+    else urlValue.textContent = "-";
   }
 
   if (eventTypeValue) {
-    let label = "";
     if (eventType === "official") {
-      label = t("lobby.eventTypeOfficial", "公式イベント");
+      eventTypeValue.textContent = t("lobby.eventTypeOfficial", "公式イベント");
     } else if (eventType === "fan") {
-      label = t("lobby.eventTypeFan", "ファン企画");
+      eventTypeValue.textContent = t("lobby.eventTypeFan", "ファン企画");
     } else if (eventType === "private") {
-      label = t("lobby.eventTypePrivate", "非公開");
+      eventTypeValue.textContent = t(
+        "lobby.eventTypePrivate",
+        "非公開イベント"
+      );
+    } else if (eventType === "paid") {
+      eventTypeValue.textContent = t("lobby.eventTypePaid", "有料イベント");
     } else {
-      label = t("lobby.eventTypeUnknown", "不明");
+      eventTypeValue.textContent = t("lobby.eventTypeUnknown", "不明");
     }
-    eventTypeValue.textContent = label;
   }
 
   if (priceValue) {
-    if (!price) {
-      priceValue.textContent = t("lobby.priceFree", "無料");
+    if (price) {
+      priceValue.textContent = price;
     } else {
-      priceValue.textContent = t("lobby.priceValue", "{price}").replace(
-        "{price}",
-        price
-      );
+      priceValue.textContent = "-";
     }
   }
 
@@ -359,21 +366,15 @@ function detectLang() {
     if (!countEl || !statusEl) return;
 
     if (!start) {
-      countEl.textContent = t("lobby.statusNoStart", "未設定");
-      statusEl.textContent = t(
-        "lobby.statusNoStartDetail",
-        "開始時刻が設定されていません。"
-      );
+      countEl.textContent = t("lobby.noStart", "未設定");
+      statusEl.textContent = t("lobby.statusUnknown", "状態不明");
       return;
     }
 
     const startDate = new Date(start);
     if (isNaN(startDate.getTime())) {
-      countEl.textContent = t("lobby.statusNoStart", "未設定");
-      statusEl.textContent = t(
-        "lobby.statusNoStartDetail",
-        "開始時刻が設定されていません。"
-      );
+      countEl.textContent = t("lobby.invalidStart", "不正な日時");
+      statusEl.textContent = t("lobby.statusUnknown", "状態不明");
       return;
     }
 
@@ -386,8 +387,8 @@ function detectLang() {
         const h = Math.floor(totalSec / 3600);
         const m = Math.floor((totalSec % 3600) / 60);
         const s = totalSec % 60;
-        countEl.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
-        statusEl.textContent = t(
+        $("#count").textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
+        $("#status").textContent = t(
           "lobby.statusWaiting",
           "開始までお待ちください。"
         );
@@ -403,20 +404,20 @@ function detectLang() {
           "lobby.statusDuring",
           "消滅まで後{minutes}分"
         ).replace("{minutes}", pad(remainMin));
-        countEl.textContent = label;
-        statusEl.textContent = t(
-          "lobby.statusStarted",
+        $("#count").textContent = label;
+        $("#status").textContent = t(
+          "lobby.statusOngoing",
           "ツアー中です。途中参加も可能です。"
         );
         requestAnimationFrame(update);
         return;
       }
 
-      countEl.textContent = t(
-        "lobby.statusExpiredShort",
-        "期限切れ"
+      $("#count").textContent = t(
+        "lobby.statusExpired",
+        "この待合室は終了しました"
       );
-      statusEl.textContent = t(
+      $("#status").textContent = t(
         "lobby.statusExpiredDetail",
         "イベントは終了し、待合室は無効になっています。"
       );
@@ -424,7 +425,6 @@ function detectLang() {
 
     update();
   }
-
   setupCountdown();
 
   // ===== 入室ボタン =====
@@ -458,17 +458,17 @@ function detectLang() {
     setNameBtn2.addEventListener("click", () => {
       const newName = prompt(
         t(
-          "lobby.setNamePrompt",
+          "lobby.nicknamePrompt",
           "チャット用のニックネームを入力してください。"
         ),
         user || ""
       );
       if (!newName) return;
-      user = newName;
+      user = newName.trim().slice(0, 32) || "Guest";
       try {
-        localStorage.setItem("nickname", newName);
+        localStorage.setItem("nickname", user);
       } catch (e) {}
-      alert(t("lobby.setNameSaved", "ニックネームを保存しました。"));
+      alert(t("lobby.nicknameSaved", "ニックネームを保存しました。"));
     });
   }
 
@@ -483,32 +483,66 @@ function detectLang() {
 
   // ===== Members パネル =====
   const membersEl = $("#members");
-  function renderMembers(members) {
-    if (!membersEl) return;
+  function renderMembers(list) {
     membersEl.innerHTML = "";
-    if (!members || members.length === 0) {
-      const div = document.createElement("div");
-      div.className = "member";
-      div.textContent = t("lobby.membersEmpty", "参加者はいません。");
-      membersEl.appendChild(div);
+    if (!list || list.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "status";
+      empty.textContent = t("lobby.membersEmpty", "参加者はいません。");
+      membersEl.appendChild(empty);
       return;
     }
-    members.forEach((m) => {
-      const div = document.createElement("div");
-      div.className = "member";
-      const nameText = m.name || "Guest";
-      div.textContent = t("lobby.memberLabel", "{name}").replace(
-        "{name}",
-        nameText
-      );
-      membersEl.appendChild(div);
+    list.forEach((m, idx) => {
+      const row = document.createElement("div");
+      row.className = "member";
+      const badge = document.createElement("div");
+      badge.className = "badge";
+      badge.textContent = String(idx + 1);
+      const label = document.createElement("div");
+      // 翻訳側で {id} を入れていても、画面には表示しない
+      let labelTemplate = t("lobby.memberLabel", "{name}");
+      let labelText = labelTemplate.replace("{name}", m.name || "");
+      labelText = labelText
+        .replace("({id})", "")
+        .replace("{id}", "")
+        .replace(" ()", " ")
+        .replace("()", "");
+      label.textContent = labelText.trim();
+      row.appendChild(badge);
+      row.appendChild(label);
+      membersEl.appendChild(row);
     });
   }
 
-  // ===== チャット用 UI =====
   const chatLog = $("#chatLog");
-  const chatInput = $("#chatInput");
-  const chatSend = $("#chatSend");
+
+  function linkify(text) {
+    if (!text) return "";
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.replace(
+      urlRegex,
+      '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
+  }
+
+  function addSys(text) {
+    if (!chatLog) return;
+    const div = document.createElement("div");
+    div.className = "msg sys";
+    div.innerHTML = linkify(text);
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  function addMsg(kind, text) {
+    if (!chatLog) return;
+    const div = document.createElement("div");
+    div.className = "msg " + kind;
+    div.innerHTML = linkify(text);
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
   const chatStatus = $("#chatStatus");
   const debugEl = $("#debug");
 
@@ -519,24 +553,6 @@ function detectLang() {
     debugEl.scrollTop = debugEl.scrollHeight;
   }
 
-  function addSys(text) {
-    if (!chatLog) return;
-    const div = document.createElement("div");
-    div.className = "msg sys";
-    div.textContent = text;
-    chatLog.appendChild(div);
-    chatLog.scrollTop = chatLog.scrollHeight;
-  }
-
-  function addMsg(kind, text) {
-    if (!chatLog) return;
-    const div = document.createElement("div");
-    div.className = "msg " + kind;
-    div.textContent = text;
-    chatLog.appendChild(div);
-    chatLog.scrollTop = chatLog.scrollHeight;
-  }
-
   // 「Reginald 考え中」インジケーター
   let thinkingElem = null;
   function showThinking() {
@@ -544,11 +560,7 @@ function detectLang() {
     if (thinkingElem) return;
     const div = document.createElement("div");
     div.className = "msg sys thinking";
-    // ★ フォールバックを日本語に
-    div.textContent = t(
-      "lobby.botThinking",
-      "Reginald が考え中です…"
-    );
+    div.textContent = t("lobby.botThinking", "Reginald が考え中です…");
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
     thinkingElem = div;
@@ -580,10 +592,7 @@ function detectLang() {
     try {
       ws = new WebSocket(CHAT_URL);
       ws.onopen = () => {
-        chatStatus.textContent = t(
-          "lobby.chatConnected",
-          "接続しました"
-        );
+        chatStatus.textContent = t("lobby.chatConnected", "接続しました");
         logDebug("WebSocket connected");
       };
       ws.onclose = () => {
@@ -599,7 +608,7 @@ function detectLang() {
           "lobby.chatError",
           "エラーが発生しました"
         );
-        logDebug("WebSocket error: " + e?.message);
+        logDebug("WebSocket error: " + (e?.message || ""));
       };
       ws.onmessage = (ev) => {
         try {
@@ -631,10 +640,7 @@ function detectLang() {
                     hideThinking();
                   }
                   const klass = obj.name === user ? "me" : "other";
-                  const text = t(
-                    "lobby.chatLine",
-                    "{name}: {text}"
-                  )
+                  const text = t("lobby.chatLine", "{name}: {text}")
                     .replace("{name}", obj.name || "")
                     .replace("{text}", obj.text || "");
                   addMsg(klass, text);
@@ -695,19 +701,18 @@ function detectLang() {
         }
       };
     } catch (e) {
-      chatStatus.textContent = t(
-        "lobby.chatError",
-        "エラーが発生しました"
-      );
-      logDebug("WebSocket init error: " + e?.message);
+      chatStatus.textContent = t("lobby.chatError", "エラーが発生しました");
+      logDebug("WebSocket init error: " + (e?.message || ""));
     }
   }
 
   connect();
 
-  if (chatSend && chatInput) {
-    chatSend.addEventListener("click", () => {
-      const text = chatInput.value.trim();
+  const chatInput2 = $("#chatInput");
+  const chatSend2 = $("#chatSend");
+  if (chatSend2 && chatInput2) {
+    chatSend2.addEventListener("click", () => {
+      const text = chatInput2.value.trim();
       if (!text) return;
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         alert(
@@ -725,13 +730,13 @@ function detectLang() {
           name: user || "Guest",
         })
       );
-      chatInput.value = "";
+      chatInput2.value = "";
     });
 
-    chatInput.addEventListener("keydown", (e) => {
+    chatInput2.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        chatSend.click();
+        chatSend2.click();
       }
     });
   }
@@ -790,7 +795,7 @@ function detectLang() {
     } catch (e) {
       alert(
         t(
-          "lobby.micDenied",
+          "lobby.micErrorMsg",
           "マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。"
         )
       );
@@ -982,7 +987,7 @@ function detectLang() {
   }
 
   // ===== 執事に質問（音声）ボタン =====
-  const voiceAskBtn = $("#voiceAskBtn");
+  const voiceAskBtn2 = $("#voiceAskBtn");
   const voiceAskStatus = $("#voiceAskStatus");
 
   let mediaStream = null;
@@ -999,13 +1004,16 @@ function detectLang() {
     if (isRecording) return;
     isRecording = true;
     chunks = [];
-    setVoiceAskStatus("botThinking", "執事が考え中です…");
+    setVoiceAskStatus(
+      "recording",
+      "録音中です。もう一度押すと停止します。"
+    );
 
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       setVoiceAskStatus(
-        "micDenied",
+        "micErrorMsg",
         "マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。"
       );
       isRecording = false;
@@ -1027,8 +1035,8 @@ function detectLang() {
         return;
       }
       setVoiceAskStatus(
-        "botThinking",
-        "執事が考え中です…（音声を送信しています）"
+        "sending",
+        "音声を送信しています…"
       );
 
       try {
@@ -1057,7 +1065,6 @@ function detectLang() {
     };
 
     mediaRecorder.start();
-    setVoiceAskStatus("recording", "録音中です。もう一度押すと停止します。");
   }
 
   function stopRecording() {
@@ -1070,11 +1077,10 @@ function detectLang() {
     if (mediaStream) {
       mediaStream.getTracks().forEach((t) => t.stop());
     }
-    setVoiceAskStatus("sending", "音声を送信しています…");
   }
 
-  if (voiceAskBtn) {
-    voiceAskBtn.addEventListener("click", () => {
+  if (voiceAskBtn2) {
+    voiceAskBtn2.addEventListener("click", () => {
       if (!isRecording) {
         startRecording();
       } else {
