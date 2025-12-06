@@ -1125,7 +1125,7 @@ function renderMembers(list) {
         formData.append("roomId", roomId || "default");
         formData.append("audio", blob, "voice.webm");
 
-        const res = await fetch("/do-chat/voice", {
+        const res = await fetch("https://do-chat.awachima7.workers.dev/voice", {
           method: "POST",
           body: formData,
         });
