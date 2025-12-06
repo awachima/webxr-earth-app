@@ -111,7 +111,7 @@ AFRAME.registerComponent('rounded-panel', {
     }
   }
 });
-  </script>
+</script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
@@ -187,6 +187,7 @@ AFRAME.registerComponent('panel-world-lock',{
     console.log('[panel-world-lock] placed at dist=',dist.toFixed(3),' baseDist=',this.data.baseDist,' pos=',this.el.object3D.position.toArray());
   }
 });
+
 
 
 
@@ -549,487 +550,207 @@ AFRAME.registerComponent('marker-placer',{
     try{
       var res=await fetch(sheetUrl,{cache:'no-store'});
       if(res.ok){
-        var text=await res.text(); this.allLocations=this.parseCSV(text);
-        console.log('[marker-placer] loaded records:', this.allLocations.length);
-      }else{
-        console.error('[marker-placer] fetch failed:', res.status);
-      }
-    }catch(err){
-      console.error('[marker-placer] fetch error:', err);
-    }
-    this.updateClusters(true);
+        var text=await res.text(); this.allLocations=this.parseCsv(text);
+        console.log('[marker-placer] CSV loaded:', this.allLocations.length, 'rows');
+      }else{ console.error('CSV fetch failed:', res.status); }
+    }catch(e){ console.error("データ取得エラー:",e); }
+    this.updateClusters();
   },
-  parseCSV:function(csv){
-    var lines=csv.split(/\r?\n/);
-    var out=[];
-    for(var i=1;i<lines.length;i++){
-      var row=lines[i].trim();
-      if(!row) continue;
-      var cols=row.split(',');
-      if(cols.length<4) continue;
-      var title=cols[0];
-      var lat=parseFloat(cols[1]);
-      var lng=parseFloat(cols[2]);
-      var url=cols[3];
-      if(!isFinite(lat)||!isFinite(lng)) continue;
-      out.push({ title:title, lat:lat, lng:lng, url:url });
-    }
-    return out;
-  },
-  latLngToXYZ:function(lat,lng,R){
-    var phi  =(90-lat)*Math.PI/180;
-    var theta=(lng+180)*Math.PI/180;
-    var x=-(R*Math.sin(phi)*Math.cos(theta));
-    var z= (R*Math.sin(phi)*Math.sin(theta));
-    var y= (R*Math.cos(phi));
-    return {x:x,y:y,z:z};
-  },
-  clusterLocations:function(radius){
-    var pts=this.allLocations.slice();
-    var clusters=[];
-    while(pts.length>0){
-      var base=pts.shift();
-      var cluster=[base];
-      for(var i=pts.length-1;i>=0;i--){
-        var p=pts[i];
-        var dLat=base.lat-p.lat;
-        var dLng=base.lng-p.lng;
-        var dist=Math.sqrt(dLat*dLat+dLng*dLng);
-        if(dist<radius){
-          cluster.push(p); pts.splice(i,1);
+
+  // ★★★ ここから修正されたparseCsv関数 ★★★
+  parseCsv:function(csvText){
+    const locations=[];
+
+    // 引用符内のコンマを無視して行を正しく分割する関数
+    const parseCsvLine = (line) => {
+      const parts = [];
+      let currentPart = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"' && (i === 0 || line[i-1] !== '"')) {
+            inQuotes = !inQuotes;
+            continue; // 引用符自体は含めない
+        }
+        if (char === ',' && !inQuotes) {
+            parts.push(currentPart);
+            currentPart = '';
+        } else {
+            currentPart += char;
         }
       }
-      clusters.push(cluster);
+      parts.push(currentPart);
+      // Google Sheets CSVは先頭と末尾の引用符を保持するので除去
+      if (parts[0] && parts[0].startsWith('"')) parts[0] = parts[0].slice(1);
+      if (parts[0] && parts[0].endsWith('"')) parts[0] = parts[0].slice(0, -1);
+      return parts;
+    };
+
+    const lines = csvText.trim().split(/\r?\n/);
+    if (lines.length === 0) return locations;
+
+    const cleanAndParseFloat = (str) => {
+      if (typeof str !== 'string') return NaN;
+      const cleanedStr = str.trim().replace(/[−–‐]/g, '-');
+      return parseFloat(cleanedStr);
+    };
+
+    // ヘッダー行かどうかの判定
+    const firstLineParts = parseCsvLine(lines[0]);
+    const latTry = cleanAndParseFloat(firstLineParts[1] || '');
+    const lonTry = cleanAndParseFloat(firstLineParts[2] || '');
+    const isHeader = isNaN(latTry) || isNaN(lonTry);
+    const startIndex = isHeader ? 1 : 0;
+
+    for (let i = startIndex; i < lines.length; i++) {
+      if (!lines[i]) continue;
+      const parts = parseCsvLine(lines[i]);
+
+      if (parts.length >= 4) {
+        const title = parts[0];
+        const lat = cleanAndParseFloat(parts[1]);
+        const lon = cleanAndParseFloat(parts[2]);
+        const url = parts[3];
+
+        if (isNaN(lat) || isNaN(lon)) {
+          locations.push({ title: title || '名称不明（座標なし）', lat: -90, lon: 0, url: url });
+        } else {
+          locations.push({ title: title, lat: lat, lon: lon, url: url });
+        }
+      }
     }
-    return clusters;
+    return locations;
   },
-  updateClusters:function(force){
-    if(this.allLocations.length===0) return;
-    var s=this.el.object3D.scale.x;
-    var t=(s-1.0)/(3.0-1.0);
-    var minR=0.008, maxR=0.2;
-    var radius=maxR - t*(maxR-minR);
+  // ★★★ ここまでが修正されたparseCsv関数 ★★★
 
-    if(!force && Math.abs(s-this.previousEarthScale)<0.01) return;
-    this.previousEarthScale=s;
-
-    this.currentMarkers.forEach(m => m.parentNode && m.parentNode.removeChild(m));
-    this.currentMarkers.length=0;
-
-    var R=(this.el.getAttribute('geometry')&&this.el.getAttribute('geometry').radius)||1;
-    var clusters=this.clusterLocations(radius);
-    console.log('[marker-placer] scale=',s.toFixed(2),' radius=',radius.toFixed(4),' clusters=',clusters.length);
-
-    clusters.forEach(cluster=>{
-      var sumLat=0,sumLng=0;
-      cluster.forEach(c=>{ sumLat+=c.lat; sumLng+=c.lng; });
-      var cLat=sumLat/cluster.length;
-      var cLng=sumLng/cluster.length;
-
-      var pos=this.latLngToXYZ(cLat,cLng,R+0.01);
-      var marker=document.createElement('a-entity');
-      marker.setAttribute('position',pos);
-      marker.setAttribute('look-at','[camera]');
-      marker.setAttribute('hex-marker',{count:cluster.length, baseRadius:0.013});
+  computeThreshold:function(){ var s=this.el.object3D.scale.x; var t=(s-1)/(3-1); return 0.2 - t*(0.2-0.015); },
+  updateClusters:function(){
+    this.currentMarkers.forEach(m=>{ if(m && m.parentNode) m.parentNode.removeChild(m); }); this.currentMarkers=[];
+    var th=this.computeThreshold(); var unclustered=this.allLocations.slice(); var clusters=[];
+    while(unclustered.length>0){
+      var p=unclustered.shift(); var cluster=[p]; var rest=[];
+      for(var i2=0;i2<unclustered.length;i2++){
+        var q=unclustered[i2]; var dist=this.haversineDistance(p,q);
+        if(dist<th) cluster.push(q); else rest.push(q);
+      }
+      unclustered=rest; clusters.push(cluster);
+    }
+    console.log('[marker-placer] clusters formed:', clusters.length);
+    this.placeMarkersFromClusters(clusters);
+  },
+  placeMarkersFromClusters:function(clusters){
+    var R=this.el.getAttribute('geometry').radius; var self=this;
+    clusters.forEach(function(cluster, idx){
+      var lat=0,lon=0; cluster.forEach(p=>{lat+=p.lat;lon+=p.lon;}); lat/=cluster.length; lon/=cluster.length;
+      var pos=self.latLonTo3D(lat,lon,R);
+      var marker=document.createElement('a-entity'); marker.setAttribute('position',pos);
+      var yAxis=pos.clone().normalize(), worldUp=new THREE.Vector3(0,1,0);
+      var xAxis=new THREE.Vector3().crossVectors(worldUp,yAxis).normalize(); if(xAxis.length()===0) xAxis.set(1,0,0);
+      var zAxis=new THREE.Vector3().crossVectors(xAxis,yAxis);
+      var rotM=new THREE.Matrix4().makeBasis(xAxis,yAxis,zAxis);
+      marker.object3D.quaternion.setFromRotationMatrix(rotM);
+      marker.setAttribute('hex-marker',{count:cluster.length});
       marker.classList.add('collidable');
-
-      marker.addEventListener('click',()=>{
-        console.log('[marker-placer] cluster clicked, size=',cluster.length);
-        openPanelForCluster(cluster);
-        this.currentMarkers.forEach(m=>{
-          var mesh=m.getObject3D('mesh');
-          if(mesh) mesh.material.color.set('#FF7F8A');
-        });
-        var myMesh=marker.getObject3D('mesh');
-        if(myMesh) myMesh.material.color.set('#00FFAA');
-      });
-
-      this.el.appendChild(marker);
-      this.currentMarkers.push(marker);
+      marker.dataset.locations=JSON.stringify(cluster);
+      marker.addEventListener('mouseenter',()=>{ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('yellow'); });
+      marker.addEventListener('mouseleave',()=>{ if(window.__panelOpen) return; var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('#FF7F8A'); });
+      marker.addEventListener('click', e=>{ if(window.__panelOpen) return; console.log('[marker] click -> openPanel, items=', cluster.length); openPanel(JSON.parse(e.currentTarget.dataset.locations)); });
+      self.el.appendChild(marker); self.currentMarkers.push(marker);
     });
-
+    console.log('[marker-placer] markers placed:', this.currentMarkers.length);
     refreshAllRaycasters();
+  },
+  haversineDistance:function(a,b){
+    function toRad(x){ return x*Math.PI/180; }
+    var dLat=toRad(b.lat-a.lat), dLon=toRad(b.lon-a.lon);
+    var lat1=toRad(a.lat), lat2=toRad(b.lat);
+    var h=Math.sin(dLat/2)**2 + Math.sin(dLon/2)**2 * Math.cos(lat1)*Math.cos(lat2);
+    return 2*Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
+  },
+  tick:function(){
+    if(this.currentMarkers.length===0 || !this.cameraEl) return;
+    var s=this.el.object3D.scale.x; if(Math.abs(s-this.previousEarthScale)>0.1){ this.updateClusters(); this.previousEarthScale=s; }
+    this.el.object3D.getWorldPosition(this.earthPos); this.cameraEl.object3D.getWorldPosition(this.cameraPos);
+    for(var i=0;i<this.currentMarkers.length;i++){
+      var marker=this.currentMarkers[i];
+      var t = (s-1)/(3-1);
+var targetWorld = this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier - this.data.minWorldMultiplier);
+var markerScale = targetWorld / s;
+marker.object3D.scale.set(markerScale, markerScale, markerScale);
+      marker.object3D.scale.set(markerScale,markerScale,markerScale);
+// ループの外（forの前）で1回だけ計算してもOK
+// var toEye = this.cameraPos.clone().sub(this.earthPos).normalize();
+
+marker.object3D.getWorldPosition(this.markerPos);
+var normal = this.markerPos.clone().sub(this.earthPos).normalize();
+
+// ここで「地球中心→カメラ」を使う（毎回計算するなら↓）
+var toEye = this.cameraPos.clone().sub(this.earthPos).normalize();
+
+// 境界のチラつきを避けたい場合は 0.0→0.001〜0.01 くらいのεを加える
+var visible = (normal.dot(toEye) > 0.001);
+
+marker.object3D.visible = visible;
+if (marker.textEl) marker.textEl.object3D.visible = visible;
+    }
+  },
+  latLonTo3D:function(lat,lon,R){ var phi=(90-lat)*(Math.PI/180), theta=(lon+180)*(Math.PI/180);
+    return new THREE.Vector3( -(R*Math.sin(phi)*Math.cos(theta)), R*Math.cos(phi), R*Math.sin(phi)*Math.sin(theta)); }
+});
+
+// スクロール: thumbstickmoved + axismove + XR gamepad + getGamepads, ログ付き
+AFRAME.registerComponent('panel-scroll-handler', {
+  schema: {
+    deadzone: {type: 'number', default: 0.08},
+    gain: {type: 'number', default: 1.0}
+  },
+  init: function () {
+    var el = this.el;
+    this.stickY = 0;
+    this.panelOpen = false;
+    this._onAxisMove = (e)=>{
+      var a = e && e.detail && (e.detail.axis || e.detail.axes || e.detail) || [0,0,0,0];
+      var y = (a[3]!==undefined) ? a[3] : (typeof a.y==='number'? a.y : 0);
+      var v = (Math.abs(y) > this.data.deadzone) ? y * this.data.gain : 0;
+      this.stickY = v;
+      console.log('[panel-scroll-handler] axismove axis=', a, '=> y=', y, 'stickY=', this.stickY);
+    };
+    this._onThumb = (e)=>{
+      var y = (e && e.detail && typeof e.detail.y==='number') ? e.detail.y : 0;
+      var v = (Math.abs(y) > this.data.deadzone) ? y * this.data.gain : 0;
+      this.stickY = v;
+      console.log('[panel-scroll-handler] thumbstickmoved y=', y, 'panelOpen=', this.panelOpen);
+    };
+    this._onOpened = (e)=>{
+      this.panelOpen = true;
+      console.log('[panel-scroll-handler] opened');
+    };
+    this._onClosed = ()=>{
+      this.panelOpen = false;
+      this.stickY = 0;
+      console.log('[panel-scroll-handler] closed');
+    };
+    el.addEventListener('axismove', this._onAxisMove);
+    el.addEventListener('thumbstickmoved', this._onThumb);
+    el.sceneEl.addEventListener('panel-opened', this._onOpened);
+    el.sceneEl.addEventListener('panel-closed', this._onClosed);
+    console.log('[panel-scroll-handler] init, listeners attached (FIX4)');
+  },
+  remove: function(){
+    var el = this.el;
+    el.removeEventListener('axismove', this._onAxisMove);
+    el.removeEventListener('thumbstickmoved', this._onThumb);
+    el.sceneEl.removeEventListener('panel-opened', this._onOpened);
+    el.sceneEl.removeEventListener('panel-closed', this._onClosed);
   }
 });
 
-// ★★★★★ ここから：待合室パネル関連 ★★★★★
-(function(){
-  'use strict';
-  const PANEL = {
-    BOARD_W: 1.10,
-    CONTENT_LEFT: -0.45,
-    TEXT_MAX_W: 0.84,
-    PAD_X: 0.02,
-    PAD_Y: 0.020,
-    GAP: 0.020,
-    CONTENT_TOP: 0.48,
-    CONTENT_BOTTOM: -0.45,
-    SCROLL_MARGIN_R: 0.035,
-    SCROLL_TRACK_W: 0.048,
-    SCROLL_TRACK_H: 0.78
-  };
-  const HOVER_BG   = '#23324A';
-  const ZEBRA_A    = '#262b31';
-  const ZEBRA_B    = '#21262c';
-  const EDGE_COL   = '#596273';
-  const BTN_R      = 0.045;
-  const BTN_FS     = 0.06;
-  const PANEL_FONT_URL = (typeof FONT_URL!=='undefined')?FONT_URL:(window.FONT_URL||'static/NotoSansJP-Regular.ttf');
-  const FONT_SIZE  = 0.035;
-  const LINE_HEIGHT= 1.35;
-  const EXTRA      = Math.max(0.006, FONT_SIZE*0.38);
-  const FUDGE_FIXED= 0.0035;
-  const FUDGE_PERLINE=0.0035;
-  const EST_COLS   = 19;
-  const EST_SCALE  = 1.08;
-  const JOY_DEADZONE = 0.15;
-  const JOY_SPEED    = 0.120;
-  const HOLD_SPEED   = 0.080;
-  let currentOnWheelListener = null;
-  let isHoldingUp   = false;
-  let isHoldingDown = false;
-  let scrollHandler = null;
-  let rightHandForRestart = null;
-  let lastLog = 0;
-
-  function toLog(...args){
-    const now = performance.now();
-    if(now-lastLog>250){
-      console.log(...args);
-      lastLog = now;
+// ★ WebXR中でも確実に毎フレーム動作するtickループ
+AFRAME.registerComponent('panel-raf-proxy', {
+  tick: function(){
+    if (window.__panelOpen && typeof window.__panelTick === 'function') {
+      window.__panelTick();
     }
-  }
-
-  function openPanelForCluster(cluster){
-    const scene = document.querySelector('a-scene');
-    if(!scene) return;
-    window.__panelOpen = true;
-
-    const panelEl = document.getElementById('ui-panel');
-    if(!panelEl){
-      console.warn('[panel] ui-panel not found');
-      return;
-    }
-    const contentRoot = document.getElementById('panel-content');
-    if(!contentRoot){
-      console.warn('[panel] panel-content not found');
-      return;
-    }
-
-    while(contentRoot.firstChild){
-      contentRoot.removeChild(contentRoot.firstChild);
-    }
-
-    cluster.forEach((loc, idx)=>{
-      const row = document.createElement('a-entity');
-      row.setAttribute('position', `0 ${-idx*0.09} 0.001`);
-      row.classList.add('collidable', 'panel-row');
-
-      const bg = document.createElement('a-plane');
-      bg.setAttribute('width', PANEL.TEXT_MAX_W + PANEL.PAD_X*2);
-      bg.setAttribute('height', 0.08);
-      bg.setAttribute('position', `0 0 0`);
-      const isEven = (idx%2===0);
-      bg.setAttribute('material', {
-        color: isEven? ZEBRA_A : ZEBRA_B,
-        opacity: 0.9
-      });
-      bg.classList.add('collidable', 'ui');
-
-      const text = document.createElement('a-entity');
-      text.setAttribute('troika-text', {
-        value: loc.title,
-        font: PANEL_FONT_URL,
-        fontSize: FONT_SIZE,
-        color: '#ffffff',
-        maxWidth: PANEL.TEXT_MAX_W,
-        anchor: 'left',
-        outlineWidth: 0.0025,
-        outlineColor: '#000000'
-      });
-      text.setAttribute('position', `${PANEL.CONTENT_LEFT} 0 0.002`);
-
-      bg.addEventListener('mouseenter', ()=>{
-        bg.setAttribute('material', 'color', HOVER_BG);
-      });
-      bg.addEventListener('mouseleave', ()=>{
-        bg.setAttribute('material', 'color', isEven? ZEBRA_A : ZEBRA_B);
-      });
-      bg.addEventListener('click', ()=>{
-        console.log('[panel] row clicked, url=', loc.url);
-        safeNavigate(loc.url);
-      });
-
-      row.appendChild(bg);
-      row.appendChild(text);
-      contentRoot.appendChild(row);
-    });
-
-    panelEl.setAttribute('visible', 'true');
-
-    const board = document.getElementById('panel-board');
-    if(board){
-      board.setAttribute('panel-world-lock', {
-        baseDist: 0.5,
-        baseScale: 0.5,
-        margin: 0.03,
-        minDist: 1.02,
-        worldYaw: 0,
-        yOffset: 0.00
-      });
-    }
-
-    scene.emit('panel-opened');
-    window.__panelTick = function(){
-    };
-
-    (function attachWheel(){
-      if(currentOnWheelListener){
-        window.removeEventListener('wheel', currentOnWheelListener, {passive:false});
-      }
-      currentOnWheelListener = function(e){
-        if(!window.__panelOpen) return;
-        e.preventDefault();
-      };
-      window.addEventListener('wheel', currentOnWheelListener, {passive:false});
-    })();
-  }
-
-  function closePanel(){
-    const panelEl = document.getElementById('ui-panel');
-    if(panelEl){
-      panelEl.setAttribute('visible', 'false');
-    }
-    window.__panelOpen = false;
-    window.__panelTick = null;
-
-    const scene = document.querySelector('a-scene');
-    if(scene){
-      scene.emit('panel-closed');
-    }
-
-    if(currentOnWheelListener){
-      window.removeEventListener('wheel', currentOnWheelListener, {passive:false});
-      currentOnWheelListener = null;
-    }
-  }
-
-  window.openPanelForCluster = openPanelForCluster;
-  window.closePanel = closePanel;
-
-  function createCloseButtonText(){
-    const btn = document.getElementById('btn-close-panel-text');
-    if(!btn) return;
-    btn.setAttribute('troika-text', {
-      value: 'CLOSE',
-      font: PANEL_FONT_URL,
-      fontSize: BTN_FS,
-      color: '#ffffff',
-      outlineWidth: 0.006,
-      outlineColor: '#000000',
-      anchor: 'center'
-    });
-  }
-
-  window.addEventListener('load', createCloseButtonText);
-
-  AFRAME.registerComponent('panel-button-behavior', {
-    schema:{
-      action:{type:'string',default:'none'}
-    },
-    init:function(){
-      const el = this.el;
-      const data = this.data;
-      el.addEventListener('mouseenter', ()=>{
-        el.setAttribute('material', {color:HOVER_BG, opacity:0.90});
-      });
-      el.addEventListener('mouseleave', ()=>{
-        el.setAttribute('material', {color:'#1b2330', opacity:0.85});
-      });
-      el.addEventListener('click', ()=>{
-        if(data.action === 'close'){
-          closePanel();
-        }else if(data.action === 'scrollUp'){
-        }else if(data.action === 'scrollDown'){
-        }
-      });
-    }
-  });
-
-  AFRAME.registerComponent('panel-scroll-handler', {
-    schema:{
-      deadzone:{type:'number', default:0.17},
-      gain:{type:'number', default:1.6}
-    },
-    init: function(){
-      var el = this.el;
-      this.stickY = 0;
-      this.panelOpen = false;
-
-      this._onAxisMove = (e)=>{
-        var a = e && e.detail && (e.detail.axis || e.detail.axes || e.detail) || [0,0,0,0];
-        var y = (a[3]!==undefined) ? a[3] : (typeof a.y==='number'? a.y : 0);
-        var v = (Math.abs(y) > this.data.deadzone) ? y * this.data.gain : 0;
-        this.stickY = v;
-        console.log('[panel-scroll-handler] axismove axis=', a, '=> y=', y, 'stickY=', this.stickY);
-      };
-      this._onThumb = (e)=>{
-        var y = (e && e.detail && typeof e.detail.y==='number') ? e.detail.y : 0;
-        var v = (Math.abs(y) > this.data.deadzone) ? y * this.data.gain : 0;
-        this.stickY = v;
-        console.log('[panel-scroll-handler] thumbstickmoved y=', y, 'panelOpen=', this.panelOpen);
-      };
-      this._onOpened = (e)=>{
-        this.panelOpen = true;
-        console.log('[panel-scroll-handler] opened');
-      };
-      this._onClosed = ()=>{
-        this.panelOpen = false;
-        this.stickY = 0;
-        console.log('[panel-scroll-handler] closed');
-      };
-      el.addEventListener('axismove', this._onAxisMove);
-      el.addEventListener('thumbstickmoved', this._onThumb);
-      el.sceneEl.addEventListener('panel-opened', this._onOpened);
-      el.sceneEl.addEventListener('panel-closed', this._onClosed);
-      console.log('[panel-scroll-handler] init, listeners attached (FIX4)');
-    },
-    remove: function(){
-      var el = this.el;
-      el.removeEventListener('axismove', this._onAxisMove);
-      el.removeEventListener('thumbstickmoved', this._onThumb);
-      el.sceneEl.removeEventListener('panel-opened', this._onOpened);
-      el.sceneEl.removeEventListener('panel-closed', this._onClosed);
-    }
-  });
-
-  // ★ WebXR中でも確実に毎フレーム動作するtickループ
-  AFRAME.registerComponent('panel-raf-proxy', {
-    tick: function(){
-      if (window.__panelOpen && typeof window.__panelTick === 'function') {
-        window.__panelTick();
-      }
-    }
-  });
-})();
-
-// ここまで待合室パネル関連
-</script>
-
-<script>
-AFRAME.registerComponent('country-labels', {
-  schema: {
-    color: {type: 'color', default: '#FFFFFF'},
-    fontSize: {type: 'number', default: 0.04}, // 文字の大きさ
-    altitude: {type: 'number', default: 1.01}, // 地表からの浮き具合(半径に対する倍率)
-    font: {type: 'string', default: 'static/NotoSansJP-Regular.ttf'} // 既存のフォントを使用
-  },
-
-  init: function() {
-    // 主要国のデータ (国名, 緯度, 経度)
-    this.countries = [
-      {name: "日本", lat: 36.2048, lon: 138.2529},
-      {name: "アメリカ", lat: 37.0902, lon: -95.7129},
-      {name: "中国", lat: 35.8617, lon: 104.1954},
-      {name: "インド", lat: 20.5937, lon: 78.9629},
-      {name: "ブラジル", lat: -14.2350, lon: -51.9253},
-      {name: "ロシア", lat: 61.5240, lon: 105.3188},
-      {name: "オーストラリア", lat: -25.2744, lon: 133.7751},
-      {name: "カナダ", lat: 56.1304, lon: -106.3468},
-      {name: "イギリス", lat: 55.3781, lon: -3.4360},
-      {name: "フランス", lat: 46.2276, lon: 2.2137},
-      {name: "ドイツ", lat: 51.1657, lon: 10.4515},
-      {name: "イタリア", lat: 41.8719, lon: 12.5674},
-      {name: "スペイン", lat: 40.4637, lon: -3.7492},
-      {name: "メキシコ", lat: 23.6345, lon: -102.5528},
-      {name: "インドネシア", lat: -0.7893, lon: 113.9213},
-      {name: "サウジアラビア", lat: 23.8859, lon: 45.0792},
-      {name: "トルコ", lat: 38.9637, lon: 35.2433},
-      {name: "南アフリカ", lat: -30.5595, lon: 22.9375},
-      {name: "エジプト", lat: 26.8206, lon: 30.8025},
-      {name: "韓国", lat: 35.9078, lon: 127.7669},
-      {name: "アルゼンチン", lat: -38.4161, lon: -63.6167},
-      {name: "コロンビア", lat: 4.5709, lon: -74.2973},
-      {name: "イラン", lat: 32.4279, lon: 53.6880},
-      {name: "タイ", lat: 15.8700, lon: 100.9925},
-      {name: "ベトナム", lat: 14.0583, lon: 108.2772},
-      {name: "フィリピン", lat: 12.8797, lon: 121.7740},
-      {name: "パキスタン", lat: 30.3753, lon: 69.3451},
-      {name: "ナイジェリア", lat: 9.0820, lon: 8.6753},
-      {name: "バングラデシュ", lat: 23.6850, lon: 90.3563},
-      {name: "ウクライナ", lat: 48.3794, lon: 31.1656},
-      {name: "ポーランド", lat: 51.9194, lon: 19.1451},
-      {name: "モロッコ", lat: 31.7917, lon: -7.0926},
-      {name: "ペルー", lat: -9.1900, lon: -75.0152},
-      {name: "マレーシア", lat: 4.2105, lon: 101.9758},
-      {name: "ベネズエラ", lat: 6.4238, lon: -66.5897},
-      {name: "チリ", lat: -35.6751, lon: -71.5430},
-      {name: "オランダ", lat: 52.1326, lon: 5.2913},
-      {name: "ベルギー", lat: 50.5039, lon: 4.4699},
-      {name: "スウェーデン", lat: 60.1282, lon: 18.6435},
-      {name: "チェコ", lat: 49.8175, lon: 15.4730},
-      {name: "ギリシャ", lat: 39.0742, lon: 21.8243},
-      {name: "ポルトガル", lat: 39.3999, lon: -8.2245},
-      {name: "ハンガリー", lat: 47.1625, lon: 19.5033},
-      {name: "オーストリア", lat: 47.5162, lon: 14.5501},
-      {name: "スイス", lat: 46.8182, lon: 8.2275},
-      {name: "イスラエル", lat: 31.0461, lon: 34.8516},
-      {name: "シンガポール", lat: 1.3521, lon: 103.8198},
-      {name: "ニュージーランド", lat: -40.9006, lon: 174.8860},
-      {name: "ケニア", lat: -0.0236, lon: 37.9062},
-      {name: "エチオピア", lat: 9.1450, lon: 40.4897}
-    ];
-    
-    this.addLabels();
-  },
-
-  addLabels: function() {
-    const el = this.el;
-    // 半径を取得（ジオメトリが未ロードの場合はデフォルト1とする）
-    const geometryRadius = el.getAttribute('geometry') ? el.getAttribute('geometry').radius : 1;
-    // 文字を配置する半径（地表より少し浮かせる）
-    const R = geometryRadius * this.data.altitude;
-
-    this.countries.forEach(country => {
-      // 1. テキストエンティティの作成
-      const textEl = document.createElement('a-entity');
-      
-      // 2. troika-textの設定 (日本語対応フォント、アウトライン付きで視認性確保)
-      textEl.setAttribute('troika-text', {
-        value: country.name,
-        font: this.data.font,
-        fontSize: this.data.fontSize,
-        align: 'center',
-        anchor: 'center',
-        color: this.data.color,
-        outlineWidth: '10%',
-        outlineColor: '#000000',
-        depthOffset: 1 // チラつき防止
-      });
-
-      // 3. 座標計算 (latLonTo3Dロジックの再利用)
-      const pos = this.latLonTo3D(country.lat, country.lon, R);
-      textEl.setAttribute('position', pos);
-
-      // 4. 回転設定 (地球の中心から外側を向くように設定)
-      // まず地球の中心(0,0,0)の方を向かせる
-      textEl.object3D.lookAt(new THREE.Vector3(0, 0, 0));
-      // そのままだと文字が裏返るので、Y軸で180度回転させて表に向ける
-      textEl.object3D.rotateY(Math.PI); 
-
-      // 子要素として追加
-      el.appendChild(textEl);
-    });
-  },
-
-  // 既存のmarker-placerと同じ計算ロジックを使用
-  latLonTo3D: function(lat, lon, R) {
-    const phi = (90 - lat) * (Math.PI / 180);
-    const theta = (lon + 180) * (Math.PI / 180);
-    const x = -(R * Math.sin(phi) * Math.cos(theta));
-    const z = R * Math.sin(phi) * Math.sin(theta);
-    const y = R * Math.cos(phi);
-    return new THREE.Vector3(x, y, z);
   }
 });
 </script>
@@ -1040,8 +761,7 @@ AFRAME.registerComponent('country-labels', {
   <a-sphere id="earth" position="0 1.5 -7" radius="2" scale="1 1 1"
             src="eartn_model/world.topo.200409.3x10800x5400.jpg"
             segments-height="64" segments-width="128"
-            earth-controls marker-placer="maxMarkerMultiplier: 14"
-            country-labels></a-sphere>
+            earth-controls marker-placer="maxMarkerMultiplier: 14"></a-sphere>
 
   <a-entity id="rig">
     <a-entity id="camera" camera="near: 0.01; far: 1000" position="0 1.6 0" look-controls="enabled: false">
@@ -1052,7 +772,8 @@ AFRAME.registerComponent('country-labels', {
               oculus-touch-controls="hand: right; model: false"
               panel-scroll-handler
               visible="false">
-      <a-entity id="right-ray" raycaster="objects: .collidable, .ui; useWorldCoordinates: false; far: 30; interval: 50; showLine: true" cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend" rotation="-45 0 0"></a-entity>
+    <a-entity id="right-ray" raycaster="objects: .collidable, .ui; useWorldCoordinates: false; far: 30; interval: 50; showLine: true" cursor="rayOrigin: entity; fuse: false; downEvents: triggerdown, selectstart; upEvents: triggerup, selectend" rotation="-45 0 0"></a-entity>
+
     </a-entity>
   </a-entity>
 
@@ -1060,110 +781,416 @@ AFRAME.registerComponent('country-labels', {
     <a-entity rounded-panel="width: 0.6; height: 0.7; radius: 0.05;
                  color: #228; opacity: 0.6;
                  stroke: 0.01; strokeColor: #fff; strokeOpacity: 1"></a-entity>
-    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.25 0.01"></a-entity>
-    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.05 0.01"></a-entity>
-    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.15 0.15 0.01"></a-entity>
-    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.19 0.15 0.01"></a-entity>
-    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.2; height: 0.15" material="transparent: true; opacity: 0" position="-0.2 -0.25 0.01"></a-entity>
-    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.2; height: 0.15" material="transparent: true; opacity: 0" position="0.2 -0.25 0.01"></a-entity>
-
-    <a-entity id="panel-board" position="0 0 0.005">
-      <a-plane width="1.10" height="0.74" position="0 0 0" color="#141921" opacity="0.96"></a-plane>
-
-      <a-entity id="panel-title" position="-0.38 0.33 0.01"
-                troika-text="value: Selected Locations; font: static/NotoSansJP-Regular.ttf; fontSize: 0.055; color: #ffffff; anchor: left; outlineWidth: 0.003; outlineColor: #000000"></a-entity>
-
-      <a-plane position="0 0.30 0.005" width="1.02" height="0.002" color="#4b5870"></a-plane>
-
-      <a-entity id="panel-content-root" position="0 0.18 0.01">
-        <a-entity id="panel-content" position="0 0 0.001"></a-entity>
-      </a-entity>
-
-      <a-entity id="btn-close-panel"
-                class="ui collidable"
-                geometry="primitive: circle; radius: 0.045"
-                material="color: #1b2330; opacity: 0.85"
-                position="0.45 0.335 0.02"
-                panel-button-behavior="action: close">
-        <a-entity id="btn-close-panel-text"
-                  position="0 0 0.01"></a-entity>
-      </a-entity>
-    </a-entity>
+    <a-entity id="btn-rot-up" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.25 0.01"><a-entity troika-text="value: ▲; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-down" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.25 0.01"><a-entity troika-text="value: ▼; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-left" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="-0.20 0 0.01"><a-entity troika-text="value: ◀; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-rot-right" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.23 0 0.01"><a-entity troika-text="value: ▶; color: #FFF; fontSize: 0.1; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-in" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 0.08 0.01"><a-entity troika-text="value: +; color: #FFF; fontSize: 0.2; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
+    <a-entity id="btn-zoom-out" class="ui collidable" geometry="primitive: plane; width: 0.15; height: 0.15" material="transparent: true; opacity: 0" position="0.02 -0.06 0.01"><a-entity troika-text="value: -; color: #FFF; fontSize: 0.3; align: center; anchor: center; font: static/NotoSansJP-Regular.ttf;" position="0 0 0.01"></a-entity></a-entity>
   </a-entity>
-</a-scene>
+
+  <a-sky src="eartn_model/sky.jpg"></a-sky>
+
+<script>
+  AFRAME.registerComponent('vr-ray-toggle',{
+    init:function(){
+      var scene=this.el.sceneEl||this.el; var right=document.getElementById('right-hand'); var mouse=document.getElementById('mouseCursor');
+      function setAttr(el, comp, prop, val){ if(!el) return; try{ el.setAttribute(comp, prop, val); }catch(e){} }
+      
+      function enableVRRay(){
+        // ★追加: ヘッドセットが接続されていない(PC全画面など)なら、マウスを無効化せずここで終了
+        if (!AFRAME.utils.device.checkHeadsetConnected()) {
+           console.log('[vr-ray-toggle] enter-vr (Desktop/No Headset): keep mouse enabled');
+           return;
+        }
+
+        if(right){ right.setAttribute('visible',true); setAttr(right,'raycaster','enabled',true);} 
+        if(mouse){ setAttr(mouse,'raycaster','enabled',false);} 
+        console.log('[vr-ray-toggle] enter-vr: enable right-hand ray'); 
+      }
+
+      function disableVRRay(){ 
+        if(right){ right.setAttribute('visible',false); setAttr(right,'raycaster','enabled',false);} 
+        if(mouse){ setAttr(mouse,'raycaster','enabled',true);} 
+        console.log('[vr-ray-toggle] exit-vr: disable right-hand ray'); 
+      }
+      
+      disableVRRay(); scene.addEventListener('enter-vr', enableVRRay); scene.addEventListener('exit-vr', disableVRRay);
+    }
+  });
+  </script></a-scene>
 
 <script>
 (function(){
   'use strict';
+  const PANEL = { BOARD_W:1.10, CONTENT_LEFT:-0.45, TEXT_MAX_W:0.84, PAD_X:0.02, PAD_Y:0.020, GAP:0.020,
+                  CONTENT_TOP:0.48, CONTENT_BOTTOM:-0.45, SCROLL_MARGIN_R:0.035, SCROLL_TRACK_W:0.048, SCROLL_TRACK_H:0.78 };
+  const HOVER_BG = '#23324A', ZEBRA_A='#262b31', ZEBRA_B='#21262c', EDGE_COL='#596273';
+  const BTN_R=0.045, BTN_FS=0.06;
+  const PANEL_FONT_URL = (typeof FONT_URL!=='undefined')?FONT_URL:(window.FONT_URL||'static/NotoSansJP-Regular.ttf');
+  const FONT_SIZE=0.035, LINE_HEIGHT=1.35, EXTRA=Math.max(0.006, FONT_SIZE*0.38);
+  const FUDGE_FIXED=0.0035, FUDGE_PERLINE=0.0035, EST_COLS=19, EST_SCALE=1.08;
+  const JOY_DEADZONE = 0.15;
+  const JOY_SPEED    = 0.120;
+  const HOLD_SPEED   = 0.080;
+  let currentOnWheelListener = null;
+  let isHoldingUp = false;
+  let isHoldingDown = false;
+  let scrollHandler = null;
+  let rightHandForRestart = null;
+  let lastLog = 0;
 
-  const STORAGE_KEY = 'earth_state_v2';
+  // --- New: safe navigation that exits VR first, then navigates in same tab ---
+  function safeNavigate(url){
+  if(!url) return;
+  const topWin = window.top || window.parent || window;
+  const scene  = (AFRAME.scenes && AFRAME.scenes[0]) || null;
 
-  function clamp(v,min,max){ return (v<min)?min:(v>max)?max:v; }
+  const go = ()=>{
+    try { topWin.location.assign(url); }
+    catch(_) { try { topWin.location.href = url; } catch(_2){} }
+  };
 
-  function saveState(){
-    var earth = document.getElementById('earth');
-    if(!earth || !earth.object3D) return;
-    var s = earth.object3D.scale.x || 1;
-    var rx = earth.object3D.rotation.x || 0;
-    var ry = earth.object3D.rotation.y || 0;
-    var state = {
-      s: s,
-      rxDeg: THREE.MathUtils.radToDeg(rx),
-      ryDeg: THREE.MathUtils.radToDeg(ry)
+  if (scene && scene.is && scene.is('vr-mode')){
+    const onExit = ()=>{
+      try { scene.removeEventListener('exit-vr', onExit); } catch(_) {}
+      setTimeout(go, 50);
     };
-    try{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }catch(e){}
+    try { scene.addEventListener('exit-vr', onExit); } catch(_) {}
+    try { scene.exitVR(); } catch(_) {}
+    setTimeout(()=>{
+      try { scene && scene.removeEventListener('exit-vr', onExit); } catch(_) {}
+      go();
+    }, 1200);
+  } else {
+    go();
+  }
+}
+/* window.open -> parent same-tab navigation */
+(function(){
+  try{
+    const topWin = window.top || window.parent || window;
+    const _open = window.open;
+    window.open = function(url, target, features){
+      if (typeof url === 'string'){
+        try { topWin.location.assign(url); }
+        catch(_) { topWin.location.href = url; }
+        return null;
+      }
+      return _open.apply(window, arguments);
+    };
+  }catch(_){}
+})();
+
+
+  function setCardFrame(row,w,h){
+    const bw=0.003, edge=EDGE_COL;
+    let bg=row.querySelector('.list-bg'); if(!bg){ bg=document.createElement('a-entity'); bg.classList.add('ui','list-bg','collidable'); row.appendChild(bg); }
+    bg.setAttribute('geometry',`primitive:plane;width:${w};height:${h}`);
+    bg.setAttribute('material',`shader:flat;color:${row.dataset.baseColor};opacity:0.95;transparent:true;side:double`);
+    bg.setAttribute('position',`${w/2} ${-h/2} 0`);
+    const ensure=cls=>{ let e=row.querySelector('.'+cls); if(!e){ e=document.createElement('a-entity'); e.classList.add('ui',cls); row.appendChild(e);} e.setAttribute('material',`shader:flat;color:${edge};transparent:true;opacity:1;side:double`); return e; };
+    const top=ensure('list-border-top'), bottom=ensure('list-border-bottom'), left=ensure('list-border-left'), right=ensure('list-border-right');
+    top.setAttribute('geometry',`primitive:plane;width:${w};height:${bw}`); bottom.setAttribute('geometry',`primitive:plane;width:${w};height:${bw}`);
+    left.setAttribute('geometry',`primitive:plane;width:${bw};height:${h}`); right.setAttribute('geometry',`primitive:plane;width:${bw};height:${h}`);
+    top.setAttribute('position',`${w/2} ${-bw/2} 0.001`); bottom.setAttribute('position',`${w/2} ${-(h-bw/2)} 0.001`);
+    left.setAttribute('position',`${bw/2} ${-h/2} 0.001`); right.setAttribute('position',`${w-bw/2} ${-h/2} 0.001`);
+  }
+  function setRowBgColor(row,color){ const bg=row.querySelector('.list-bg'); if(bg){ const mat=bg.getAttribute('material')||{}, opa=(typeof mat.opacity==='number')?mat.opacity:0.95; bg.setAttribute('material',`shader:flat;color:${color};opacity:${opa};transparent:true;side:double`);} }
+  function readBlockBoundsFrom(txtEl){ const mesh=txtEl.getObject3D('text')||txtEl.getObject3D('mesh')||null; const info=mesh&&(mesh.textRenderInfo||mesh._textRenderInfo)||(txtEl.components&&txtEl.components['troika-text']&&txtEl.components['troika-text'].textRenderInfo); return (info&&info.blockBounds)? info.blockBounds : null; }
+  function pollHeight(txtEl, tries, cb){ (function loop(n){ const b=readBlockBoundsFrom(txtEl); if(b){ return cb(b[3]-b[1]); } if(n<=0) return cb(null); requestAnimationFrame(()=>loop(n-1)); })(tries); }
+  function sanitizeTitle(s){ return String(s||'').replace(/\r\n?/g,'\n').replace(/^\s+|\s+$/g,'').replace(/\n{2,}/g,'\n'); }
+  function countLinesByCols(title, cols){ const parts=String(title||'').split('\n'); let lines=0; for(const p of parts){ let c=0; for(const ch of p){ const w=/[ -~]/.test(ch)?0.5:1; if(c+w>cols){lines++; c=w;} else c+=w; } lines++; } return lines; }
+
+  function openPanel(locations){
+    closePanel();
+    const scene=document.querySelector('a-scene');
+    const panel=document.createElement('a-entity'); panel.id='vrPanel'; panel.classList.add('ui','collidable');
+    panel.setAttribute('position','0 0 -0.5'); panel.setAttribute('rotation','0 0 0'); panel.setAttribute('scale','0.5 0.5 0.5');
+    if(AFRAME.components['panel-world-lock']) panel.setAttribute('panel-world-lock', 'baseDist: 1.5; baseScale: 1.40;'); // +0.5m
+    scene.appendChild(panel);
+    console.log('[openPanel] panel created; baseDist=1.0 (+0.5m), items=', (locations||[]).length);
+
+    const rightHandEl = document.querySelector('#right-hand');
+    if (rightHandEl) {
+      scrollHandler = rightHandEl.components['panel-scroll-handler'];
+      console.log('[openPanel] right-hand has panel-scroll-handler?', !!scrollHandler);
+    }
+
+    const rightX=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
+    const track=document.createElement('a-entity'); track.classList.add('ui','scroll-track');
+    track.setAttribute('geometry',`primitive:plane;width:${PANEL.SCROLL_TRACK_W};height:${PANEL.SCROLL_TRACK_H}`);
+    track.setAttribute('material',`shader:flat;color:#1f2a38;opacity:0.9;transparent:true;side:double`);
+    track.setAttribute('position',`${rightX} 0 0.05`); panel.appendChild(track);
+
+    const thumb=document.createElement('a-entity'); thumb.classList.add('ui','scroll-thumb','collidable');
+    thumb.setAttribute('geometry',`primitive:plane;width:0.088;height:0.10`);
+    thumb.setAttribute('material','shader:flat;color:#7fa7ff;opacity:0.85;transparent:true;side:double');
+    thumb.setAttribute('position',`${rightX} 0 0.051`); panel.appendChild(thumb);
+
+    const mkBtn=(y,ch)=>{ const b=document.createElement('a-entity'); b.classList.add('ui','collidable'); b.setAttribute('geometry',`primitive:circle;radius:${BTN_R};segments:48`);
+      b.setAttribute('material','shader:flat;color:#243246;opacity:0.95;transparent:true;side:double'); b.setAttribute('position',`${rightX} ${y} 0.05`);
+      const t=document.createElement('a-entity'); t.setAttribute('troika-text',{value:ch,fontSize:BTN_FS,color:'#cfe3ff',anchor:'center',baseline:'middle',font:PANEL_FONT_URL}); t.setAttribute('position','0 0 0.001'); b.appendChild(t); return b; };
+    const btnUp=mkBtn(0.50,'▲'), btnDn=mkBtn(-0.50,'▼'); panel.appendChild(btnUp); panel.appendChild(btnDn);
+
+    const closeY = 0.50 + (BTN_R*2 + 0.015);
+    const btnClose = mkBtn(closeY, '×'); panel.appendChild(btnClose);
+    btnClose.addEventListener('mousedown', ()=>{ try{ closePanel(); }catch(e){ if (typeof window.closePanel==='function') window.closePanel(); } });
+
+    const listGroup=document.createElement('a-entity'); listGroup.classList.add('list-group'); listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP} 0.02`); panel.appendChild(listGroup);
+
+    const maxWidth=PANEL.TEXT_MAX_W-0.002; const rows=[], estHeights=[], realH=[], estLinesList=[];
+    (locations||[]).forEach((loc,i)=>{
+      const row=document.createElement('a-entity'); row.classList.add('ui','list-entry','collapsible','collidable');
+      const title=sanitizeTitle(loc.title); row.dataset.title=title; row.dataset.url=String(loc.url??''); row.dataset.baseColor=(i%2===0)?ZEBRA_A:ZEBRA_B;
+      const txt=document.createElement('a-entity'); txt.classList.add('ui','list-text');
+      txt.setAttribute('troika-text',{ value:row.dataset.title, fontSize:FONT_SIZE, lineHeight:LINE_HEIGHT, maxWidth, anchor:'left', baseline:'top', color:'#fff', outlineWidth:0.004, outlineColor:'#000', overflowWrap:'break-word', whiteSpace:'pre-wrap', clipRect:`0 -9999 ${maxWidth} 9999`, font:PANEL_FONT_URL });
+      txt.setAttribute('position',`${PANEL.PAD_X} ${-PANEL.PAD_Y} 0.002`);
+      row.appendChild(txt);
+
+      // ★ 修正: VRモードなら先にexitVRしてから同タブ遷移。非VRなら即遷移。
+      row.addEventListener('mousedown',()=>{
+        const u=row.dataset.url;
+        if(u) safeNavigate(u);
+      });
+
+      row.addEventListener('mouseenter',()=>setRowBgColor(row,HOVER_BG));
+      row.addEventListener('mouseleave',()=>setRowBgColor(row,row.dataset.baseColor));
+      listGroup.appendChild(row); rows.push(row);
+      const estLines = countLinesByCols(title, EST_COLS); estLinesList.push(estLines);
+      const estH = Math.max( estLines * FONT_SIZE * LINE_HEIGHT, FONT_SIZE*LINE_HEIGHT) * EST_SCALE; estHeights.push(estH);
+      realH.push(null);
+    });
+
+    const viewportH=(PANEL.CONTENT_TOP-PANEL.CONTENT_BOTTOM);
+    let totalHeight=0, maxOffset=0, currentOffset=0, targetOffset=0;
+    function applyOffset(){ listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP + currentOffset} 0.02`); }
+    function setOffset(v,snap=false){ targetOffset=Math.min(Math.max(v,0),maxOffset); if(snap){ currentOffset=targetOffset; applyOffset(); updateScrollbar(); console.log('[setOffset] target=',targetOffset.toFixed(3),' current=',currentOffset.toFixed(3),' max=',maxOffset.toFixed(3)); } }
+
+    function reflow(){
+      let y=0; rows.forEach((row,i)=>{
+        const lines=estLinesList[i]; const baseH=(realH[i]??estHeights[i]);
+        const th=baseH + FUDGE_FIXED + FUDGE_PERLINE * Math.max(1, lines);
+        const boxH = th + 2*PANEL.PAD_Y + EXTRA; const boxW = PANEL.TEXT_MAX_W + 2*PANEL.PAD_X;
+        row._boxH=boxH; row.setAttribute('position',`${PANEL.CONTENT_LEFT} ${-y} 0.03`); setCardFrame(row, boxW, boxH);
+        y += boxH + PANEL.GAP;
+      });
+      totalHeight=Math.max(0,y-PANEL.GAP); maxOffset=Math.max(0,totalHeight-viewportH);
+      setOffset(currentOffset,true); updateScrollbar();
+      console.log('[reflow] rows=', rows.length, ' totalH=', totalHeight.toFixed(3), ' viewportH=', viewportH.toFixed(3), ' maxOffset=', maxOffset.toFixed(3));
+    }
+
+    rows.forEach((row,i)=>{ const txt=row.querySelector('.list-text'); pollHeight(txt, 140, h=>{ if(h!=null){ realH[i]=h; reflow(); } }); });
+    setTimeout(reflow, 400); setTimeout(reflow, 1000); setTimeout(reflow, 2000); setTimeout(reflow, 3000);
+
+    function readXRRightStickY(){
+      try {
+        var scene = AFRAME.scenes && AFRAME.scenes[0];
+        var session = scene && scene.renderer && scene.renderer.xr && scene.renderer.xr.getSession ? scene.renderer.xr.getSession() : null;
+        if (!session || !session.inputSources) return 0;
+        var y = 0;
+        session.inputSources.forEach(function(src){
+          try {
+            if (src && (src.handedness === 'right' || src.handedness === 'unknown') && src.gamepad && src.gamepad.axes && src.gamepad.axes.length){
+              var axes = src.gamepad.axes;
+              var cand = (axes.length > 3 ? axes[3] : (axes.length > 1 ? axes[1] : 0));
+              if (Math.abs(cand) > Math.abs(y)) y = cand;
+            }
+          } catch(_){}}
+        );
+        return y;
+      } catch(e){ return 0; }
+    }
+
+    function readNavigatorGamepadsY(){
+      try {
+        var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        var y = 0;
+        for (var i=0;i<pads.length;i++){
+          var p = pads[i];
+          if (!p || !p.connected) continue;
+          var ax = p.axes || [];
+          var cand = (ax.length > 3 ? ax[3] : (ax.length > 1 ? ax[1] : 0));
+          if (Math.abs(cand) > Math.abs(y)) y = cand;
+        }
+        return y;
+      } catch(_){ return 0; }
+    }
+
+    // ★ 1フレーム分の処理（panel-raf-proxy の tick から毎フレーム呼ばれる）
+    function animateStep(){
+      let stickY_src = 'panel-scroll-handler';
+      let stickY = (scrollHandler && typeof scrollHandler.stickY==='number') ? scrollHandler.stickY : 0;
+
+      if (Math.abs(stickY) <= JOY_DEADZONE) {
+        const yXR = readXRRightStickY();
+        if (Math.abs(yXR) > Math.abs(stickY)) { stickY = yXR; stickY_src = 'xr.gamepad'; }
+      }
+      if (Math.abs(stickY) <= JOY_DEADZONE) {
+        const yGP = readNavigatorGamepadsY();
+        if (Math.abs(yGP) > Math.abs(stickY)) { stickY = yGP; stickY_src = 'navigator.getGamepads'; }
+      }
+
+      const now = performance.now();
+      if (now - lastLog > 300) {
+        lastLog = now;
+        console.log('[animate] stickY=', stickY.toFixed(3), ' src=', stickY_src, ' target=', targetOffset.toFixed(3), ' current=', currentOffset.toFixed(3));
+      }
+
+      if (Math.abs(stickY) > JOY_DEADZONE) {
+        const delta = stickY * JOY_SPEED * viewportH;
+        setOffset(currentOffset + delta, false);
+      }
+      if (isHoldingUp) {
+        setOffset(currentOffset - (viewportH * HOLD_SPEED), false);
+      }
+      if (isHoldingDown) {
+        setOffset(currentOffset + (viewportH * HOLD_SPEED), false);
+      }
+      const d = targetOffset - currentOffset;
+      if (Math.abs(d) < 0.0005) {
+        currentOffset = targetOffset;
+      } else {
+        currentOffset += d * 0.18;
+      }
+      applyOffset();
+      updateScrollbar();
+    }
+
+    const rightX_forScroll=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
+    function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1; const thumbH=Math.max(0.06,H*frac);
+      const denom=Math.max(1e-6,maxOffset); const t=denom>0?(currentOffset/denom):0; const top=H/2-thumbH/2; const y=top - t*(H-thumbH);
+      thumb.setAttribute('geometry',`primitive:plane;width:0.048;height:${thumbH}`); thumb.setAttribute('position',`${rightX_forScroll} ${y} 0.051`); }
+
+    currentOnWheelListener = (e)=>{ const k=0.0018*viewportH; setOffset(currentOffset + e.deltaY*k); };
+    window.addEventListener('wheel', currentOnWheelListener, {passive:true});
+
+    const stopHolds = () => { isHoldingUp = false; isHoldingDown = false; };
+    btnDn.addEventListener('mousedown', () => { isHoldingDown = true; });
+    btnUp.addEventListener('mousedown', () => { isHoldingUp = true; });
+    btnDn.addEventListener('mouseup', stopHolds);
+    btnUp.addEventListener('mouseup', stopHolds);
+    btnDn.addEventListener('mouseleave', stopHolds);
+    btnUp.addEventListener('mouseleave', stopHolds);
+
+    track.addEventListener('mousedown',(e)=>{
+      const p=e.detail&&e.detail.intersection? e.detail.intersection.point : null; if(!p) return;
+      const step = viewportH * 0.85;
+      const local=track.object3D.worldToLocal(p.clone());
+      if(local.y > 0) setOffset(currentOffset-step); else setOffset(currentOffset+step);
+    });
+
+    window.__panelOpen=true;
+    setRaycasterTargets && setRaycasterTargets(true);
+    refreshAllRaycasters && refreshAllRaycasters();
+    panel.sceneEl && panel.sceneEl.emit('panel-opened');
+    console.log('[openPanel] panel-opened, tick-driven scroll start');
+    // ★ tick から呼ばせる
+    window.__panelTick = animateStep;
+    // 1回だけ即時反映
+    animateStep();
   }
 
+  function closePanel(){
+    const p=document.getElementById('vrPanel');
+    if(p && p.parentNode) p.parentNode.removeChild(p);
+    if(currentOnWheelListener){ window.removeEventListener('wheel', currentOnWheelListener); currentOnWheelListener=null; }
+    isHoldingUp = false; isHoldingDown = false;
+    scrollHandler = null;
+    window.__panelTick = null; // ★ 停止
+    window.__panelOpen=false;
+    const scene = AFRAME.scenes[0];
+    if(scene) scene.emit('panel-closed');
+    setRaycasterTargets && setRaycasterTargets(false);
+    refreshAllRaycasters && refreshAllRaycasters();
+    console.log('[closePanel] panel-closed');
+  }
+
+  window.openPanel=openPanel; window.closePanel=closePanel;
+  console.log('[boot] debug build ready (fix5: auto-exit-vr-on-link)');
+})();
+</script>
+
+<script>
+(function(){
+  'use strict';
+  const KEY = 'earthState.v1';
+
+  function clamp(v, min, max){ return Math.min(max, Math.max(min, v)); }
+
+  function readEarthState(){
+    try { return JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch(_) { return null; }
+  }
+  function writeEarthState(state){
+    try { sessionStorage.setItem(KEY, JSON.stringify(state)); } catch(_) {}
+  }
+
+  // === 保存：ページ離脱時（通常遷移・戻る時の直前） ===
+  function saveNow(){
+    const earth = document.getElementById('earth');
+    if (!earth || !earth.object3D) return;
+    const o = earth.object3D;
+    const ec = earth.components['earth-controls'];
+    const rxDeg = ec ? ec.currentXRotation : THREE.MathUtils.radToDeg(o.rotation.x);
+    const ryDeg = THREE.MathUtils.radToDeg(o.rotation.y);
+    const s = o.scale.x;
+    writeEarthState({ rxDeg, ryDeg, s });
+    // console.log('[persist] saved', {rxDeg, ryDeg, s});
+  }
+  // bfcache 対応：pagehide で保存（persisted=true でも発火）
+  window.addEventListener('pagehide', saveNow, {capture:true});
+  // 念のため
+  window.addEventListener('beforeunload', saveNow, {capture:true});
+
+  // === 復元：シーン準備後に適用 ===
   function restoreIfAny(){
-    var earth = document.getElementById('earth');
-    if(!earth || !earth.object3D) return;
+    const state = readEarthState();
+    if (!state) return;
 
-    var raw = null;
-    try{
-      raw = localStorage.getItem(STORAGE_KEY);
-    }catch(e){}
+    const earth = document.getElementById('earth');
+    if (!earth || !earth.object3D) return;
 
-    if(!raw) return;
-    var state = null;
-    try{
-      state = JSON.parse(raw);
-    }catch(e){
-      return;
-    }
-    if(!state) return;
-
+    // 範囲の安全確認（既存の最小最大に合わせる）
     const minS = 1.0, maxS = 3.0;
     const s = clamp(Number(state.s)||1, minS, maxS);
     const rxDeg = clamp(Number(state.rxDeg)||0, -80, 80);
     const ryDeg = Number(state.ryDeg)||0;
 
+    // 1) 回転・拡縮を適用
     earth.object3D.scale.set(s, s, s);
     earth.object3D.rotation.x = THREE.MathUtils.degToRad(rxDeg);
     earth.object3D.rotation.y = THREE.MathUtils.degToRad(ryDeg);
 
+    // 2) コントロール側の内部状態も同期（重要）
     const ec = earth.components['earth-controls'];
     if (ec) {
       ec.currentXRotation = rxDeg;
+      // スクロールや入力のスナップ用にキー状態は触らない
     }
 
+    // 3) マーカーの再配置が必要なら即時更新（閾値待ちではなく）
     const mp = earth.components['marker-placer'];
     if (mp && typeof mp.updateClusters === 'function') {
-      mp.previousEarthScale = s;
+      mp.previousEarthScale = s;   // 差分判定をバイパス
       try { mp.updateClusters(); } catch(_) {}
     }
+
+    // console.log('[persist] restored', state);
   }
 
-  window.addEventListener('beforeunload', saveState);
-
+  // bfcache で完全復帰した場合はブラウザが状態を保持してくれますが、
+  // 念のため pageshow でも復元を試みます（persisted のときは基本そのまま）
   window.addEventListener('pageshow', function(e){
+    // bfcache 復元でも UI 崩れは起きない想定だが、二重適用を避けたいなら下行を有効化
+    // if (e.persisted) return;
+    // A-Frame シーン準備後に適用
     const scene = (AFRAME.scenes && AFRAME.scenes[0]) || document.querySelector('a-scene');
     if (scene && scene.hasLoaded) {
       restoreIfAny();
     } else if (scene) {
       scene.addEventListener('loaded', restoreIfAny, {once:true});
     } else {
+      // 念のためのフォールバック
       window.addEventListener('load', restoreIfAny, {once:true});
     }
   }, {capture:true});
@@ -1176,6 +1203,7 @@ AFRAME.registerComponent('country-labels', {
 (function(){
   function isQuestBrowser(){
     var ua = navigator.userAgent || '';
+    // Meta Quest / Oculus Browser の UA をざっくり判定
     return /OculusBrowser|Quest|Meta Quest/i.test(ua);
   }
 
@@ -1184,8 +1212,10 @@ AFRAME.registerComponent('country-labels', {
     var scene = (AFRAME.scenes && AFRAME.scenes[0]) || document.querySelector('a-scene');
     if (!panel || !scene) return;
 
+    // VRモードかどうか
     var isVr = scene.is && scene.is('vr-mode');
 
+    // Meta Quest ブラウザ かつ 非VR のときだけ表示
     var show = isQuestBrowser() && !isVr;
     panel.setAttribute('visible', show ? 'true' : 'false');
   }
@@ -1196,10 +1226,12 @@ AFRAME.registerComponent('country-labels', {
       scene.addEventListener('enter-vr', updatePanelVisibility);
       scene.addEventListener('exit-vr', updatePanelVisibility);
     }
+    // 初期表示時にも一度チェック
     updatePanelVisibility();
   });
 })();
 </script>
+
 
 </body>
 </html>
