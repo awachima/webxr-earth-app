@@ -4,21 +4,28 @@
     "nicknameButton": "昵称",
     "nicknamePrompt": "请输入你的昵称。",
     "backButton": "← 返回",
+
     "countdownLabel": "倒计时",
     "countdownWaiting": "请等待行程开始。",
     "countdownFinished": "行程开始时间已到。",
+    "statusWaiting": "请等待行程开始。",
+
     "enterButton": "进入旅程",
     "copyRoomUrl": "复制此等待房间的 URL",
     "copiedUrl": "已复制此等待房间的 URL。",
     "copyFailed": "复制失败。",
+
     "textChatLabel": "文字聊天",
     "chatSend": "发送",
     "chatConnected": "已连接。",
     "chatDisconnected": "连接已断开。请重新载入页面。",
     "chatError": "发生错误。请稍候再试。",
+    "chatPlaceholder": "输入消息…",
+
     "connConnected": "已连接",
     "connDisconnected": "已断开",
     "connError": "错误",
+
     "startLabel": "开始时间：",
     "dateLabel": "开始日期与时间",
     "dateUnknown": "未设定",
@@ -31,25 +38,43 @@
     "eventTypeUnknown": "未设定",
     "priceLabel": "费用",
     "priceUnknown": "未设定",
+
     "infoPanelLabel": "等待房间信息",
     "voicePanelLabel": "语音与会话设置",
+    "voiceSectionTitle": "语音聊天",
+    "voiceControlLabel": "语音聊天",
+
     "selfEchoLabel": "将自己的声音回放给自己",
     "voiceAutoJoinLabel": "进入房间时自动加入语音",
+
     "voiceOn": "语音开",
     "voiceOff": "语音关",
     "voiceJoined": "语音：已连接",
     "voiceNone": "语音：未加入",
     "mute": "静音",
     "unmute": "取消静音",
+
     "voiceHint": "※ 语音数据在浏览器之间直接传输。",
+    "voiceOnOffNotice": "🔊 重新开关语音可能改善音质。",
+    "voiceAskNotice": "🤵 放慢速度、清晰地说话可提高识别准确度。",
+
     "enableSound": "在手机上启用声音",
     "voicePermissionError": "没有获得麦克风访问权限。请检查浏览器设置。",
+
     "voiceAskBtn": "向管家提问（语音）",
     "voiceAskNeedJoin": "请先加入语音聊天。",
     "voiceAskNoWs": "尚未连接到聊天服务器。请重新载入页面。",
     "voiceAskListening": "管家正在聆听你的声音…",
-    "voiceOnOffHint": "通过关闭再开启语音，有时可以改善声音状况。",
-    "voiceSpeakHint": "慢慢、清晰地说话可以提高识别准确度。",
+
+    "historyLoaded": "— 已载入历史记录 —",
+
+    "joined": "{name} 加入了（共 {count} 人）",
+    "left": "{name} 离开了（共 {count} 人）",
+
+    "memberLabel": "{name}",
+
+    "botThinking": "Reginald 正在思考…",
+
     "footer": "© DokodemoDoors"
   }
 }

@@ -4,21 +4,28 @@
     "nicknameButton": "Nickname",
     "nicknamePrompt": "Please enter your nickname.",
     "backButton": "← Back",
+
     "countdownLabel": "Countdown",
     "countdownWaiting": "Please wait until the tour starts.",
     "countdownFinished": "The tour start time has arrived.",
+    "statusWaiting": "Please wait until the tour starts.",
+
     "enterButton": "Go to tour",
     "copyRoomUrl": "Copy this lobby URL",
     "copiedUrl": "Lobby URL copied to clipboard.",
     "copyFailed": "Failed to copy.",
+
     "textChatLabel": "Text chat",
     "chatSend": "Send",
     "chatConnected": "Connected.",
     "chatDisconnected": "Disconnected. Please reload this page.",
     "chatError": "An error occurred. Please wait and try again.",
+    "chatPlaceholder": "Type a message…",
+
     "connConnected": "Connected",
     "connDisconnected": "Disconnected",
     "connError": "Error",
+
     "startLabel": "Start time: ",
     "dateLabel": "Start date & time",
     "dateUnknown": "Not set",
@@ -31,25 +38,43 @@
     "eventTypeUnknown": "Not set",
     "priceLabel": "Price",
     "priceUnknown": "Not set",
+
     "infoPanelLabel": "Lobby information",
     "voicePanelLabel": "Voice & conversation settings",
+    "voiceSectionTitle": "Voice chat",
+    "voiceControlLabel": "Voice chat",
+
     "selfEchoLabel": "Play my own voice to myself",
     "voiceAutoJoinLabel": "Automatically join voice on entry",
+
     "voiceOn": "Voice ON",
     "voiceOff": "Voice OFF",
     "voiceJoined": "Voice: connected",
     "voiceNone": "Voice: not joined",
     "mute": "Mute",
     "unmute": "Unmute",
+
     "voiceHint": "※ Voice audio is exchanged directly between browsers.",
+    "voiceOnOffNotice": "🔊 Audio quality may improve by turning voice chat OFF and ON again.",
+    "voiceAskNotice": "🤵 Speaking slowly and clearly improves recognition accuracy.",
+
     "enableSound": "Enable sound on smartphone",
     "voicePermissionError": "Microphone access was not granted. Please check your browser settings.",
+
     "voiceAskBtn": "Ask the butler (voice)",
     "voiceAskNeedJoin": "Please join the voice chat first.",
     "voiceAskNoWs": "Not connected to the chat server. Please reload this page.",
     "voiceAskListening": "The butler is now listening to your voice…",
-    "voiceOnOffHint": "Audio quality may improve by turning voice chat OFF and ON again.",
-    "voiceSpeakHint": "Speaking slowly and clearly improves recognition accuracy.",
+
+    "historyLoaded": "— Loaded previous messages —",
+
+    "joined": "{name} joined (total {count})",
+    "left": "{name} left (total {count})",
+
+    "memberLabel": "{name}",
+
+    "botThinking": "Reginald is thinking…",
+
     "footer": "© DokodemoDoors"
   }
 }

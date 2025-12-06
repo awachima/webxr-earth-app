@@ -4,21 +4,28 @@
     "nicknameButton": "ニックネーム",
     "nicknamePrompt": "ニックネームを入力してください。",
     "backButton": "← 戻る",
+
     "countdownLabel": "カウントダウン",
     "countdownWaiting": "開始までお待ちください。",
     "countdownFinished": "ツアー開始時刻になりました。",
+    "statusWaiting": "開始までお待ちください。",
+
     "enterButton": "ツアーに行く",
     "copyRoomUrl": "この待合室のURLをコピー",
     "copiedUrl": "この待合室のURLをコピーしました。",
     "copyFailed": "コピーに失敗しました。",
+
     "textChatLabel": "テキストチャット",
     "chatSend": "送信",
     "chatConnected": "接続しました。",
     "chatDisconnected": "切断されました。再読み込みしてください。",
     "chatError": "エラーが発生しました。しばらく待ってから再度お試しください。",
+    "chatPlaceholder": "メッセージを入力…",
+
     "connConnected": "接続済み",
     "connDisconnected": "切断されています",
     "connError": "エラー",
+
     "startLabel": "開始時刻：",
     "dateLabel": "開始日時",
     "dateUnknown": "未設定",
@@ -31,25 +38,43 @@
     "eventTypeUnknown": "未設定",
     "priceLabel": "料金",
     "priceUnknown": "未設定",
+
     "infoPanelLabel": "待合室の情報",
     "voicePanelLabel": "音声・会話設定",
+    "voiceSectionTitle": "ボイスチャット",
+    "voiceControlLabel": "ボイスチャット",
+
     "selfEchoLabel": "自分の声を自分にも流す",
     "voiceAutoJoinLabel": "入室時に自動で音声接続する",
+
     "voiceOn": "音声ON",
     "voiceOff": "音声OFF",
     "voiceJoined": "音声: 接続中",
     "voiceNone": "音声: 未参加",
     "mute": "ミュート",
     "unmute": "ミュート解除",
+
     "voiceHint": "※ 音声はブラウザ同士で直接やり取りされます。",
+    "voiceOnOffNotice": "🔊 音声はON/OFFで改善することがあります。",
+    "voiceAskNotice": "🤵 ゆっくり・はっきり話すと認識が安定します。",
+
     "enableSound": "スマホで音を有効化",
     "voicePermissionError": "マイクへのアクセスが許可されませんでした。ブラウザの設定を確認してください。",
+
     "voiceAskBtn": "執事に質問（音声）",
     "voiceAskNeedJoin": "まずボイスチャットに接続してからご利用ください。",
     "voiceAskNoWs": "チャットサーバーに接続されていません。ページを再読み込みしてください。",
     "voiceAskListening": "執事が音声を聞き取っています…",
-    "voiceOnOffHint": "音声はON/OFFで改善することがあります。",
-    "voiceSpeakHint": "ゆっくり・はっきり話すと認識が安定します。",
+
+    "historyLoaded": "— 過去のメッセージを読み込みました —",
+
+    "joined": "{name} が参加しました（合計 {count} 名）",
+    "left": "{name} が退出しました（合計 {count} 名）",
+
+    "memberLabel": "{name}",
+
+    "botThinking": "Reginald が考え中です…",
+
     "footer": "© DokodemoDoors"
   }
 }
