@@ -124,15 +124,11 @@
     <div class="modal">
       <header>
         <div id="modalTitle">Create a meetup room</div>
-        <div class="close" id="close">×</div>
+        <div class="close" id="close" aria-label="Close">×</div>
       </header>
       <div class="body">
-        <!-- ★ 説明文を追加 -->
-        <p class="modal-description" style="margin-bottom:12px; font-size:0.9rem; line-height:1.5;">
-          あなたがどこでもドアの
-          <a href="https://dokodemodoors.com/" target="_blank">公式サイト</a>
-          で作成したイベントの待合室を作成できます。イベントのタイトル、作成したイベントページのURL、参加上限、有料 or 無料、集合日時（開催時刻のこと）を入力し、待合室を作成してください。
-        </p>
+        <!-- ★ 多言語対応用の説明文コンテナ（中身は JS で差し替え） -->
+        <p class="modal-description" id="modalDescription" style="margin-bottom:12px; font-size:0.9rem; line-height:1.5;"></p>
 
         <div class="form">
           <div>
@@ -150,19 +146,19 @@
 
           <!-- Free / Paid 選択＋金額 -->
           <div>
-            <label>Free or paid event</label>
+            <label id="mEventTypeLabel">Free or paid event</label>
             <div style="margin-top:4px; display:flex; gap:24px; align-items:center;">
               <label style="display:flex; align-items:center; gap:4px;">
                 <input type="radio" name="mEventType" value="free" checked>
-                <span>Free event</span>
+                <span id="mEventTypeFreeLabel">Free event</span>
               </label>
               <label style="display:flex; align-items:center; gap:4px;">
                 <input type="radio" name="mEventType" value="paid">
-                <span>Paid event</span>
+                <span id="mEventTypePaidLabel">Paid event</span>
               </label>
             </div>
             <div id="priceWrapper" style="margin-top:8px; display:none;">
-              <label for="mPrice" style="display:block; margin-bottom:4px;">Price</label>
+              <label for="mPrice" id="mPriceLabel" style="display:block; margin-bottom:4px;">Price</label>
               <input
                 id="mPrice"
                 type="text"

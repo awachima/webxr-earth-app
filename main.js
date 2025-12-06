@@ -122,7 +122,9 @@ function renderTools(card){
   if(roomId && isOwner(roomId)){
     const b=document.createElement('button');
     b.className='btn icon';
-    b.title='Edit';
+    const t = (window.i18n && window.i18n.meetups) || {};
+    const editTooltip = t.editTooltip || 'Edit';
+    b.title = editTooltip;
     b.textContent='✎';
     b.onclick=()=>openModal('edit', {
       roomId,
@@ -162,16 +164,20 @@ function upsertCard(item){
   card.dataset.eventType = item.eventType || 'free';
   card.dataset.price     = (item.price ?? '').toString();
 
-  // ★ イベント種別表示文言
+  // ★ イベント種別表示文言（多言語対応）
   const etEl = card.querySelector('[data-event-type]');
   if (etEl){
     const type  = item.eventType || 'free';
     const price = (item.price ?? '').toString().trim();
+    const t = (window.i18n && window.i18n.meetups) || {};
+    const freeLabel = t.freeEvent || 'Free event';
+    const paidLabel = t.paidEvent || 'Paid event';
+    const paidTpl   = t.paidEventWithPrice || 'Paid event ({price})';
     let label = '';
     if (type === 'paid'){
-      label = price ? `Paid event (${price})` : 'Paid event';
+      label = price ? paidTpl.replace('{price}', price) : paidLabel;
     } else {
-      label = 'Free event';
+      label = freeLabel;
     }
     etEl.textContent = label;
   }
@@ -880,6 +886,24 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
           span.textContent = `${t.meetups.cardStartsLabel}: ${suffix}`;
         });
       }
+
+      // カード内のイベント種別表示（多言語更新）
+      document.querySelectorAll('#grid .card').forEach(card=>{
+        const etEl = card.querySelector('[data-event-type]');
+        if (!etEl) return;
+        const type  = card.dataset.eventType || 'free';
+        const price = (card.dataset.price || '').trim();
+        const freeLabel = t.meetups.freeEvent || 'Free event';
+        const paidLabel = t.meetups.paidEvent || 'Paid event';
+        const paidTpl   = t.meetups.paidEventWithPrice || 'Paid event ({price})';
+        let label = '';
+        if (type === 'paid'){
+          label = price ? paidTpl.replace('{price}', price) : paidLabel;
+        }else{
+          label = freeLabel;
+        }
+        etEl.textContent = label;
+      });
     }
 
     // 作成/編集モーダル（ラベル類）
@@ -894,7 +918,25 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       if (lblTarget && t.modal.form.targetLabel) lblTarget.textContent = t.modal.form.targetLabel;
       const note = document.querySelector('.note');
       if (note && t.modal.form.targetNote) note.textContent = t.modal.form.targetNote;
-      // Free/Paid/Price のラベル i18n は必要なら後で追加
+
+      // モーダル説明文（HTML）
+      const desc = document.getElementById('modalDescription');
+      if (desc && t.modal.form.descriptionHtml){
+        desc.innerHTML = t.modal.form.descriptionHtml;
+      }
+
+      // Free/Paid/Price ラベル
+      const evTypeLabel = document.getElementById('mEventTypeLabel');
+      const freeSpan    = document.getElementById('mEventTypeFreeLabel');
+      const paidSpan    = document.getElementById('mEventTypePaidLabel');
+      const priceLabel  = document.getElementById('mPriceLabel');
+      if (evTypeLabel && t.modal.form.eventTypeLabel) evTypeLabel.textContent = t.modal.form.eventTypeLabel;
+      if (freeSpan && t.modal.form.eventTypeFree)     freeSpan.textContent    = t.modal.form.eventTypeFree;
+      if (paidSpan && t.modal.form.eventTypePaid)     paidSpan.textContent    = t.modal.form.eventTypePaid;
+      if (priceLabel && t.modal.form.priceLabel)      priceLabel.textContent  = t.modal.form.priceLabel;
+      if (window.mPrice && t.modal.form.pricePlaceholder){
+        window.mPrice.placeholder = t.modal.form.pricePlaceholder;
+      }
     }
 
     // 作成/編集モーダル（ボタン類）
@@ -935,6 +977,23 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       if (alertOk && t.alert.ok)       alertOk.textContent    = t.alert.ok;
     }
 
+    // aria-label 系
+    if (t.aria){
+      if (window.mLimit && t.aria.selectMaxParticipants){
+        window.mLimit.setAttribute('aria-label', t.aria.selectMaxParticipants);
+      }
+      if (window.mMonth && t.aria.month)   window.mMonth.setAttribute('aria-label', t.aria.month);
+      if (window.mDay && t.aria.day)       window.mDay.setAttribute('aria-label', t.aria.day);
+      if (window.mHour && t.aria.hour)     window.mHour.setAttribute('aria-label', t.aria.hour);
+      if (window.mMinute && t.aria.minute) window.mMinute.setAttribute('aria-label', t.aria.minute);
+
+      document.querySelectorAll('.modal .close').forEach(el=>{
+        if (t.aria.close){
+          el.setAttribute('aria-label', t.aria.close);
+        }
+      });
+    }
+
     // 言語トグルボタンとメニューの表示更新
     const langToggle = document.getElementById('langToggle');
     if (langToggle){
@@ -947,6 +1006,14 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       btn.classList.toggle('is-active', code === current);
     });
   }
+
+  // グローバル参照用にフォーム要素を window にもぶら下げておく
+  window.mLimit  = mLimit;
+  window.mMonth  = mMonth;
+  window.mDay    = mDay;
+  window.mHour   = mHour;
+  window.mMinute = mMinute;
+  window.mPrice  = mPrice;
 
   // ドロップダウンの開閉制御
   function setupLangDropdown(){
