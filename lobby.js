@@ -210,8 +210,13 @@ function detectLang() {
       );
 
     const dateLabel = $("#dateLabel");
-    if (dateLabel)
-      dateLabel.textContent = t("lobby.dateLabel", "開始日時");
+    if (dateLabel) {
+      const defaultText =
+        currentLang && currentLang.startsWith("ja")
+          ? "開始日時"
+          : "Start date & time";
+      dateLabel.textContent = t("lobby.dateLabel", defaultText);
+    }
 
     const limitLabel = $("#limitLabel");
     if (limitLabel)
@@ -315,7 +320,12 @@ function detectLang() {
 
   // 上部「開始時刻：…」の表示
   if (metaEl) {
-    const label = t("lobby.startLabel", "開始時刻：");
+    const defaultLabel =
+      currentLang && currentLang.startsWith("ja")
+        ? "開始時刻："
+        : "Start time: ";
+    const label = t("lobby.startLabel", defaultLabel);
+
     if (start) {
       const d = new Date(start);
       if (!isNaN(d.getTime())) {
@@ -554,7 +564,7 @@ function detectLang() {
     );
   }
 
-  // ★ 追加: {"type":"chat","text":"…","name":"…"} 形式なら text 部分だけを取り出す
+  // {"type":"chat","text":"…","name":"…"} 形式なら text 部分だけを取り出す
   function normalizeChatText(rawText) {
     if (!rawText) return "";
     const trimmed = String(rawText).trim();
