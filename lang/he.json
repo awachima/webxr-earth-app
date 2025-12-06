@@ -19,7 +19,11 @@
     "cardStartsLabel": "מתחיל בעוד",
     "cardExpiresIn": "זמן עד למחיקה",
     "cardExpired": "פג תוקף",
-    "enterLobby": "כניסה"
+    "enterLobby": "כניסה",
+    "freeEvent": "אירוע חינם",
+    "paidEvent": "אירוע בתשלום",
+    "paidEventWithPrice": "אירוע בתשלום ({price})",
+    "editTooltip": "עריכה"
   },
   "modal": {
     "createTitle": "יצירת חדר מפגש",
@@ -29,7 +33,13 @@
       "limitLabel": "מגבלת משתתפים",
       "startLabel": "זמן מפגש (JST)",
       "targetLabel": "קישור לעולם / טיול",
-      "targetNote": "לאחר יצירה לא ניתן לשנות את הקישור. לשינוי יש ליצור עותק חדש."
+      "targetNote": "לאחר יצירה לא ניתן לשנות את הקישור. לשינוי יש ליצור עותק חדש.",
+      "descriptionHtml": "<p>באפשרותכם ליצור לובי מפגש לאירוע שיצרתם ב־<a href='https://dokodemodoors.com/' target='_blank'>האתר הרשמי של Dokodemo Doors</a>. הזינו את כותרת האירוע, קישור לדף האירוע, מגבלת המשתתפים, האם האירוע חינמי או בתשלום וזמן המפגש (שעת ההתחלה), ולאחר מכן צרו את החדר.</p>",
+      "eventTypeLabel": "סוג האירוע",
+      "eventTypeFree": "אירוע חינם",
+      "eventTypePaid": "אירוע בתשלום",
+      "priceLabel": "מחיר",
+      "pricePlaceholder": "לדוגמה: ‎1500‎ ין / ‎$10‎ / ‎10‎ EUR"
     },
     "deleteButton": "מחיקת חדר",
     "duplicateButton": "שכפול חדר",
@@ -105,5 +115,13 @@
     "voiceNone": "קול: לא מחובר",
     "micErrorTitle": "נכשל באיתור המיקרופון:",
     "micErrorMsg": "אנא אפשרו גישה למיקרופון. בדקו את הגדרות הדפדפן או רעננו את העמוד."
+  },
+  "aria": {
+    "close": "סגירה",
+    "selectMaxParticipants": "בחרו מגבלת משתתפים",
+    "month": "חודש",
+    "day": "יום",
+    "hour": "שעה",
+    "minute": "דקה"
   }
 }

@@ -19,7 +19,11 @@
     "cardStartsLabel": "शुरू होने में",
     "cardExpiresIn": "हटाए जाने तक शेष समय",
     "cardExpired": "समय समाप्त",
-    "enterLobby": "प्रवेश करें"
+    "enterLobby": "प्रवेश करें",
+    "freeEvent": "मुफ़्त इवेंट",
+    "paidEvent": "पेड इवेंट",
+    "paidEventWithPrice": "पेड इवेंट ({price})",
+    "editTooltip": "संपादित करें"
   },
   "modal": {
     "createTitle": "मीटअप रूम बनाएँ",
@@ -29,7 +33,13 @@
       "limitLabel": "प्रतिभागी सीमा",
       "startLabel": "समय (JST)",
       "targetLabel": "टूर / वर्ल्ड URL",
-      "targetNote": "एक बार बनाने के बाद URL बदला नहीं जा सकता। बदलने के लिए रूम की प्रतिलिपि बनाएँ।"
+      "targetNote": "एक बार बनाने के बाद URL बदला नहीं जा सकता। बदलने के लिए रूम की प्रतिलिपि बनाएँ।",
+      "descriptionHtml": "<p>आप <a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors की आधिकारिक साइट</a> पर बनाए गए इवेंट के लिए एक मीटअप लॉबी बना सकते हैं। इवेंट का शीर्षक, इवेंट पेज का URL, प्रतिभागी सीमा, इवेंट मुफ़्त है या पेड, और मीटिंग का समय (शुरू होने का समय) दर्ज करके रूम बनाएँ।</p>",
+      "eventTypeLabel": "इवेंट का प्रकार",
+      "eventTypeFree": "मुफ़्त इवेंट",
+      "eventTypePaid": "पेड इवेंट",
+      "priceLabel": "शुल्क",
+      "pricePlaceholder": "उदाहरण: 1500 JPY / $10 / 10 EUR"
     },
     "deleteButton": "इस रूम को हटाएँ",
     "duplicateButton": "रूम कॉपी करें",
@@ -73,7 +83,7 @@
     "enableSound": "मोबाइल पर ध्वनि सक्षम करें",
     "enableSoundRetry": "आवाज़ नहीं आ रही? फिर से सक्षम करें",
     "footer": "© DokodemoDoors",
-    "pageTitleSuffix": "मीटअप लॉबी",
+    "pageTitleSuffix": "मीटअप लॉビー",
     "startLabel": "शुरू होने का समय: ",
     "participantLimit": "अधिकतम {limit} प्रतिभागी",
     "statusNoStart": "शुरू होने का समय सेट नहीं है",
@@ -105,5 +115,13 @@
     "voiceNone": "वॉइस: जुड़ा नहीं है",
     "micErrorTitle": "माइक प्राप्त करने में विफल:",
     "micErrorMsg": "कृपया माइक्रोफ़ोन की अनुमति दें। ब्राउज़र की सेटिंग जाँचें या पेज को दोबारा लोड करें।"
+  },
+  "aria": {
+    "close": "बंद करें",
+    "selectMaxParticipants": "अधिकतम प्रतिभागी चुनें",
+    "month": "महीना",
+    "day": "दिन",
+    "hour": "घंटा",
+    "minute": "मिनट"
   }
 }

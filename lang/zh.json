@@ -19,7 +19,11 @@
     "cardStartsLabel": "开始剩余",
     "cardExpiresIn": "距离删除剩余时间",
     "cardExpired": "已过期",
-    "enterLobby": "进入"
+    "enterLobby": "进入",
+    "freeEvent": "免费活动",
+    "paidEvent": "收费活动",
+    "paidEventWithPrice": "收费活动（{price}）",
+    "editTooltip": "编辑"
   },
   "modal": {
     "createTitle": "创建等待房间",
@@ -29,7 +33,13 @@
       "limitLabel": "人数上限",
       "startLabel": "集合时间（JST）",
       "targetLabel": "旅游 / 世界 URL",
-      "targetNote": "创建后无法修改 URL。如需修改，请复制房间并重新创建。"
+      "targetNote": "创建后无法修改 URL。如需修改，请复制房间并重新创建。",
+      "descriptionHtml": "<p>你可以为自己在<a href='https://dokodemodoors.com/' target='_blank'>任意门官方网站</a>上创建的活动建立一个等待房间。请输入活动标题、活动页面的 URL、参加人数上限、活动是免费还是收费，以及集合时间（开始时间），然后创建等待房间。</p>",
+      "eventTypeLabel": "活动类型",
+      "eventTypeFree": "免费活动",
+      "eventTypePaid": "收费活动",
+      "priceLabel": "价格",
+      "pricePlaceholder": "例如：1500 日元 / $10 / 10 EUR"
     },
     "deleteButton": "删除此房间",
     "duplicateButton": "复制此房间",
@@ -105,5 +115,13 @@
     "voiceNone": "语音：未加入",
     "micErrorTitle": "获取麦克风失败：",
     "micErrorMsg": "请允许访问麦克风。请检查浏览器设置或重新加载页面。"
+  },
+  "aria": {
+    "close": "关闭",
+    "selectMaxParticipants": "选择人数上限",
+    "month": "月",
+    "day": "日",
+    "hour": "小时",
+    "minute": "分钟"
   }
 }
