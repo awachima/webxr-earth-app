@@ -78,6 +78,13 @@ function detectLang() {
     }
   })();
 
+  // ===== チャットステータスの状態管理 =====
+  // initial: 未接続 / 画面初期表示
+  // connected: WebSocket 接続中
+  // reconnecting: 切断され再接続試行中
+  // error: エラー発生時
+  let chatStatusMode = "initial";
+
   // ===== i18n ヘルパー =====
   function t(path, fallback) {
     const root = window.i18n || {};
@@ -139,9 +146,31 @@ function detectLang() {
         "スマホで音を有効化"
       );
 
+    // ★ ここを修正：状態に応じてテキストを変える（初期化で上書きしない）
     const chatStatus = $("#chatStatus");
-    if (chatStatus)
-      chatStatus.textContent = t("lobby.chatInitial", "接続していません");
+    if (chatStatus) {
+      if (chatStatusMode === "initial") {
+        chatStatus.textContent = t(
+          "lobby.chatInitial",
+          "接続していません"
+        );
+      } else if (chatStatusMode === "connected") {
+        chatStatus.textContent = t(
+          "lobby.chatConnected",
+          "接続しました"
+        );
+      } else if (chatStatusMode === "reconnecting") {
+        chatStatus.textContent = t(
+          "lobby.chatReconnecting",
+          "切断されました。再接続を試みます…"
+        );
+      } else if (chatStatusMode === "error") {
+        chatStatus.textContent = t(
+          "lobby.chatError",
+          "エラーが発生しました"
+        );
+      }
+    }
 
     const chatInput = $("#chatInput");
     if (chatInput)
@@ -592,22 +621,31 @@ function detectLang() {
     try {
       ws = new WebSocket(CHAT_URL);
       ws.onopen = () => {
-        chatStatus.textContent = t("lobby.chatConnected", "接続しました");
+        chatStatusMode = "connected";
+        if (chatStatus) {
+          chatStatus.textContent = t("lobby.chatConnected", "接続しました");
+        }
         logDebug("WebSocket connected");
       };
       ws.onclose = () => {
-        chatStatus.textContent = t(
-          "lobby.chatReconnecting",
-          "切断されました。再接続を試みます…"
-        );
+        chatStatusMode = "reconnecting";
+        if (chatStatus) {
+          chatStatus.textContent = t(
+            "lobby.chatReconnecting",
+            "切断されました。再接続を試みます…"
+          );
+        }
         logDebug("WebSocket closed, retry in 1500ms");
         setTimeout(connect, 1500);
       };
       ws.onerror = (e) => {
-        chatStatus.textContent = t(
-          "lobby.chatError",
-          "エラーが発生しました"
-        );
+        chatStatusMode = "error";
+        if (chatStatus) {
+          chatStatus.textContent = t(
+            "lobby.chatError",
+            "エラーが発生しました"
+          );
+        }
         logDebug("WebSocket error: " + (e?.message || ""));
       };
       ws.onmessage = (ev) => {
@@ -701,7 +739,10 @@ function detectLang() {
         }
       };
     } catch (e) {
-      chatStatus.textContent = t("lobby.chatError", "エラーが発生しました");
+      chatStatusMode = "error";
+      if (chatStatus) {
+        chatStatus.textContent = t("lobby.chatError", "エラーが発生しました");
+      }
       logDebug("WebSocket init error: " + (e?.message || ""));
     }
   }
@@ -1034,10 +1075,7 @@ function detectLang() {
         );
         return;
       }
-      setVoiceAskStatus(
-        "sending",
-        "音声を送信しています…"
-      );
+      setVoiceAskStatus("sending", "音声を送信しています…");
 
       try {
         const formData = new FormData();
@@ -1107,3 +1145,4 @@ function detectLang() {
     } catch (e) {}
   })();
 })();
+
