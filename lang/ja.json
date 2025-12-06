@@ -14,7 +14,7 @@
     "bodyHtml": "<p class='heading-large'>3D地球儀から行き先を選べる非公式サイト</p><p>公式サイトのリストではなく、3D地球儀で目的地を選びたい——。その思いから、<a href='https://dokodemodoors.com/' target='_blank'>公式サイト</a> の許可を得て、このファンサイトを制作しました。</p><p class='heading-strong'>1. 視聴には公式サイトでの会員登録が必要</p><p style='padding-left: 1em;'>各ワールドに入り景色を楽しむには公式サイトでの会員登録が必要です。未登録の場合、ワールドに入ろうとすると登録ページに案内されます。<br>一部のワールドは期間限定で無料開放されており、<a href='https://dokodemodoors.com/' target='_blank'>公式ホームページ</a> の「Recommended Worlds」から見つけられます。</p><p class='heading-strong'>2. Meta Quest 2 以上のHMD推奨</p><p style='padding-left: 1em;'>PCやスマホからも視聴自体は可能ですが、VRならではの没入感を味わうには Meta Quest 2 以上のヘッドセットを強くおすすめします。</p>"
   },
   "meetups": {
-    "title": "待合室（Meetup Rooms）",
+    "title": "待合室",
     "createButton": "待合室を作成",
     "cardStartsLabel": "開始まで",
     "cardExpiresIn": "自動削除までの残り時間",
