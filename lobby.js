@@ -146,7 +146,7 @@ function detectLang() {
         "スマホで音を有効化"
       );
 
-    // ★ ここを修正：状態に応じてテキストを変える（初期化で上書きしない）
+    // 状態に応じてテキストを変える
     const chatStatus = $("#chatStatus");
     if (chatStatus) {
       if (chatStatusMode === "initial") {
@@ -554,6 +554,23 @@ function detectLang() {
     );
   }
 
+  // ★ 追加: {"type":"chat","text":"…","name":"…"} 形式なら text 部分だけを取り出す
+  function normalizeChatText(rawText) {
+    if (!rawText) return "";
+    const trimmed = String(rawText).trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        const inner = JSON.parse(trimmed);
+        if (inner && typeof inner.text === "string") {
+          return inner.text;
+        }
+      } catch (e) {
+        // 失敗したらそのまま返す
+      }
+    }
+    return rawText;
+  }
+
   function addSys(text) {
     if (!chatLog) return;
     const div = document.createElement("div");
@@ -678,9 +695,10 @@ function detectLang() {
                     hideThinking();
                   }
                   const klass = obj.name === user ? "me" : "other";
+                  const body = normalizeChatText(obj.text || "");
                   const text = t("lobby.chatLine", "{name}: {text}")
                     .replace("{name}", obj.name || "")
-                    .replace("{text}", obj.text || "");
+                    .replace("{text}", body);
                   addMsg(klass, text);
                 } catch {}
               });
@@ -730,9 +748,10 @@ function detectLang() {
             hideThinking();
           }
           const klass = obj.name === user ? "me" : "other";
+          const body = normalizeChatText(obj.text || "");
           const label = t("lobby.chatLine", "{name}: {text}")
             .replace("{name}", obj.name || "")
-            .replace("{text}", obj.text || "");
+            .replace("{text}", body);
           addMsg(klass, label);
         } catch (e) {
           // 非 JSON は無視
