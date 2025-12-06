@@ -540,7 +540,7 @@ function detectLang() {
 
   // ===== Members パネル =====
   const membersEl = $("#members");
-  function renderMembers(list) {
+function renderMembers(list) {
     membersEl.innerHTML = "";
     if (!list || list.length === 0) {
       const empty = document.createElement("div");
@@ -556,15 +556,8 @@ function detectLang() {
       badge.className = "badge";
       badge.textContent = String(idx + 1);
       const label = document.createElement("div");
-      // 翻訳側で {id} を入れていても、画面には表示しない
-      let labelTemplate = t("lobby.memberLabel", "{name}");
-      let labelText = labelTemplate.replace("{name}", m.name || "");
-      labelText = labelText
-        .replace("({id})", "")
-        .replace("{id}", "")
-        .replace(" ()", " ")
-        .replace("()", "");
-      label.textContent = labelText.trim();
+      // ★ ニックネームだけを表示し、テンプレートの {id} やカッコは使わない
+      label.textContent = m.name || "";
       row.appendChild(badge);
       row.appendChild(label);
       membersEl.appendChild(row);
