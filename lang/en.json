@@ -121,7 +121,8 @@
     "voiceAskNeedJoin": "Please join the voice chat first.",
     "voiceAskNoWs": "Not connected to the chat server. Please reload this page.",
     "voiceAskListening": "The butler is now listening to your voice…",
-    "voiceOnOffHint": "Audio quality may improve by turning voice chat OFF and ON again.",
+
+    "voiceOnOffHint": "Audio quality may improve if you toggle voice chat OFF and ON again.",
     "voiceSpeakHint": "Speaking slowly and clearly improves recognition accuracy."
   },
   "aria": {
