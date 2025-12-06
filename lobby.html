@@ -1,185 +1,89 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <title>待ち合わせロビー</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <header class="lobby-header">
-      <div class="header-left">
-        <button id="backToIndex" class="text-link">← 戻る</button>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>待ち合わせロビー</title>
+  <link rel="stylesheet" href="./lobby.css" />
+</head>
+<body>
+  <header>
+    <div id="lobbyHeaderTitle">待ち合わせロビー</div>
+    <div style="display:flex; gap:8px; align-items:center">
+      <button id="setName" class="btn ghost" type="button">ニックネーム</button>
+      <a id="backToIndex" class="btn ghost" href="./index.html">← 戻る</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <div>
+        <div class="pill" id="limitPill" style="display:none"></div>
+        <h1 id="title">（タイトル未設定）</h1>
+        <div class="meta" id="meta">開始時刻：—</div>
       </div>
-      <div class="header-center">
-        <h1 id="lobbyHeaderTitle">待ち合わせロビー</h1>
+
+      <div class="grid">
+        <div class="panel">
+          <div class="label" id="countdownLabel">カウントダウン</div>
+          <div class="count" id="count">--:--:--</div>
+          <div class="status" id="status">開始までお待ちください。</div>
+          <div class="row">
+            <a id="enter" class="btn" target="_top" rel="noopener">ツアーに行く</a>
+          </div>
+          <div class="sep"></div>
+          <div class="row">
+            <button id="copy" class="btn" type="button">この待合室のURLをコピー</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="label" id="voiceSectionTitle">ボイスチャット</div>
+          <div id="members" class="members"></div>
+
+          <div class="sep"></div>
+          <div class="label" id="voiceControlLabel">ボイスチャット</div>
+          <div class="row">
+            <button id="voicePower" class="btn" type="button">音声ON</button>
+            <button id="micToggle" class="btn ghost" type="button" style="display:none">ミュート</button>
+          </div>
+          <!-- ★ 追加: 音声ON/OFFの注意書き（アイコン付き・ボタンのすぐ下） -->
+          <div class="notice-small">🔊 音声はON/OFFで改善することがあります。</div>
+
+          <div id="voiceHint" class="status" style="margin-top:6px">音声: 未参加</div>
+          <button id="enableSound" class="btn ghost" type="button" style="display:none;margin-top:6px">スマホで音を有効化</button>
+
+          <div class="sep"></div>
+          <div class="label" id="textChatLabel">テキストチャット</div>
+          <div class="chat">
+            <div id="chatLog" class="chat-log" aria-live="polite"></div>
+            <div class="chat-input">
+              <input id="chatInput" placeholder="メッセージを入力…" maxlength="2000">
+              <button id="chatSend" class="btn" type="button">送信</button>
+            </div>
+            <!-- ★ 執事に質問（音声）ボタンとステータス表示 -->
+            <div class="chat-voice-ask" style="margin-top:8px;">
+              <button id="voiceAskBtn" class="btn ghost" type="button">
+                執事に質問（音声）
+              </button>
+              <div id="voiceAskStatus" class="status" style="margin-top:4px;"></div>
+              <!-- ★ 追加: 執事向け注意書き（アイコン付き・ステータスのすぐ下） -->
+              <div class="notice-small">🤵 ゆっくり・はっきり話すと認識が安定します。</div>
+            </div>
+          </div>
+          <div class="status" id="chatStatus" style="margin-top:8px;color:#0a7f3f">接続していません</div>
+        </div>
       </div>
-      <div class="header-right">
-        <button id="setName" class="secondary">ニックネーム</button>
-        <select id="langSelect" class="lang-select">
-          <option value="en">English</option>
-          <option value="ja-JP">日本語</option>
-          <option value="zh-CN">中文</option>
-          <option value="fa">فارسی</option>
-          <option value="hi">हिन्दी</option>
-          <option value="he">עברית</option>
-        </select>
-      </div>
-    </header>
 
-    <main class="lobby-main">
-      <section class="lobby-main-left">
-        <div class="panel main-panel">
-          <div class="panel-header">
-            <div class="title-block">
-              <h2 id="title">タイトル未設定</h2>
-              <p id="meta">開始時刻：—</p>
-            </div>
-          </div>
+      <div class="sep"></div>
+      <!-- デバッグログは残すが画面には表示しない -->
+      <pre id="debug" class="debug"></pre>
+    </div>
+  </main>
+  <footer id="lobbyFooter">
+    © DokodemoDoors
+  </footer>
 
-          <div class="panel-body">
-            <div class="countdown">
-              <div class="countdown-header">
-                <span id="countdownLabel">カウントダウン</span>
-              </div>
-              <div class="countdown-main">
-                <div id="count">--:--:--</div>
-                <div id="status">開始までお待ちください。</div>
-              </div>
-              <div class="countdown-actions">
-                <a
-                  id="enterBtn"
-                  class="primary"
-                  href="#"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  >ツアーに行く</a
-                >
-                <button id="copy" class="secondary">
-                  この待合室のURLをコピー
-                </button>
-              </div>
-            </div>
-
-            <div class="voice-and-chat">
-              <div class="voice-panel">
-                <div class="panel-header">
-                  <h3 id="voiceSectionTitle">ボイスチャット</h3>
-                </div>
-                <div class="panel-body">
-                  <div class="voice-controls">
-                    <div class="voice-main">
-                      <div class="voice-label" id="voiceControlLabel">
-                        ボイスチャット
-                      </div>
-                      <div class="voice-buttons">
-                        <button id="voicePower" class="primary">音声ON</button>
-                        <button id="micToggle" class="secondary">ミュート</button>
-                      </div>
-                    </div>
-                    <div class="voice-status" id="voiceStatus">
-                      音声: 未参加
-                    </div>
-                    <div class="voice-hint" id="voiceHint">
-                      ※ 音声はブラウザ同士で直接やり取りされます。
-                    </div>
-                    <div id="voiceToggleNote" class="notice-small"></div>
-                    <button id="enableSound" class="small">
-                      スマホで音を有効化
-                    </button>
-                  </div>
-
-                  <div class="voice-ask">
-                    <div class="voice-ask-header">
-                      <button id="voiceAskBtn" class="secondary">
-                        執事に質問（音声）
-                      </button>
-                    </div>
-                    <div id="voiceAskStatus" class="notice-small">
-                      <!-- 状態メッセージはJSで挿入 -->
-                    </div>
-                    <div id="voiceAskNote" class="notice-small"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="chat-panel">
-                <div class="panel-header">
-                  <h3 id="textChatLabel">テキストチャット</h3>
-                </div>
-                <div class="panel-body">
-                  <div id="chatLog" class="chat-log"></div>
-                  <div class="chat-input-row">
-                    <input
-                      id="chatInput"
-                      type="text"
-                      placeholder="メッセージを入力…"
-                    />
-                    <button id="chatSend" class="primary">送信</button>
-                  </div>
-                  <div class="chat-status-row">
-                    <span id="chatStatus">接続していません</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel debug-panel">
-          <div class="panel-header">
-            <h3>Debug Log</h3>
-          </div>
-          <div class="panel-body">
-            <pre id="debug" class="debug-log"></pre>
-          </div>
-        </div>
-      </section>
-
-      <section class="lobby-main-right">
-        <div class="panel info-panel">
-          <div class="panel-header">
-            <h3 id="voicePanelLabel">音声・会話設定</h3>
-          </div>
-          <div class="panel-body">
-            <div class="info-row">
-              <div class="info-label" id="dateLabel">開始日時</div>
-              <div class="info-value" id="dateValue">未設定</div>
-            </div>
-            <div class="info-row">
-              <div class="info-label" id="limitLabel">参加上限</div>
-              <div class="info-value" id="limitValue">未設定</div>
-            </div>
-            <div class="info-row">
-              <div class="info-label" id="urlLabel">ツアーURL</div>
-              <div class="info-value" id="urlValue">-</div>
-            </div>
-            <div class="info-row">
-              <div class="info-label" id="eventTypeLabel">種別</div>
-              <div class="info-value" id="eventTypeValue">不明</div>
-            </div>
-            <div class="info-row">
-              <div class="info-label" id="priceLabel">参加費</div>
-              <div class="info-value" id="priceValue">-</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel members-panel">
-          <div class="panel-header">
-            <h3 id="membersLabel">参加者</h3>
-          </div>
-          <div class="panel-body">
-            <div id="members" class="members-list"></div>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer class="lobby-footer">
-      <div id="lobbyFooter">© DokodemoDoors</div>
-    </footer>
-
-    <script src="./lobby.js"></script>
-  </body>
+  <script src="./lobby.js"></script>
+</body>
 </html>
