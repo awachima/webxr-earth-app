@@ -1,80 +1,135 @@
 {
+  "pageTitle": "Dokodemo Doors 粉丝网站",
+  "siteTitle": "Dokodemo Doors 粉丝网站",
+  "buttons": {
+    "about": "什么是 Dokodemo Doors？",
+    "guide": "这个粉丝网站是什么？"
+  },
+  "about": {
+    "title": "什么是 Dokodemo Doors？",
+    "bodyHtml": "<p class='heading-large'>即使身在远方，也能一起看世界的地方</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors</a> 是一个收录了世界各地 360° VR 旅行视频的在线 VR 平台。</p><p class='heading-strong'>收录视频超过 1,700 部</p><p style='padding-left: 1em;'>YouTube 上也有 VR 内容，但像这样把这么多 VR 旅行视频集中在同一处的网站几乎没有。</p><p class='heading-strong'>完美同步，一起观看</p><p style='padding-left: 1em;'>只要在同一时间开始播放视频，即使相隔很远，也可以在完全相同的瞬间看到同一幅景色，一边交谈一边共享体验。</p><p>详细说明请参阅 <a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>这里</a>。</p>"
+  },
+  "guide": {
+    "title": "这个粉丝网站是什么？",
+    "bodyHtml": "<p class='heading-large'>可以通过 3D 地球仪选择目的地的非官方网站</p><p>我想通过 3D 地球仪来选择世界，而不仅仅是从列表中选择。基于这个想法，在获得<a href='https://dokodemodoors.com/' target='_blank'>官方站点</a>许可后，我创建了这个粉丝网站。</p><p class='heading-strong'>1. 观看世界需要在官方站点注册</p><p style='padding-left: 1em;'>要进入各个世界并欣赏风景，需要在官方站点开通会员。如果尚未注册，在尝试进入世界时会被带到会员注册页面。<br>部分世界在限定时间内可以免费体验，可在<a href='https://dokodemodoors.com/' target='_blank'>官方首页</a>的“Recommended Worlds”中找到。</p><p class='heading-strong'>2. 推荐使用 Meta Quest 2 及以上设备</p><p style='padding-left: 1em;'>虽然在多种设备上都可以观看，但若想真正感受 VR 的沉浸感，非常推荐使用 Meta Quest 2 或更高型号的头显。</p>"
+  },
+  "meetups": {
+    "title": "等待房间（Meetup Rooms）",
+    "createButton": "创建房间",
+    "cardStartsLabel": "距离开始还有",
+    "cardExpiresIn": "距离自动删除还有",
+    "cardExpired": "已结束",
+    "enterLobby": "进入",
+    "freeEvent": "免费活动",
+    "paidEvent": "收费活动",
+    "paidEventWithPrice": "收费活动（{price}）",
+    "editTooltip": "编辑"
+  },
+  "modal": {
+    "createTitle": "创建等待房间",
+    "editTitle": "编辑房间",
+    "form": {
+      "titleLabel": "标题",
+      "limitLabel": "人数上限",
+      "startLabel": "开始时间（JST）",
+      "targetLabel": "旅程 / 世界 URL",
+      "targetNote": "房间创建后无法修改 URL。如需更改，请复制此房间并创建一个新的。",
+      "descriptionHtml": "<p>您可以为在<a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors 官方网站</a>上创建的活动生成一个等待房间。请输入活动标题、活动页面 URL、人数上限、是否收费以及集合时间（开始时间），然后创建房间。</p>",
+      "eventTypeLabel": "活动类型",
+      "eventTypeFree": "免费活动",
+      "eventTypePaid": "收费活动",
+      "priceLabel": "价格",
+      "pricePlaceholder": "例：1500 JPY / $10 / 10 EUR"
+    },
+    "deleteButton": "删除此房间",
+    "duplicateButton": "复制房间",
+    "closeButton": "关闭",
+    "submitCreate": "创建",
+    "submitUpdate": "更新",
+    "statusCreated": "已创建",
+    "statusUpdated": "已更新",
+    "validation": {
+      "startRequired": "请输入开始时间。",
+      "noPermission": "此设备没有编辑该房间的权限。",
+      "ownerMissing": "找不到创建者信息，无法删除。",
+      "deleteFailedPrefix": "删除时发生错误：",
+      "serverError": "服务器错误。",
+      "duplicated": "已存在具有相同 URL 的房间。"
+    }
+  },
+  "alert": {
+    "title": "关于 URL",
+    "body": "请输入 Dokodemo Doors 内旅程 / 世界的 URL。",
+    "ok": "确定"
+  },
+  "aboutModal": {
+    "ok": "确定"
+  },
+  "guideModal": {
+    "ok": "确定"
+  },
   "lobby": {
-    "headerTitle": "等候房间大厅",
+    "headerTitle": "等待房间",
     "nicknameButton": "昵称",
-    "nicknamePrompt": "请输入你的昵称。",
     "backButton": "← 返回",
-
     "countdownLabel": "倒计时",
-    "countdownWaiting": "请等待行程开始。",
-    "countdownFinished": "行程开始时间已到。",
-    "statusWaiting": "请等待行程开始。",
-
-    "enterButton": "进入旅程",
-    "copyRoomUrl": "复制此等待房间的 URL",
-    "copiedUrl": "已复制此等待房间的 URL。",
-    "copyFailed": "复制失败。",
-
-    "textChatLabel": "文字聊天",
-    "chatSend": "发送",
-    "chatConnected": "已连接。",
-    "chatDisconnected": "连接已断开。请重新载入页面。",
-    "chatError": "发生错误。请稍候再试。",
-    "chatPlaceholder": "输入消息…",
-
-    "connConnected": "已连接",
-    "connDisconnected": "已断开",
-    "connError": "错误",
-
-    "startLabel": "开始时间：",
-    "dateLabel": "开始日期与时间",
-    "dateUnknown": "未设定",
-    "limitLabel": "人数上限",
-    "limitNone": "无限制",
-    "peopleUnit": "人上限",
-    "urlLabel": "行程 URL",
-    "urlUnknown": "未设定",
-    "eventTypeLabel": "类型",
-    "eventTypeUnknown": "未设定",
-    "priceLabel": "费用",
-    "priceUnknown": "未设定",
-
-    "infoPanelLabel": "等待房间信息",
-    "voicePanelLabel": "语音与会话设置",
     "voiceSectionTitle": "语音聊天",
     "voiceControlLabel": "语音聊天",
-
-    "selfEchoLabel": "将自己的声音回放给自己",
-    "voiceAutoJoinLabel": "进入房间时自动加入语音",
-
-    "voiceOn": "语音开",
-    "voiceOff": "语音关",
-    "voiceJoined": "语音：已连接",
-    "voiceNone": "语音：未加入",
-    "mute": "静音",
-    "unmute": "取消静音",
-
-    "voiceHint": "※ 语音数据在浏览器之间直接传输。",
-    "voiceOnOffNotice": "🔊 重新开关语音可能改善音质。",
-    "voiceAskNotice": "🤵 放慢速度、清晰地说话可提高识别准确度。",
-
+    "textChatLabel": "文字聊天",
+    "copyRoomUrl": "复制此等待房间的 URL",
+    "enterButton": "进入旅程",
+    "chatSend": "发送",
+    "chatPlaceholder": "输入消息…",
     "enableSound": "在手机上启用声音",
-    "voicePermissionError": "没有获得麦克风访问权限。请检查浏览器设置。",
-
-    "voiceAskBtn": "向管家提问（语音）",
-    "voiceAskNeedJoin": "请先加入语音聊天。",
-    "voiceAskNoWs": "尚未连接到聊天服务器。请重新载入页面。",
-    "voiceAskListening": "管家正在聆听你的声音…",
-
-    "historyLoaded": "— 已载入历史记录 —",
-
+    "enableSoundRetry": "没有声音？请再次尝试启用",
+    "footer": "© DokodemoDoors",
+    "pageTitleSuffix": "等待房间",
+    "startLabel": "开始时间：",
+    "participantLimit": "最多 {limit} 人",
+    "statusNoStart": "尚未设置开始时间",
+    "statusWaiting": "请等待旅程开始。",
+    "statusDuring": "距离自动删除还有 {minutes} 分钟",
+    "statusStarted": "旅程已经开始（在 20 分钟以内仍可进入）",
+    "statusExpiredShort": "已结束",
+    "statusEnded": "此等待房间已结束",
+    "copied": "已复制",
+    "manualCopyPrompt": "若未成功复制，请手动复制：",
+    "nicknamePrompt": "请输入昵称。",
+    "nicknameSaved": "已保存昵称。重新加载页面后生效。",
+    "membersEmpty": "当前没有参与者。",
+    "memberLabel": "{name}（{id}）",
+    "chatLine": "{name}: {text}",
+    "historyLoaded": "— 已加载过往消息 —",
     "joined": "{name} 加入了（共 {count} 人）",
     "left": "{name} 离开了（共 {count} 人）",
-
-    "memberLabel": "{name}",
-
-    "botThinking": "Reginald 正在思考…",
-
-    "footer": "© DokodemoDoors"
+    "chatConnected": "已连接。",
+    "chatReconnecting": "连接已中断，正在重新连接…",
+    "chatError": "发生错误。",
+    "chatConnectFailed": "连接失败。",
+    "chatInitial": "尚未连接。",
+    "voiceOn": "语音 ON",
+    "voiceOff": "语音 OFF",
+    "mute": "静音",
+    "unmute": "取消静音",
+    "voiceJoined": "语音：已连接（麦克风 {state}）",
+    "voiceNone": "语音：未加入",
+    "micErrorTitle": "获取麦克风失败：",
+    "micErrorMsg": "请允许访问麦克风。检查浏览器设置或重新加载页面。",
+    "voiceHint": "※ 语音数据在浏览器之间直接传输。",
+    "voicePermissionError": "未授予麦克风访问权限。请检查浏览器设置。",
+    "voiceAskBtn": "向管家提问（语音）",
+    "voiceAskNeedJoin": "请先加入语音聊天，然后再使用此功能。",
+    "voiceAskNoWs": "尚未连接到聊天服务器。请重新加载页面。",
+    "voiceAskListening": "管家正在聆听您的声音…",
+    "voiceOnOffHint": "多次切换语音 ON / OFF 有时可以改善音质。",
+    "voiceSpeakHint": "慢慢地、清晰地说话能提高识别准确率。"
+  },
+  "aria": {
+    "close": "关闭",
+    "selectMaxParticipants": "选择最大参与人数",
+    "month": "月",
+    "day": "日",
+    "hour": "时",
+    "minute": "分"
   }
 }

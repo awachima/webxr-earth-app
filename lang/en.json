@@ -1,80 +1,135 @@
 {
+  "pageTitle": "Dokodemo Doors Fan Site",
+  "siteTitle": "Dokodemo Doors Fan Site",
+  "buttons": {
+    "about": "What is Dokodemo Doors?",
+    "guide": "What is this fan site?"
+  },
+  "about": {
+    "title": "What is Dokodemo Doors?",
+    "bodyHtml": "<p class='heading-large'>A place where you can explore the world together, even when you're far apart</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>Dokodemo Doors</a> is an online VR platform that offers a large collection of 360° VR travel videos from around the world.</p><p class='heading-strong'>More than 1,700 videos available</p><p style='padding-left: 1em;'>Although YouTube also has VR content, very few sites gather this many VR travel videos in one place.</p><p class='heading-strong'>Watch together in perfect sync</p><p style='padding-left: 1em;'>By starting the video at the same time, you and your friends can share exactly the same scenery at the same moment while talking or using gestures.</p><p>For more details, please see <a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>this page</a>.</p>"
+  },
+  "guide": {
+    "title": "What is this fan site?",
+    "bodyHtml": "<p class='heading-large'>An unofficial site where you choose destinations from a 3D globe</p><p>I wanted to choose worlds from a 3D globe rather than from a simple text list, so I created this fan site with permission from the <a href='https://dokodemodoors.com/' target='_blank'>official site</a>.</p><p class='heading-strong'>1. Subscription required to watch worlds</p><p style='padding-left: 1em;'>To enter and fully enjoy each world, you need a subscription on the official site. If you are not subscribed, trying to enter a world will redirect you to the subscription page.<br>Some worlds are available for free for a limited time. You can find them on the <a href='https://dokodemodoors.com/' target='_blank'>official homepage</a> under “Recommended Worlds”.</p><p class='heading-strong'>2. Meta Quest 2 or later is recommended</p><p style='padding-left: 1em;'>You can technically watch on various devices, but to really experience the immersion of VR, a Meta Quest 2 or later headset is strongly recommended.</p>"
+  },
+  "meetups": {
+    "title": "Meetup Rooms",
+    "createButton": "Create a room",
+    "cardStartsLabel": "Starts in",
+    "cardExpiresIn": "Time until auto-deletion",
+    "cardExpired": "Expired",
+    "enterLobby": "Enter",
+    "freeEvent": "Free event",
+    "paidEvent": "Paid event",
+    "paidEventWithPrice": "Paid event ({price})",
+    "editTooltip": "Edit"
+  },
+  "modal": {
+    "createTitle": "Create a meetup room",
+    "editTitle": "Edit room",
+    "form": {
+      "titleLabel": "Title",
+      "limitLabel": "Max participants",
+      "startLabel": "Start time (JST)",
+      "targetLabel": "Tour / world URL",
+      "targetNote": "Once created, the URL cannot be changed. To change it, duplicate this room and create a new one.",
+      "descriptionHtml": "<p>You can create a meetup lobby for an event you set up on the <a href='https://dokodemodoors.com/' target='_blank'>official Dokodemo Doors site</a>. Enter the event title, the event page URL, the participant limit, whether the event is free or paid, and the meeting time (start time), then create the room.</p>",
+      "eventTypeLabel": "Event type",
+      "eventTypeFree": "Free event",
+      "eventTypePaid": "Paid event",
+      "priceLabel": "Price",
+      "pricePlaceholder": "Example: 1500 JPY / $10 / 10 EUR"
+    },
+    "deleteButton": "Delete this room",
+    "duplicateButton": "Duplicate room",
+    "closeButton": "Close",
+    "submitCreate": "Create",
+    "submitUpdate": "Update",
+    "statusCreated": "Created",
+    "statusUpdated": "Updated",
+    "validation": {
+      "startRequired": "Please enter a start time.",
+      "noPermission": "This device does not have permission to edit this room.",
+      "ownerMissing": "Creator information not found; the room cannot be deleted.",
+      "deleteFailedPrefix": "Error while deleting:",
+      "serverError": "Server error.",
+      "duplicated": "A room with the same URL already exists."
+    }
+  },
+  "alert": {
+    "title": "About the URL",
+    "body": "Please enter the URL of a Dokodemo Doors tour or world.",
+    "ok": "OK"
+  },
+  "aboutModal": {
+    "ok": "OK"
+  },
+  "guideModal": {
+    "ok": "OK"
+  },
   "lobby": {
     "headerTitle": "Meetup Lobby",
     "nicknameButton": "Nickname",
-    "nicknamePrompt": "Please enter your nickname.",
     "backButton": "← Back",
-
     "countdownLabel": "Countdown",
-    "countdownWaiting": "Please wait until the tour starts.",
-    "countdownFinished": "The tour start time has arrived.",
-    "statusWaiting": "Please wait until the tour starts.",
-
-    "enterButton": "Go to tour",
-    "copyRoomUrl": "Copy this lobby URL",
-    "copiedUrl": "Lobby URL copied to clipboard.",
-    "copyFailed": "Failed to copy.",
-
-    "textChatLabel": "Text chat",
-    "chatSend": "Send",
-    "chatConnected": "Connected.",
-    "chatDisconnected": "Disconnected. Please reload this page.",
-    "chatError": "An error occurred. Please wait and try again.",
-    "chatPlaceholder": "Type a message…",
-
-    "connConnected": "Connected",
-    "connDisconnected": "Disconnected",
-    "connError": "Error",
-
-    "startLabel": "Start time: ",
-    "dateLabel": "Start date & time",
-    "dateUnknown": "Not set",
-    "limitLabel": "Capacity",
-    "limitNone": "No limit",
-    "peopleUnit": "people max",
-    "urlLabel": "Tour URL",
-    "urlUnknown": "Not set",
-    "eventTypeLabel": "Type",
-    "eventTypeUnknown": "Not set",
-    "priceLabel": "Price",
-    "priceUnknown": "Not set",
-
-    "infoPanelLabel": "Lobby information",
-    "voicePanelLabel": "Voice & conversation settings",
     "voiceSectionTitle": "Voice chat",
     "voiceControlLabel": "Voice chat",
-
-    "selfEchoLabel": "Play my own voice to myself",
-    "voiceAutoJoinLabel": "Automatically join voice on entry",
-
+    "textChatLabel": "Text chat",
+    "copyRoomUrl": "Copy this lobby URL",
+    "enterButton": "Go to tour",
+    "chatSend": "Send",
+    "chatPlaceholder": "Type a message…",
+    "enableSound": "Enable sound on smartphone",
+    "enableSoundRetry": "No sound? Try enabling again",
+    "footer": "© DokodemoDoors",
+    "pageTitleSuffix": "Meetup Lobby",
+    "startLabel": "Start time: ",
+    "participantLimit": "Up to {limit} people",
+    "statusNoStart": "Start time is not set.",
+    "statusWaiting": "Please wait until the tour starts.",
+    "statusDuring": "This room will be auto-deleted in {minutes} minutes.",
+    "statusStarted": "The tour has already started. You can still join within 20 minutes.",
+    "statusExpiredShort": "Expired",
+    "statusEnded": "This meetup room has ended.",
+    "copied": "Copied.",
+    "manualCopyPrompt": "If copying failed, copy this manually:",
+    "nicknamePrompt": "Please enter your nickname.",
+    "nicknameSaved": "Nickname saved. It will apply after reloading the page.",
+    "membersEmpty": "No participants yet.",
+    "memberLabel": "{name} ({id})",
+    "chatLine": "{name}: {text}",
+    "historyLoaded": "— Loaded previous messages —",
+    "joined": "{name} joined (total {count})",
+    "left": "{name} left (total {count})",
+    "chatConnected": "Connected.",
+    "chatReconnecting": "Connection lost. Reconnecting…",
+    "chatError": "An error occurred.",
+    "chatConnectFailed": "Failed to connect.",
+    "chatInitial": "Not connected.",
     "voiceOn": "Voice ON",
     "voiceOff": "Voice OFF",
-    "voiceJoined": "Voice: connected",
-    "voiceNone": "Voice: not joined",
     "mute": "Mute",
     "unmute": "Unmute",
-
+    "voiceJoined": "Voice: connected (mic {state})",
+    "voiceNone": "Voice: not joined",
+    "micErrorTitle": "Failed to access microphone:",
+    "micErrorMsg": "Please allow microphone access in your browser settings, or reload this page.",
     "voiceHint": "※ Voice audio is exchanged directly between browsers.",
-    "voiceOnOffNotice": "🔊 Audio quality may improve by turning voice chat OFF and ON again.",
-    "voiceAskNotice": "🤵 Speaking slowly and clearly improves recognition accuracy.",
-
-    "enableSound": "Enable sound on smartphone",
     "voicePermissionError": "Microphone access was not granted. Please check your browser settings.",
-
     "voiceAskBtn": "Ask the butler (voice)",
     "voiceAskNeedJoin": "Please join the voice chat first.",
     "voiceAskNoWs": "Not connected to the chat server. Please reload this page.",
     "voiceAskListening": "The butler is now listening to your voice…",
-
-    "historyLoaded": "— Loaded previous messages —",
-
-    "joined": "{name} joined (total {count})",
-    "left": "{name} left (total {count})",
-
-    "memberLabel": "{name}",
-
-    "botThinking": "Reginald is thinking…",
-
-    "footer": "© DokodemoDoors"
+    "voiceOnOffHint": "Audio quality may improve by turning voice chat OFF and ON again.",
+    "voiceSpeakHint": "Speaking slowly and clearly improves recognition accuracy."
+  },
+  "aria": {
+    "close": "Close",
+    "selectMaxParticipants": "Select maximum participants",
+    "month": "Month",
+    "day": "Day",
+    "hour": "Hour",
+    "minute": "Minute"
   }
 }

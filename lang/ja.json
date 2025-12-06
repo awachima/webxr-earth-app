@@ -1,80 +1,135 @@
 {
+  "pageTitle": "どこでもドア ファンサイト",
+  "siteTitle": "どこでもドア ファンサイト",
+  "buttons": {
+    "about": "どこでもドアとは？",
+    "guide": "ファンサイトとは？"
+  },
+  "about": {
+    "title": "どこでもドアとは？",
+    "bodyHtml": "<p class='heading-large'>離れていても、世界を一緒に味わえる場所</p><p style='padding-left: 1em;'><a href='https://dokodemodoors.com/' target='_blank'>どこでもドア</a> は、世界各地の360°VR旅行動画を多数収録したオンラインVRプラットフォームです。</p><p class='heading-strong'>掲載本数 1,700 本以上</p><p style='padding-left: 1em;'>YouTubeにもVR動画はありますが、これほど多くのVR旅行動画が一か所にまとまっているサイトはほとんどありません。</p><p class='heading-strong'>同じ瞬間を「完全同期」で共有</p><p style='padding-left: 1em;'>同じタイミングで動画を再生することで、離れた場所にいても、まったく同じ景色を見ながら会話やジェスチャーで体験を共有できます。</p><p>詳しくは <a href='https://dokodemodoors.com/info/about-dokodemodoor' target='_blank'>こちら</a> をご覧ください。</p>"
+  },
+  "guide": {
+    "title": "ファンサイトとは？",
+    "bodyHtml": "<p class='heading-large'>3D地球儀から世界を選べる非公式サイト</p><p>公式サイトのリストからではなく、3Dの地球儀から行き先を選びたい――そんな思いから、<a href='https://dokodemodoors.com/' target='_blank'>公式サイト</a>の許可をいただき、このファンサイトを制作しました。</p><p class='heading-strong'>1. 視聴には会員登録が必要</p><p style='padding-left: 1em;'>各ワールドの中に入って景色を楽しむには、公式サイト側での会員登録が必要です。未登録の状態で入ろうとすると、公式サイトの会員登録ページへ案内されます。<br>一部のワールドは期間限定で無料開放されており、<a href='https://dokodemodoors.com/' target='_blank'>公式サイトのトップページ</a>にある「Recommended Worlds」から見つけることができます。</p><p class='heading-strong'>2. Meta Quest 2 以上のヘッドセット推奨</p><p style='padding-left: 1em;'>PCやスマートフォンからでも視聴自体は可能ですが、VRならではの没入感を十分に味わうには、Meta Quest 2 以上のHMDでの視聴を強くおすすめします。</p>"
+  },
+  "meetups": {
+    "title": "待合室（Meetup Rooms）",
+    "createButton": "待合室を作成",
+    "cardStartsLabel": "開始まで",
+    "cardExpiresIn": "自動削除までの残り時間",
+    "cardExpired": "終了",
+    "enterLobby": "入室する",
+    "freeEvent": "無料イベント",
+    "paidEvent": "有料イベント",
+    "paidEventWithPrice": "有料イベント（{price}）",
+    "editTooltip": "編集"
+  },
+  "modal": {
+    "createTitle": "待合室を作成",
+    "editTitle": "待合室を編集",
+    "form": {
+      "titleLabel": "タイトル",
+      "limitLabel": "人数上限",
+      "startLabel": "開始日時（JST）",
+      "targetLabel": "ツアー / ワールドURL",
+      "targetNote": "一度作成した後にURLを変更することはできません。変更したい場合は、この待合室をコピーして新しく作り直してください。",
+      "descriptionHtml": "<p><a href='https://dokodemodoors.com/' target='_blank'>どこでもドア公式サイト</a>で作成したイベント用に、待合室ロビーを作成できます。イベントのタイトル・イベントページのURL・参加上限人数・無料/有料の別・集合時間（開始時刻）を入力して、待合室を作成してください。</p>",
+      "eventTypeLabel": "イベント種別",
+      "eventTypeFree": "無料イベント",
+      "eventTypePaid": "有料イベント",
+      "priceLabel": "料金",
+      "pricePlaceholder": "例: 1500 JPY / $10 / 10 EUR"
+    },
+    "deleteButton": "この待合室を削除",
+    "duplicateButton": "この待合室をコピー",
+    "closeButton": "閉じる",
+    "submitCreate": "作成",
+    "submitUpdate": "更新",
+    "statusCreated": "作成しました",
+    "statusUpdated": "更新しました",
+    "validation": {
+      "startRequired": "開始日時を入力してください。",
+      "noPermission": "この端末には編集権限がありません。",
+      "ownerMissing": "作成者情報が見つからないため、削除できません。",
+      "deleteFailedPrefix": "削除中にエラーが発生しました：",
+      "serverError": "サーバーエラーが発生しました。",
+      "duplicated": "すでに同じURLの待合室が存在します。"
+    }
+  },
+  "alert": {
+    "title": "URLについて",
+    "body": "どこでもドア内のツアー / ワールドのURLを入力してください。",
+    "ok": "OK"
+  },
+  "aboutModal": {
+    "ok": "OK"
+  },
+  "guideModal": {
+    "ok": "OK"
+  },
   "lobby": {
     "headerTitle": "待ち合わせロビー",
     "nicknameButton": "ニックネーム",
-    "nicknamePrompt": "ニックネームを入力してください。",
     "backButton": "← 戻る",
-
     "countdownLabel": "カウントダウン",
-    "countdownWaiting": "開始までお待ちください。",
-    "countdownFinished": "ツアー開始時刻になりました。",
-    "statusWaiting": "開始までお待ちください。",
-
-    "enterButton": "ツアーに行く",
-    "copyRoomUrl": "この待合室のURLをコピー",
-    "copiedUrl": "この待合室のURLをコピーしました。",
-    "copyFailed": "コピーに失敗しました。",
-
-    "textChatLabel": "テキストチャット",
-    "chatSend": "送信",
-    "chatConnected": "接続しました。",
-    "chatDisconnected": "切断されました。再読み込みしてください。",
-    "chatError": "エラーが発生しました。しばらく待ってから再度お試しください。",
-    "chatPlaceholder": "メッセージを入力…",
-
-    "connConnected": "接続済み",
-    "connDisconnected": "切断されています",
-    "connError": "エラー",
-
-    "startLabel": "開始時刻：",
-    "dateLabel": "開始日時",
-    "dateUnknown": "未設定",
-    "limitLabel": "人数制限",
-    "limitNone": "制限なし",
-    "peopleUnit": "人まで",
-    "urlLabel": "ツアーURL",
-    "urlUnknown": "未設定",
-    "eventTypeLabel": "種別",
-    "eventTypeUnknown": "未設定",
-    "priceLabel": "料金",
-    "priceUnknown": "未設定",
-
-    "infoPanelLabel": "待合室の情報",
-    "voicePanelLabel": "音声・会話設定",
     "voiceSectionTitle": "ボイスチャット",
     "voiceControlLabel": "ボイスチャット",
-
-    "selfEchoLabel": "自分の声を自分にも流す",
-    "voiceAutoJoinLabel": "入室時に自動で音声接続する",
-
-    "voiceOn": "音声ON",
-    "voiceOff": "音声OFF",
-    "voiceJoined": "音声: 接続中",
-    "voiceNone": "音声: 未参加",
-    "mute": "ミュート",
-    "unmute": "ミュート解除",
-
-    "voiceHint": "※ 音声はブラウザ同士で直接やり取りされます。",
-    "voiceOnOffNotice": "🔊 音声はON/OFFで改善することがあります。",
-    "voiceAskNotice": "🤵 ゆっくり・はっきり話すと認識が安定します。",
-
+    "textChatLabel": "テキストチャット",
+    "copyRoomUrl": "この待合室のURLをコピー",
+    "enterButton": "ツアーに行く",
+    "chatSend": "送信",
+    "chatPlaceholder": "メッセージを入力…",
     "enableSound": "スマホで音を有効化",
-    "voicePermissionError": "マイクへのアクセスが許可されませんでした。ブラウザの設定を確認してください。",
-
-    "voiceAskBtn": "執事に質問（音声）",
-    "voiceAskNeedJoin": "まずボイスチャットに接続してからご利用ください。",
-    "voiceAskNoWs": "チャットサーバーに接続されていません。ページを再読み込みしてください。",
-    "voiceAskListening": "執事が音声を聞き取っています…",
-
+    "enableSoundRetry": "音が出ない場合は、もう一度有効化をお試しください",
+    "footer": "© DokodemoDoors",
+    "pageTitleSuffix": "待ち合わせロビー",
+    "startLabel": "開始時刻：",
+    "participantLimit": "最大 {limit} 人",
+    "statusNoStart": "開始時刻が設定されていません",
+    "statusWaiting": "開始までお待ちください。",
+    "statusDuring": "自動削除まで残り {minutes} 分",
+    "statusStarted": "ツアーは開始済みです（20分以内なら入室できます）",
+    "statusExpiredShort": "終了しました",
+    "statusEnded": "この待合室は終了しました",
+    "copied": "コピーしました",
+    "manualCopyPrompt": "コピーできない場合はこちら：",
+    "nicknamePrompt": "ニックネームを入力してください。",
+    "nicknameSaved": "ニックネームを保存しました。ページ再読み込み後に反映されます。",
+    "membersEmpty": "まだ参加者はいません。",
+    "memberLabel": "{name}（合計 {id}）",
+    "chatLine": "{name}: {text}",
     "historyLoaded": "— 過去のメッセージを読み込みました —",
-
     "joined": "{name} が参加しました（合計 {count} 名）",
     "left": "{name} が退出しました（合計 {count} 名）",
-
-    "memberLabel": "{name}",
-
-    "botThinking": "Reginald が考え中です…",
-
-    "footer": "© DokodemoDoors"
+    "chatConnected": "接続しました。",
+    "chatReconnecting": "接続が切れました。再接続しています…",
+    "chatError": "エラーが発生しました。",
+    "chatConnectFailed": "接続に失敗しました。",
+    "chatInitial": "未接続です",
+    "voiceOn": "音声ON",
+    "voiceOff": "音声OFF",
+    "mute": "ミュート",
+    "unmute": "ミュート解除",
+    "voiceJoined": "音声: 接続中（マイク {state}）",
+    "voiceNone": "音声: 未参加",
+    "micErrorTitle": "マイクの取得に失敗しました：",
+    "micErrorMsg": "マイクへのアクセスを許可してください。ブラウザの設定を確認するか、ページを再読み込みしてください。",
+    "voiceHint": "※ 音声はブラウザ同士で直接やり取りされます。",
+    "voicePermissionError": "マイクへのアクセスが許可されませんでした。ブラウザの設定をご確認ください。",
+    "voiceAskBtn": "執事に質問（音声）",
+    "voiceAskNeedJoin": "まずボイスチャットに参加してからご利用ください。",
+    "voiceAskNoWs": "チャットサーバーに接続されていません。ページを再読み込みしてください。",
+    "voiceAskListening": "執事が音声を聞き取っています…",
+    "voiceOnOffHint": "音声はON/OFFで改善することがあります。",
+    "voiceSpeakHint": "ゆっくり・はっきり話すと認識が安定します。"
+  },
+  "aria": {
+    "close": "閉じる",
+    "selectMaxParticipants": "最大参加人数を選択",
+    "month": "月",
+    "day": "日",
+    "hour": "時",
+    "minute": "分"
   }
 }
