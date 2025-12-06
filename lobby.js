@@ -125,7 +125,7 @@ function detectLang() {
     if (textChatLabel)
       textChatLabel.textContent = t("lobby.textChatLabel", "テキストチャット");
 
-    const copyRoomUrlBtn = $("#copyRoomUrl");
+    const copyRoomUrlBtn = $("#copy");
     if (copyRoomUrlBtn)
       copyRoomUrlBtn.textContent = t(
         "lobby.copyRoomUrl",
@@ -138,6 +138,47 @@ function detectLang() {
         "lobby.enableSound",
         "スマホで音を有効化"
       );
+
+    // ── 音声関連の注意書き（多言語マップをJS側に持たせる） ──
+    const lowerLang = (currentLang || "en").toLowerCase();
+
+    const voiceToggleNoteEl = $("#voiceToggleNote");
+    if (voiceToggleNoteEl) {
+      let txt;
+      if (lowerLang.startsWith("ja")) {
+        txt = "🔊 音声はON/OFFで改善することがあります。";
+      } else if (lowerLang.startsWith("zh")) {
+        txt = "🔊 通过切换开/关，有时可以改善音质。";
+      } else if (lowerLang.startsWith("fa")) {
+        txt = "🔊 گاهی با خاموش/روشن کردن صدا، کیفیت بهتر می‌شود.";
+      } else if (lowerLang.startsWith("hi")) {
+        txt = "🔊 कभी-कभी ON/OFF करने से आवाज बेहतर हो जाती है।";
+      } else if (lowerLang.startsWith("he") || lowerLang.startsWith("iw")) {
+        txt = "🔊 לפעמים איכות הצליל משתפרת אחרי כיבוי/הפעלה מחדש.";
+      } else {
+        txt = "🔊 Audio may improve by toggling ON/OFF.";
+      }
+      voiceToggleNoteEl.textContent = txt;
+    }
+
+    const voiceAskNoteEl = $("#voiceAskNote");
+    if (voiceAskNoteEl) {
+      let txt;
+      if (lowerLang.startsWith("ja")) {
+        txt = "🤵 ゆっくり・はっきり話すと認識が安定します。";
+      } else if (lowerLang.startsWith("zh")) {
+        txt = "🤵 慢慢、清晰地说话可以让识别更稳定。";
+      } else if (lowerLang.startsWith("fa")) {
+        txt = "🤵 اگر آرام و واضح صحبت کنید، تشخیص صدا پایدارتر می‌شود.";
+      } else if (lowerLang.startsWith("hi")) {
+        txt = "🤵 धीरे-धीरे और साफ बोलने से पहचान अधिक स्थिर रहती है।";
+      } else if (lowerLang.startsWith("he") || lowerLang.startsWith("iw")) {
+        txt = "🤵 אם מדברים לאט וברור, הזיהוי הקולי יציב יותר.";
+      } else {
+        txt = "🤵 Speaking slowly and clearly makes recognition more stable.";
+      }
+      voiceAskNoteEl.textContent = txt;
+    }
 
     const chatStatus = $("#chatStatus");
     if (chatStatus)
