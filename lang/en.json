@@ -19,7 +19,11 @@
     "cardStartsLabel": "Starts in",
     "cardExpiresIn": "Time until deletion",
     "cardExpired": "Expired",
-    "enterLobby": "Enter"
+    "enterLobby": "Enter",
+    "freeEvent": "Free event",
+    "paidEvent": "Paid event",
+    "paidEventWithPrice": "Paid event ({price})",
+    "editTooltip": "Edit"
   },
   "modal": {
     "createTitle": "Create a meetup room",
@@ -29,7 +33,13 @@
       "limitLabel": "Participant limit",
       "startLabel": "Meeting time (JST)",
       "targetLabel": "Tour / world URL",
-      "targetNote": "After creation, the URL cannot be changed. To change it, duplicate the room and create a new one."
+      "targetNote": "After creation, the URL cannot be changed. To change it, duplicate the room and create a new one.",
+      "descriptionHtml": "<p>You can create a meetup lobby for an event you created on the <a href='https://dokodemodoors.com/' target='_blank'>official Dokodemo Doors site</a>. Enter the event title, the event page URL, the participant limit, whether it is free or paid, and the meeting time (start time), then create the meetup room.</p>",
+      "eventTypeLabel": "Event type",
+      "eventTypeFree": "Free event",
+      "eventTypePaid": "Paid event",
+      "priceLabel": "Price",
+      "pricePlaceholder": "e.g. 1500 JPY / $10 / 10 EUR"
     },
     "deleteButton": "Delete this room",
     "duplicateButton": "Duplicate this room",
@@ -105,5 +115,13 @@
     "voiceNone": "Voice: Not joined",
     "micErrorTitle": "Failed to get microphone:",
     "micErrorMsg": "Please allow microphone access. Check your browser settings or reload the page."
+  },
+  "aria": {
+    "close": "Close",
+    "selectMaxParticipants": "Select max participants",
+    "month": "Month",
+    "day": "Day",
+    "hour": "Hour",
+    "minute": "Minute"
   }
 }

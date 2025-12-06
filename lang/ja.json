@@ -19,7 +19,11 @@
     "cardStartsLabel": "開始まで",
     "cardExpiresIn": "削除までの残り時間",
     "cardExpired": "期限切れ",
-    "enterLobby": "入室"
+    "enterLobby": "入室",
+    "freeEvent": "無料イベント",
+    "paidEvent": "有料イベント",
+    "paidEventWithPrice": "有料イベント（{price}）",
+    "editTooltip": "編集"
   },
   "modal": {
     "createTitle": "待合室を作成",
@@ -29,7 +33,13 @@
       "limitLabel": "参加上限",
       "startLabel": "集合日時 (JST)",
       "targetLabel": "ツアー（またはワールド）のURL",
-      "targetNote": "作成後はURLの変更はできません。変更したい場合は「複製」から新しく作成してください。"
+      "targetNote": "作成後はURLの変更はできません。変更したい場合は「複製」から新しく作成してください。",
+      "descriptionHtml": "<p>あなたが<a href='https://dokodemodoors.com/' target='_blank'>オンラインVR空間「どこでもドア」公式サイト</a>で作成したイベントの待合室を作成できます。イベントのタイトル、イベントページのURL、参加上限、無料／有料の区別、集合日時（開催時刻）を入力して待合室を作成してください。</p>",
+      "eventTypeLabel": "イベント種別",
+      "eventTypeFree": "無料イベント",
+      "eventTypePaid": "有料イベント",
+      "priceLabel": "料金",
+      "pricePlaceholder": "例：1500円 / $10 / 10 EUR"
     },
     "deleteButton": "この待合室を削除",
     "duplicateButton": "この待合室を複製",
@@ -105,5 +115,13 @@
     "voiceNone": "音声: 未参加",
     "micErrorTitle": "マイクの取得に失敗しました:",
     "micErrorMsg": "マイクへのアクセスを許可してください。ブラウザの設定を確認するか、ページを再読み込みしてください。"
+  },
+  "aria": {
+    "close": "閉じる",
+    "selectMaxParticipants": "参加上限を選択",
+    "month": "月",
+    "day": "日",
+    "hour": "時",
+    "minute": "分"
   }
 }
