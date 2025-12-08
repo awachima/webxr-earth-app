@@ -7,84 +7,113 @@
   <link rel="stylesheet" href="./styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans...y=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="wrap">
     <header>
       <div class="brand-logo-text">Dokodemo Doors Fan Site</div>
-      <div class="header-subtitle">
-        <span class="subtitle-line1">Share VR travel moments together</span>
-        <span class="subtitle-line2">どこにいても、同じ世界を一緒に観られる場所</span>
-      </div>
-      <div class="lang-buttons">
-        <button class="btn-lang" data-lang="en">English</button>
-        <button class="btn-lang" data-lang="ja">日本語</button>
+      <div class="lang-switch">
+        <button type="button" class="lang-switch__toggle" id="langToggle">Language</button>
+        <div class="lang-switch__menu" id="langMenu" hidden>
+          <button type="button" data-lang="en">English</button>
+          <button type="button" data-lang="ja">日本語</button>
+          <button type="button" data-lang="zh">中文</button>
+          <button type="button" data-lang="fa">فارسی</button>
+          <button type="button" data-lang="hi">हिन्दी</button>
+          <button type="button" data-lang="he">עברית</button>
+        </div>
       </div>
     </header>
 
-    <main>
-      <section class="hero">
-        <div class="hero-left">
-          <h1 id="heroTitle">Enjoy VR travels together from anywhere in the world</h1>
-          <p class="hero-lead" id="heroLead">
-            Watch over 1,700 VR travel videos in sync with friends, family, or people around the world.
+    <div class="stage">
+      <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+
+      <!-- 白線の下に表示するボタン群 -->
+      <div class="intro-bar">
+        <button type="button" id="aboutBtn" class="intro-bar__button">
+          What is Dokodemo Doors?
+        </button>
+        <button type="button" id="guideBtn" class="intro-bar__button">
+          What is this fan site?
+        </button>
+      </div>
+
+      <iframe
+        id="webxr-iframe"
+        title="WebXR Earth"
+        src="./earth.html"
+        allow="xr-spatial-tracking; fullscreen"
+        scrolling="no">
+      </iframe>
+    </div>
+
+    <!-- ★ ツアー提案カード（写真アイコン入り・A案レイアウト） -->
+    <section
+      id="recommendSection"
+      style="
+        margin: 24px auto;
+        max-width: 960px;
+        padding: 18px 20px;
+        border-radius: 12px;
+        border: 1px solid rgba(0,0,0,0.08);
+        background: rgba(255,255,255,0.95);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+      "
+    >
+      <!-- 写真＋タイトル＋説明文を横並び -->
+      <div style="display:flex; align-items:flex-start; gap:16px; margin-bottom:12px;">
+        <img src="./assets/assistant.jpg"
+             alt="Assistant"
+             style="
+               width:96px;
+               height:96px;
+               border-radius:50%;
+               object-fit:cover;
+               flex-shrink:0;
+             ">
+        <div>
+          <h2 id="recommendTitle" style="margin:0 0 6px; font-size:1.2rem; line-height:1.3;">
+            ツアー提案（プロトタイプ）
+          </h2>
+          <p
+            id="recommendIntro"
+            style="margin: 0; font-size: 0.9rem; line-height: 1.6;"
+          >
+            どのようなツアーを観たいかアシスタントに伝えてください。将来的には、上の地球儀にあなたの好みに合った目的地がハイライト表示されるようになります。
           </p>
-
-          <div class="hero-actions">
-            <button class="btn primary" id="createRoomBtn">
-              Create a Meetup Room
-            </button>
-            <button class="btn secondary" id="whatIsBtn">
-              What is Dokodemo Doors?
-            </button>
-          </div>
         </div>
+      </div>
 
-        <div class="hero-right">
-          <div class="earth-preview">
-            <iframe
-              id="earthFrame"
-              src="./earth.html"
-              title="VR Earth Globe"
-              loading="lazy"
-            ></iframe>
-          </div>
-        </div>
-      </section>
+      <div
+        class="recommend-input-row"
+        style="display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; margin-bottom:12px;"
+      >
+        <input
+          id="recommendInput"
+          type="text"
+          placeholder="例：『あの場所はここだったのか！』って思えるような場所がいい"
+          style="
+            flex:1 1 240px;
+            min-width:0;
+            padding:8px 10px;
+            border-radius:8px;
+            border:1px solid rgba(0,0,0,0.2);
+            font-size:0.9rem;
+          "
+        >
+        <button
+          type="button"
+          class="btn"
+          id="recommendSend"
+          style="flex:0 0 auto; white-space:nowrap;"
+        >
+          質問する（近日公開）
+        </button>
+      </div>
 
-      <section class="room-section">
-        <div class="room-header">
-          <h2 id="roomListTitle">Available Meetup Rooms</h2>
-          <p id="roomListDesc">
-            Join a room to watch the same VR tour together in sync.
-          </p>
-        </div>
-
-        <div id="roomList" class="room-list">
-          <!-- Rooms will be rendered here by main.js -->
-        </div>
-      </section>
-
-      <!-- ▼ Lucy のツアー提案カード -->
-      <section class="assistant-section">
-        <div class="assistant-card">
-          <div class="assistant-header">
-            <div class="assistant-avatar">
-              <img src="./assets/assistant.jpg" alt="Lucy" />
-            </div>
-            <div class="assistant-info">
-              <div class="assistant-name">Lucy</div>
-              <div class="assistant-role">Tour Concierge AI</div>
-            </div>
-          </div>
-
-          <div class="assistant-body">
-            <p class="assistant-intro">
-              どのようなツアーを観たいかアシスタントに伝えてください。将来的には、上の地球儀にあなたの好みに合った目的地がハイライト表示されるようになります。
-            </p>
-
-            <div id="recommendChat" style="
+      <!-- ★ 将来、AI の返答ログをここに積んでいく -->
+      <div id="recommendChat" style="
         margin-bottom:12px;
         padding:10px;
         border-radius:8px;
@@ -92,101 +121,179 @@
         font-size:0.9rem;
         line-height:1.5;
         min-height:40px;
-        max-height:160px;
-        overflow-y:auto;
       ">
-              <!-- 今はプロトタイプなので空。将来チャットログが入る -->
-            </div>
+        <!-- 今はプロトタイプなので空。将来チャットログが入る -->
+      </div>
 
-            <div
-              style="
-                display:flex;
-                gap:8px;
-                align-items:center;
-                margin-top:8px;
-              "
-            >
-              <input
-                id="recommendInput"
-                type="text"
-                placeholder="例）キリスト教の古い教会が見たい、癒される自然がいい など"
-                style="
-                  flex:1 1 auto;
-                  padding:8px 10px;
-                  border-radius:8px;
-                  border:1px solid rgba(0,0,0,0.2);
-                  font-size:0.9rem;
-                "
-              />
-              <button
-                id="recommendSendBtn"
-                class="btn primary"
-                style="flex:0 0 auto; white-space:nowrap;"
-              >
-                質問する（近日公開）
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-      <!-- ▲ Lucy のツアー提案カード -->
+      <div
+        id="recommendNote"
+        style="margin-top:8px; font-size:0.8rem; color:rgba(0,0,0,0.6); line-height:1.5;"
+      >
+        このエリアは現在レイアウトテスト中です。今後は専用のAIと連携し、スプレッドシートからツアーデータを読み取り、それに応じて地球儀をフィルタリングする予定です。
+      </div>
+    </section>
 
-    </main>
+    <section class="meetups">
+      <div class="meetups__head">
+        <h2 class="meetups__title">Meetup Rooms</h2>
+        <button class="btn ghost head-create" id="openCreate">Create a room</button>
+      </div>
+      <div id="grid" class="grid"></div>
+    </section>
   </div>
 
-  <!-- ▼ ポップアップ: What is Dokodemo Doors? -->
-  <div class="modal" id="aboutModal" aria-hidden="true">
-    <div class="overlay" id="aboutOverlay"></div>
-    <div class="modal-content">
-      <div class="header">
-        <h2 id="aboutTitle">What is Dokodemo Doors?</h2>
-      </div>
+  <!-- Site description modal -->
+  <div class="backdrop" id="aboutBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="aboutTitle" aria-describedby="aboutBody">
+      <header>
+        <div id="aboutTitle">What is Dokodemo Doors?</div>
+        <div class="close" id="aboutClose" aria-label="Close">×</div>
+      </header>
       <div class="body" id="aboutBody">
-        <span style="font-size: 24px; font-weight: bold">離れていても、共に旅ができる場所がある</span><br>
-        <span style="text-indent: 2em;">オンラインVR空間「どこでもドア」は、世界の360度VR動画を公開するサイトです。</span><br>
-        <span style="font-size: 34px; font-weight: bold">掲載動画数 1,700 本以上</span><br>
-        <span style="text-indent: 2em;">YouTubeにもVR動画は多く存在しますが、これだけの数が一か所に集まっているのは「どこでもドア」だけです。</span><br>
-        <br>
-        <span style="font-size: 24px; font-weight: bold">複数人で“同時に”閲覧可能</span><br>
-        <span style="text-indent: 2em;">同じタイミングで動画を再生することで、同じ景色を見ながら会話やジェスチャーを使って体験を共有できます。</span><br>
-        <span style="text-indent: 2em;">言語が異なる人との会話も翻訳して字幕にしてくれるので楽しいです。</span><br>
+        <p class="heading-large">A place where you can explore the world together, even when you're far apart</p>
+        <p style="padding-left: 1em;">
+          <a href="https://dokodemodoors.com/" target="_blank">Dokodemo Doors</a> is an online VR platform that offers a wide collection of 360-degree VR travel videos from around the world.
+        </p>
+        <p class="heading-strong">More than 1,700 videos available</p>
+        <p style="padding-left: 1em;">
+          Although YouTube also has VR content, no other site gathers this many VR travel videos in one place.
+        </p>
+        <p class="heading-strong">Watch together in perfect sync</p>
+        <p style="padding-left: 1em;">
+          By starting the video at the same time, you can share the exact same scenery while talking or using gestures.
+        </p>
+        <p>
+          Learn more
+          <a href="https://dokodemodoors.com/info/about-dokodemodoor" target="_blank">here</a>.
+        </p>
       </div>
       <div class="actions">
         <button class="btn" id="aboutOk">OK</button>
       </div>
     </div>
   </div>
-  <!-- ▲ ポップアップ -->
 
-  <!-- ▼ ポップアップ: How to use Meetup Rooms -->
-  <div class="modal" id="howToModal" aria-hidden="true">
-    <div class="overlay" id="howToOverlay"></div>
-    <div class="modal-content">
-      <div class="header">
-        <h2 id="howToTitle">How to use Meetup Rooms?</h2>
-      </div>
-      <div class="body" id="howToBody">
-        <p id="howToText">
-          1. Choose a VR tour URL from Dokodemo Doors.<br>
-          2. Create a room and share the link or QR code with your friends.<br>
-          3. Everyone joins the room and starts the tour at the same time.<br>
-          4. You can talk and react together while watching the same VR view.
+  <!-- Fan site guide modal -->
+  <div class="backdrop" id="guideBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="guideTitle" aria-describedby="guideBody">
+      <header>
+        <div id="guideTitle">What is this fan site?</div>
+        <div class="close" id="guideClose" aria-label="Close">×</div>
+      </header>
+      <div class="body" id="guideBody">
+        <p class="heading-large">An unofficial fan-made site that lets you choose destinations from a 3D globe</p>
+        <p>
+          I created this site with official permission because I wanted to pick destinations visually on a globe instead of from a traditional list view on the
+          <a href="https://dokodemodoors.com/" target="_blank">official site</a>.
+        </p>
+        <p class="heading-strong">1. Subscription required</p>
+        <p style="padding-left: 1em;">
+          Viewing each world requires a subscription through the official website. If you're not subscribed, entering a world will redirect you to the subscription page.<br>
+          Some worlds are available for free during limited periods, and those are easiest to find from the
+          <a href="https://dokodemodoors.com/" target="_blank">official homepage</a>
+          under “Recommended Worlds.”
+        </p>
+        <p class="heading-strong">2. Meta Quest 2 or higher recommended</p>
+        <p style="padding-left: 1em;">
+          Although the service works on various devices, the VR experience is overwhelmingly superior. For best results, Meta Quest 2 or higher is recommended.
         </p>
       </div>
       <div class="actions">
-        <button class="btn" id="howToOk">OK</button>
+        <button class="btn" id="guideOk">OK</button>
       </div>
     </div>
   </div>
-  <!-- ▲ ポップアップ -->
 
-  <!-- ▼ ポップアップ: URL入力エラー -->
-  <div class="modal" id="alertModal" aria-hidden="true">
-    <div class="overlay" id="alertOverlay"></div>
-    <div class="modal-content">
-      <div class="header">
-        <h2 id="alertTitle">Invalid URL</h2>
+  <!-- Create / Edit modal -->
+  <div class="backdrop" id="backdrop">
+    <div class="modal">
+      <header>
+        <div id="modalTitle">Create a meetup room</div>
+        <div class="close" id="close" aria-label="Close">×</div>
+      </header>
+      <div class="body">
+        <!-- ★ 多言語対応用の説明文コンテナ（中身は JS で差し替え） -->
+        <p class="modal-description" id="modalDescription" style="margin-bottom:12px; font-size:0.9rem; line-height:1.5;"></p>
+
+        <div class="form">
+          <div>
+            <label for="mTitle">Title</label>
+            <input id="mTitle" placeholder="e.g. Tokyo Night Tour" inputmode="text" maxlength="60">
+          </div>
+
+          <div>
+            <label for="mLimit">Participant limit</label>
+            <select id="mLimit" aria-label="Select max participants">
+              <option>10</option><option>9</option><option>8</option><option>7</option><option>6</option>
+              <option>5</option><option>4</option><option>3</option><option>2</option><option>1</option>
+            </select>
+          </div>
+
+          <!-- Free / Paid 選択＋金額 -->
+          <div>
+            <label id="mEventTypeLabel">Free or paid event</label>
+            <div style="margin-top:4px; display:flex; gap:24px; align-items:center;">
+              <label style="display:flex; align-items:center; gap:4px;">
+                <input type="radio" name="mEventType" value="free" checked>
+                <span id="mEventTypeFreeLabel">Free event</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:4px;">
+                <input type="radio" name="mEventType" value="paid">
+                <span id="mEventTypePaidLabel">Paid event</span>
+              </label>
+            </div>
+            <div id="priceWrapper" style="margin-top:8px; display:none;">
+              <label for="mPrice" id="mPriceLabel" style="display:block; margin-bottom:4px;">Price</label>
+              <input
+                id="mPrice"
+                type="text"
+                placeholder="e.g. 1500 JPY / $10 / 10 EUR"
+                inputmode="text">
+            </div>
+          </div>
+
+          <div>
+            <label for="mStart">Meeting time (JST)</label>
+            <!-- 通常（対応ブラウザ向け） -->
+            <input id="mStart" type="datetime-local" inputmode="none">
+
+            <!-- フォールバック（Quest 等）：月/日/時/分 セレクト -->
+            <div id="mStartFallback" style="display:none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px">
+              <select id="mMonth" aria-label="Month"></select>
+              <select id="mDay" aria-label="Day"></select>
+              <select id="mHour" aria-label="Hour"></select>
+              <select id="mMinute" aria-label="Minute"></select>
+            </div>
+          </div>
+
+          <div>
+            <label for="mTarget">Tour / world URL</label>
+            <input id="mTarget" placeholder="https://dokodemodoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
+            <div class="note">
+              After creation, the URL cannot be changed. To change it, duplicate the room and create a new one.
+            </div>
+          </div>
+        </div>
       </div>
+      <div class="actions">
+        <div class="left">
+          <button class="btn danger" id="delete" style="display:none">Delete this room</button>
+        </div>
+        <button class="btn ghost" id="duplicate" style="display:none">Duplicate this room</button>
+        <button class="btn ghost" id="close2">Close</button>
+        <button class="btn" id="submit">Create</button>
+      </div>
+      <div class="status" id="statusMsg">Room created</div>
+    </div>
+  </div>
+
+  <!-- Custom alert (destination URL info) -->
+  <div class="backdrop" id="alertBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
+      <header>
+        <div id="alertTitle">About the URL</div>
+        <div class="close" id="alertClose" aria-label="Close">×</div>
+      </header>
       <div class="body" id="alertBody">
         Please enter a Dokodemo Doors tour or world URL.
       </div>
@@ -196,9 +303,10 @@
     </div>
   </div>
 
+  <!-- ここから下は JS 読み込み -->
   <script src="./main.js"></script>
+  <script src="./recommend.js"></script>
 
   <footer></footer>
-
 </body>
 </html>
