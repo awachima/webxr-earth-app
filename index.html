@@ -48,7 +48,7 @@
       </iframe>
     </div>
 
-    <!-- ★ ツアー提案カード（写真アイコン入り） -->
+    <!-- ★ ツアー提案カード（写真アイコン入り・A案レイアウト） -->
     <section
       id="recommendSection"
       style="
@@ -61,29 +61,29 @@
         box-shadow: 0 4px 12px rgba(0,0,0,0.04);
       "
     >
-
-      <!-- ★ ここが今回追加した “相談員の丸アイコン＋タイトル行” -->
-      <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+      <!-- 写真＋タイトル＋説明文を横並び -->
+      <div style="display:flex; align-items:flex-start; gap:16px; margin-bottom:12px;">
         <img src="./assets/assistant.jpg"
              alt="Assistant"
              style="
-               width:48px;
-               height:48px;
+               width:96px;
+               height:96px;
                border-radius:50%;
                object-fit:cover;
                flex-shrink:0;
              ">
-        <h2 id="recommendTitle" style="margin:0; font-size:1.2rem; line-height:1.3;">
-          ツアー提案（プロトタイプ）
-        </h2>
+        <div>
+          <h2 id="recommendTitle" style="margin:0 0 6px; font-size:1.2rem; line-height:1.3;">
+            ツアー提案（プロトタイプ）
+          </h2>
+          <p
+            id="recommendIntro"
+            style="margin: 0; font-size: 0.9rem; line-height: 1.6;"
+          >
+            どのようなツアーを観たいかアシスタントに伝えてください。将来的には、上の地球儀にあなたの好みに合った目的地がハイライト表示されるようになります。
+          </p>
+        </div>
       </div>
-
-      <p
-        id="recommendIntro"
-        style="margin: 0 0 12px; font-size: 0.9rem; line-height: 1.6;"
-      >
-        どのようなツアーを観たいかアシスタントに伝えてください。将来的には、上の地球儀にあなたの好みに合った目的地がハイライト表示されるようになります。
-      </p>
 
       <div
         class="recommend-input-row"
@@ -142,7 +142,7 @@
     </section>
   </div>
 
-  <!-- 以下はすべて既存のモーダル等（変更なし） -->
+  <!-- 以下は既存モーダル等（変更なし） -->
 
   <div class="backdrop" id="aboutBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="aboutTitle" aria-describedby="aboutBody">
