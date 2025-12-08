@@ -1,8 +1,7 @@
 // recommend.js
-// ツアー提案カード内の簡易チャット UI（フロントのみの擬似AI版）
-//
-// 後で Cloudflare Workers + Gemini に差し替えやすいように、
-// appendMessage や handleSend の構造は分かりやすく分離してあります。
+// ツアー提案カード内のチャット UI（Lucy）
+// - ブラウザから Lucy Worker (https://lucy-recommend.awachima7.workers.dev/) に問い合わせ
+// - エラー時は簡易な擬似返信でフォロー
 
 document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("recommendInput");
@@ -13,13 +12,16 @@ document.addEventListener("DOMContentLoaded", () => {
     return; // 要素が見つからない場合は何もしない
   }
 
-  // --- チャット履歴（将来AIにまとめて渡すことも想定して一応保持） ---
+  const ASSISTANT_NAME = "Lucy";
+  const API_ENDPOINT = "https://lucy-recommend.awachima7.workers.dev/"; // ← Lucy Worker のURL
+
+  // --- チャット履歴（将来、まとめてAIに渡すとき用） ---
   const history = []; // { role: 'user' | 'assistant', text: string }
 
   // --- 初期メッセージ ---
   if (!chatBox.dataset.initialized) {
     chatBox.textContent =
-      "ここに、あなたとアシスタントのやりとりが表示されます。（現在はテスト用の擬似AIが応答します）";
+      "ここに、あなたと Lucy のやりとりが表示されます。現在は試験運用中のため、応答内容は今後改善されていきます。";
     chatBox.dataset.initialized = "true";
   }
 
@@ -34,56 +36,52 @@ document.addEventListener("DOMContentLoaded", () => {
     const line = document.createElement("div");
     line.style.marginBottom = "4px";
 
-    // 役割ごとに少しスタイルを変える
     const label = document.createElement("span");
     label.style.fontWeight = "600";
     label.style.marginRight = "4px";
-    label.textContent = role === "user" ? "あなた：" : "アシスタント：";
+
+    if (role === "user") {
+      label.textContent = "あなた：";
+    } else {
+      label.textContent = ASSISTANT_NAME + "：";
+      line.style.paddingLeft = "8px"; // Lucy の発言だけ少しインデント
+    }
 
     const body = document.createElement("span");
     body.textContent = text;
 
     line.appendChild(label);
     line.appendChild(body);
-
-    // アシスタント側だけ少しインデント
-    if (role === "assistant") {
-      line.style.paddingLeft = "8px";
-    }
-
     chatBox.appendChild(line);
+
     chatBox.scrollTop = chatBox.scrollHeight;
 
     history.push({ role, text });
   }
 
-  // --- 擬似AIのロジック（キーワードで軽く分岐） ---
-  function getPseudoReply(userText) {
+  // --- エラー時などの簡易な擬似返信（保険） ---
+  function getFallbackReply(userText) {
     const text = userText.toLowerCase();
 
-    // 「ここだったのか」系（マスターのイメージしていたやりとり）
     if (
       text.includes("ここだったのか") ||
       text.includes("舞台") ||
       text.includes("モデル")
     ) {
       return (
-        "「ここだったのか！」系なら、例えばベルギーのアントワープがあります。" +
-        "『フランダースの犬』の舞台として知られている場所ですね。" +
-        "今後は、こういった“作品の舞台”ジャンルだけを地球儀に残すような絞り込みもできる予定です。"
+        "通信状態があまり良くないようなので、仮のご案内になりますが…" +
+        "「ここだったのか！」という発見がある場所としては、たとえばベルギーのアントワープがあります。" +
+        "『フランダースの犬』の舞台として知られている場所ですね。"
       );
     }
 
-    // 有名どころ・定番
     if (text.includes("有名") || text.includes("定番") || text.includes("メジャー")) {
       return (
-        "定番の有名どころでしたら、エッフェル塔やナイアガラの滝、" +
-        "グランドキャニオンのような世界的観光地が候補になります。" +
-        "将来的には、スプレッドシートから「定番」ジャンルを抽出して、自動で候補を並べる予定です。"
+        "接続が不安定なため仮の回答になりますが、定番どころでしたらエッフェル塔やナイアガラの滝、" +
+        "グランドキャニオンのような観光地が候補になりそうです。"
       );
     }
 
-    // 癒し・リラックス
     if (
       text.includes("癒し") ||
       text.includes("いやし") ||
@@ -91,45 +89,86 @@ document.addEventListener("DOMContentLoaded", () => {
       text.includes("リラックス")
     ) {
       return (
-        "癒し系でしたら、南国ビーチや静かな森林、" +
-        "夕焼けがきれいなスポットなどが良さそうです。" +
-        "今後は「癒し」ジャンルを付けたツアーだけを地球儀にハイライトする機能を追加する予定です。"
+        "今は仮のご案内になってしまいますが、癒しをお求めなら、南国のビーチや静かな森林、" +
+        "夕焼けがきれいなスポットなどがおすすめになりそうです。"
       );
     }
 
-    // 動物系
     if (text.includes("動物") || text.includes("どうぶつ") || text.includes("animal")) {
       return (
-        "動物系なら、サファリや水族館、動物園のVRツアーが候補になります。" +
-        "ジャンル列に「動物」と付いたスポットだけを地球儀に残す、という絞り込みも後ほど実装していきます。"
+        "一時的にAIと通信できていないようなので、代わりに大まかなご案内をしますね。" +
+        "サファリや水族館、動物園のツアーなどが候補として考えられそうです。"
       );
     }
 
-    // それ以外（汎用）
     return (
-      "ありがとうございます。そのご希望に合いそうなツアーを、" +
-      "今後はスプレッドシート上のジャンル情報をもとにAIが候補を絞り込んでくれる予定です。" +
-      "まだ試作段階ですが、どんな雰囲気の場所が良いか、自由に書いてみてください。"
+      "うまくAIと通信できなかったようなので、仮のご案内になりますが…" +
+      "ご希望の雰囲気に合いそうなツアーを、今後はスプレッドシート上のジャンル情報から自動で探せるようにしていきます。"
     );
   }
 
   // --- 送信処理 ---
-  function handleSend() {
+  async function handleSend() {
     const text = input.value.trim();
     if (!text) return;
 
     appendMessage("user", text);
     input.value = "";
 
-    // 本物のAIに差し替えるまでは、擬似AIで応答
-    const reply = getPseudoReply(text);
-    appendMessage("assistant", reply);
+    // 軽い「考え中」メッセージ（後で削除する）
+    const thinkingLine = document.createElement("div");
+    thinkingLine.style.marginBottom = "4px";
+    thinkingLine.style.paddingLeft = "8px";
+
+    const thinkingLabel = document.createElement("span");
+    thinkingLabel.style.fontWeight = "600";
+    thinkingLabel.style.marginRight = "4px";
+    thinkingLabel.textContent = ASSISTANT_NAME + "：";
+
+    const thinkingBody = document.createElement("span");
+    thinkingBody.textContent = "少々お待ちください…おすすめを考えていますね。";
+
+    thinkingLine.appendChild(thinkingLabel);
+    thinkingLine.appendChild(thinkingBody);
+    chatBox.appendChild(thinkingLine);
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    try {
+      const res = await fetch(API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: text,
+          history, // 将来 Worker 側で会話履歴を活用するために送っておく
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("HTTP " + res.status);
+      }
+
+      const data = await res.json();
+      const reply =
+        (data && typeof data.reply === "string" && data.reply.trim()) ||
+        getFallbackReply(text);
+
+      // 「考え中」行を消してから本回答を追加
+      thinkingLine.remove();
+      appendMessage("assistant", reply);
+    } catch (err) {
+      // 通信エラー時：考え中行を消してフォールバック
+      thinkingLine.remove();
+      const fallback = getFallbackReply(text);
+      appendMessage("assistant", fallback);
+    }
   }
 
   // ボタンクリック
   sendBtn.addEventListener("click", handleSend);
 
-  // Enter キーで送信（Shift+Enter は将来改行用にしたい場合の余地を残す）
+  // Enter キーで送信
   input.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") {
       ev.preventDefault();
