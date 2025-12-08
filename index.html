@@ -112,7 +112,7 @@
         </button>
       </div>
 
-      <!-- ★ 将来、AI の返答ログをここに積んでいく -->
+      <!-- ★ AI の返答ログ表示エリア（最大約10行でスクロール） -->
       <div id="recommendChat" style="
         margin-bottom:12px;
         padding:10px;
@@ -121,8 +121,10 @@
         font-size:0.9rem;
         line-height:1.5;
         min-height:40px;
+        max-height:220px;
+        overflow-y:auto;
       ">
-        <!-- 今はプロトタイプなので空。将来チャットログが入る -->
+        <!-- チャットログがここに入る -->
       </div>
 
       <div
