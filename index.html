@@ -48,6 +48,67 @@
       </iframe>
     </div>
 
+    <!-- ★ 地球儀と待合室の間に置く「おすすめ相談」セクション（レイアウトのみ） -->
+    <section
+      id="recommendSection"
+      style="
+        margin: 24px auto;
+        max-width: 960px;
+        padding: 16px 18px;
+        border-radius: 12px;
+        border: 1px solid rgba(0,0,0,0.08);
+        background: rgba(255,255,255,0.92);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+      "
+    >
+      <h2
+        id="recommendTitle"
+        style="font-size: 1.2rem; margin: 0 0 8px; line-height: 1.4;"
+      >
+        Tour suggestions (prototype)
+      </h2>
+      <p
+        id="recommendIntro"
+        style="margin: 0 0 12px; font-size: 0.9rem; line-height: 1.6;"
+      >
+        Tell the assistant what kind of tour you feel like watching. In the future, the globe above will highlight destinations that match your taste.
+      </p>
+
+      <div
+        class="recommend-input-row"
+        style="display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch;"
+      >
+        <input
+          id="recommendInput"
+          type="text"
+          placeholder="e.g. A place that makes you think &quot;So it was here!&quot;"
+          style="
+            flex: 1 1 220px;
+            min-width: 0;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(0,0,0,0.2);
+            font-size: 0.9rem;
+          "
+        >
+        <button
+          type="button"
+          class="btn"
+          id="recommendSend"
+          style="flex: 0 0 auto; white-space: nowrap;"
+        >
+          Ask (coming soon)
+        </button>
+      </div>
+
+      <div
+        id="recommendNote"
+        style="margin-top: 8px; font-size: 0.8rem; color: rgba(0,0,0,0.6); line-height: 1.5;"
+      >
+        This area is currently for layout testing. Later, it will talk to a dedicated AI, read tour data from the spreadsheet, and filter the globe accordingly.
+      </div>
+    </section>
+
     <section class="meetups">
       <div class="meetups__head">
         <h2 class="meetups__title">Meetup Rooms</h2>
