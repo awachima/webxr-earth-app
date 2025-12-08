@@ -142,8 +142,7 @@
     </section>
   </div>
 
-  <!-- 以下は既存モーダル等（変更なし） -->
-
+  <!-- Site description modal -->
   <div class="backdrop" id="aboutBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="aboutTitle" aria-describedby="aboutBody">
       <header>
@@ -174,6 +173,7 @@
     </div>
   </div>
 
+  <!-- Fan site guide modal -->
   <div class="backdrop" id="guideBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="guideTitle" aria-describedby="guideBody">
       <header>
@@ -204,6 +204,7 @@
     </div>
   </div>
 
+  <!-- Create / Edit modal -->
   <div class="backdrop" id="backdrop">
     <div class="modal">
       <header>
@@ -211,6 +212,7 @@
         <div class="close" id="close" aria-label="Close">×</div>
       </header>
       <div class="body">
+        <!-- ★ 多言語対応用の説明文コンテナ（中身は JS で差し替え） -->
         <p class="modal-description" id="modalDescription" style="margin-bottom:12px; font-size:0.9rem; line-height:1.5;"></p>
 
         <div class="form">
@@ -227,6 +229,7 @@
             </select>
           </div>
 
+          <!-- Free / Paid 選択＋金額 -->
           <div>
             <label id="mEventTypeLabel">Free or paid event</label>
             <div style="margin-top:4px; display:flex; gap:24px; align-items:center;">
@@ -251,8 +254,10 @@
 
           <div>
             <label for="mStart">Meeting time (JST)</label>
+            <!-- 通常（対応ブラウザ向け） -->
             <input id="mStart" type="datetime-local" inputmode="none">
 
+            <!-- フォールバック（Quest 等）：月/日/時/分 セレクト -->
             <div id="mStartFallback" style="display:none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px">
               <select id="mMonth" aria-label="Month"></select>
               <select id="mDay" aria-label="Day"></select>
@@ -270,7 +275,6 @@
           </div>
         </div>
       </div>
-
       <div class="actions">
         <div class="left">
           <button class="btn danger" id="delete" style="display:none">Delete this room</button>
@@ -283,6 +287,7 @@
     </div>
   </div>
 
+  <!-- Custom alert (destination URL info) -->
   <div class="backdrop" id="alertBackdrop" aria-hidden="true">
     <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
       <header>
@@ -298,9 +303,10 @@
     </div>
   </div>
 
+  <!-- ここから下は JS 読み込み -->
   <script src="./main.js"></script>
+  <script src="./recommend.js"></script>
 
   <footer></footer>
-
 </body>
 </html>
