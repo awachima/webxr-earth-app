@@ -1,5 +1,5 @@
 // recommend.js
-// ƒcƒA[’ñˆÄƒJ[ƒh“à‚ÌŠÈˆÕƒ`ƒƒƒbƒg UIi‚Ü‚¾AI‚Æ‚Í–¢Ú‘±j
+// ãƒ„ã‚¢ãƒ¼ææ¡ˆã‚«ãƒ¼ãƒ‰å†…ã®ç°¡æ˜“ãƒãƒ£ãƒƒãƒˆ UIï¼ˆã¾ã AIã¨ã¯æœªæ¥ç¶šï¼‰
 
 document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("recommendInput");
@@ -7,17 +7,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const chatBox = document.getElementById("recommendChat");
 
   if (!input || !sendBtn || !chatBox) {
-    return; // —v‘f‚ªŒ©‚Â‚©‚ç‚È‚¢ê‡‚Í‰½‚à‚µ‚È‚¢
+    return; // è¦ç´ ãŒè¦‹ã¤ã‹ã‚‰ãªã„å ´åˆã¯ä½•ã‚‚ã—ãªã„
   }
 
-  // ‰ŠúƒƒbƒZ[ƒWi1‰ñ‚¾‚¯•\¦j
+  // åˆæœŸãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ï¼ˆ1å›ã ã‘è¡¨ç¤ºï¼‰
   if (!chatBox.dataset.initialized) {
-    chatBox.textContent = "‚±‚±‚ÉA‚ ‚È‚½‚ÆƒAƒVƒXƒ^ƒ“ƒg‚Ì‚â‚è‚Æ‚è‚ª•\¦‚³‚ê‚Ü‚·BiAI˜AŒg‚Í‚±‚ê‚©‚çÀ‘•—\’è‚Å‚·j";
+    chatBox.textContent = "ã“ã“ã«ã€ã‚ãªãŸã¨ã‚¢ã‚·ã‚¹ã‚¿ãƒ³ãƒˆã®ã‚„ã‚Šã¨ã‚ŠãŒè¡¨ç¤ºã•ã‚Œã¾ã™ã€‚ï¼ˆAIé€£æºã¯ã“ã‚Œã‹ã‚‰å®Ÿè£…äºˆå®šã§ã™ï¼‰";
     chatBox.dataset.initialized = "true";
   }
 
   function appendMessage(role, text) {
-    // ‰ŠúƒeƒLƒXƒg‚ªc‚Á‚Ä‚¢‚½‚çÁ‚·
+    // åˆæœŸãƒ†ã‚­ã‚¹ãƒˆãŒæ®‹ã£ã¦ã„ãŸã‚‰æ¶ˆã™
     if (chatBox.dataset.initialized === "true") {
       chatBox.textContent = "";
       chatBox.dataset.initialized = "done";
@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const label = document.createElement("span");
     label.style.fontWeight = "600";
     label.style.marginRight = "4px";
-    label.textContent = role === "user" ? "‚ ‚È‚½F" : "ƒAƒVƒXƒ^ƒ“ƒgF";
+    label.textContent = role === "user" ? "ã‚ãªãŸï¼š" : "ã‚¢ã‚·ã‚¹ã‚¿ãƒ³ãƒˆï¼š";
 
     const body = document.createElement("span");
     body.textContent = text;
@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
     line.appendChild(body);
     chatBox.appendChild(line);
 
-    // ‰º’[‚ÖƒXƒNƒ[ƒ‹
+    // ä¸‹ç«¯ã¸ã‚¹ã‚¯ãƒ­ãƒ¼ãƒ«
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
@@ -49,17 +49,17 @@ document.addEventListener("DOMContentLoaded", () => {
     appendMessage("user", text);
     input.value = "";
 
-    // ‚±‚±‚É«—ˆ AI ‚Ö‚ÌƒŠƒNƒGƒXƒg‚ğ’Ç‰Á‚·‚é—\’èB
-    // ¡‚Íu‹ß“úÀ‘•v‚ÌŠÈ’P‚Èƒ_ƒ~[‰“š‚¾‚¯•Ô‚·B
+    // ã“ã“ã«å°†æ¥ AI ã¸ã®ãƒªã‚¯ã‚¨ã‚¹ãƒˆã‚’è¿½åŠ ã™ã‚‹äºˆå®šã€‚
+    // ä»Šã¯ã€Œè¿‘æ—¥å®Ÿè£…ã€ã®ç°¡å˜ãªãƒ€ãƒŸãƒ¼å¿œç­”ã ã‘è¿”ã™ã€‚
     appendMessage(
       "assistant",
-      "‚ ‚è‚ª‚Æ‚¤‚²‚´‚¢‚Ü‚·B‚»‚Ì‚²Šó–]‚É‡‚¤ƒWƒƒƒ“ƒ‹‚âƒcƒA[‚ğA¡ŒãAI‚ªƒXƒvƒŒƒbƒhƒV[ƒg‚Ìî•ñ‚©‚ç’T‚µ‚Ä‚­‚ê‚é—\’è‚Å‚·B"
+      "ã‚ã‚ŠãŒã¨ã†ã”ã–ã„ã¾ã™ã€‚ãã®ã”å¸Œæœ›ã«åˆã†ã‚¸ãƒ£ãƒ³ãƒ«ã‚„ãƒ„ã‚¢ãƒ¼ã‚’ã€ä»Šå¾ŒAIãŒã‚¹ãƒ—ãƒ¬ãƒƒãƒ‰ã‚·ãƒ¼ãƒˆã®æƒ…å ±ã‹ã‚‰æ¢ã—ã¦ãã‚Œã‚‹äºˆå®šã§ã™ã€‚"
     );
   }
 
   sendBtn.addEventListener("click", handleSend);
 
-  // Enter ƒL[‚Å‘—MiShift+Enter ‚Í‰üs‚Æ‚µ‚Ä‰·‘¶‚µ‚½‚¢ê‡‚ÍŒã‚ÅŠg’£j
+  // Enter ã‚­ãƒ¼ã§é€ä¿¡ï¼ˆShift+Enter ã¯æ”¹è¡Œã¨ã—ã¦æ¸©å­˜ã—ãŸã„å ´åˆã¯å¾Œã§æ‹¡å¼µï¼‰
   input.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") {
       ev.preventDefault();
