@@ -111,7 +111,7 @@ AFRAME.registerComponent('rounded-panel', {
     }
   }
 });
-</script>
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
@@ -221,6 +221,7 @@ AFRAME.registerComponent('ray-aim-offset', {
 
 
 
+
 // --- Enforce child raycaster (#right-ray) as the only VR ray ---
 AFRAME.registerComponent('ray-enforce-child', {
   init: function(){
@@ -299,6 +300,7 @@ AFRAME.registerComponent('ray-enforce-child', {
     scene.addEventListener('exit-vr', disableChild);
   }
 });
+
 
 
 
@@ -623,10 +625,66 @@ AFRAME.registerComponent('marker-placer',{
   },
   // ★★★ ここまでが修正されたparseCsv関数 ★★★
 
+  // ★★★ マーカー絞り込みの「前段階」: 視点側半球だけに絞る ★★★
+  filterLocationsForCurrentView:function(){
+    const base = this.allLocations || [];
+    if (base.length === 0) return base;
+
+    // カメラやEarthの情報が取れない場合はそのまま
+    if (!this.cameraEl || !this.cameraEl.object3D || !this.el || !this.el.object3D) {
+      return base;
+    }
+
+    // Earth中心とカメラ位置をワールド座標で取得
+    this.el.object3D.getWorldPosition(this.earthPos);
+    this.cameraEl.object3D.getWorldPosition(this.cameraPos);
+
+    // 「地球中心 → カメラ」方向ベクトル
+    const toEye = this.cameraPos.clone().sub(this.earthPos).normalize();
+
+    const geom = this.el.getAttribute('geometry') || {};
+    const radius = geom.radius || 1;
+    const filtered = [];
+    const eps = 0.001; // 境界のチラつき防止用の少しの余裕
+
+    for (let i = 0; i < base.length; i++) {
+      const loc = base[i];
+
+      // lat / lon がなければフィルタせず通す
+      if (typeof loc.lat !== 'number' || typeof loc.lon !== 'number') {
+        filtered.push(loc);
+        continue;
+      }
+
+      // 地球ローカル座標での位置
+      const localPos = this.latLonTo3D(loc.lat, loc.lon, radius);
+      // ワールド座標へ変換
+      const worldPos = localPos.clone();
+      this.el.object3D.localToWorld(worldPos);
+
+      // 法線（地球中心→地点）
+      const normal = worldPos.clone().sub(this.earthPos).normalize();
+      const dot = normal.dot(toEye);
+
+      // 視点側半球にあるものだけ採用
+      if (dot > eps) {
+        filtered.push(loc);
+      }
+    }
+
+    // 何も残らなかった場合は元の一覧を返しておく（安全策）
+    return filtered.length > 0 ? filtered : base;
+  },
+
   computeThreshold:function(){ var s=this.el.object3D.scale.x; var t=(s-1)/(3-1); return 0.2 - t*(0.2-0.015); },
   updateClusters:function(){
     this.currentMarkers.forEach(m=>{ if(m && m.parentNode) m.parentNode.removeChild(m); }); this.currentMarkers=[];
-    var th=this.computeThreshold(); var unclustered=this.allLocations.slice(); var clusters=[];
+
+    // ★ ここで「前段階の絞り込み」を実行
+    const sourceList = this.filterLocationsForCurrentView();
+    var th=this.computeThreshold();
+    var unclustered=sourceList.slice();
+    var clusters=[];
     while(unclustered.length>0){
       var p=unclustered.shift(); var cluster=[p]; var rest=[];
       for(var i2=0;i2<unclustered.length;i2++){
@@ -635,7 +693,7 @@ AFRAME.registerComponent('marker-placer',{
       }
       unclustered=rest; clusters.push(cluster);
     }
-    console.log('[marker-placer] clusters formed:', clusters.length);
+    console.log('[marker-placer] clusters formed:', clusters.length, '(from', sourceList.length, 'locations)');
     this.placeMarkersFromClusters(clusters);
   },
   placeMarkersFromClusters:function(clusters){
