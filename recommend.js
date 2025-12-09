@@ -2,15 +2,21 @@
 // ツアー提案カード内のチャット UI（Lucy）
 // - ブラウザから Lucy Worker (https://lucy-recommend.awachima7.workers.dev/) に問い合わせ
 // - エラー時は簡易な擬似返信でフォロー
+// - 将来的に、Worker から返ってきた「候補行」を earth.html 側に postMessage で渡す
 
 document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("recommendInput");
   const sendBtn = document.getElementById("recommendSend");
   const chatBox = document.getElementById("recommendChat");
+  const earthIframe = document.getElementById("webxr-iframe"); // 地球儀 iframe（存在しなくてもOK）
 
   if (!input || !sendBtn || !chatBox) {
     return; // 要素が見つからない場合は何もしない
   }
+
+  // チャット欄をカード内スクロールにする（10行前後を想定）
+  chatBox.style.maxHeight = "12em";
+  chatBox.style.overflowY = "auto";
 
   const ASSISTANT_NAME = "Lucy";
   const API_ENDPOINT = "https://lucy-recommend.awachima7.workers.dev/"; // ← Lucy Worker のURL
@@ -57,6 +63,31 @@ document.addEventListener("DOMContentLoaded", () => {
     chatBox.scrollTop = chatBox.scrollHeight;
 
     history.push({ role, text });
+  }
+
+  // --- 地球儀 (earth.html) への通知ヘルパー ---
+  // Worker から highlightRows / exampleSpots が返ってきたら、
+  // それを iframe に postMessage で伝える（earth.html 側は後で実装）
+  function sendHighlightToEarth(highlightRows, exampleSpots) {
+    if (!earthIframe || !earthIframe.contentWindow) {
+      return;
+    }
+    if (!Array.isArray(highlightRows)) {
+      return;
+    }
+
+    const payload = {
+      type: "lucy-highlight",
+      rows: highlightRows,      // シート上の「候補行」を想定（1始まり/0始まりかは earth 側で調整）
+      exampleSpots: Array.isArray(exampleSpots) ? exampleSpots : undefined,
+    };
+
+    try {
+      // 同一オリジン前提なので targetOrigin は "*" で運用
+      earthIframe.contentWindow.postMessage(payload, "*");
+    } catch (e) {
+      console.error("sendHighlightToEarth postMessage error:", e);
+    }
   }
 
   // --- エラー時などの簡易な擬似返信（保険） ---
@@ -141,7 +172,7 @@ document.addEventListener("DOMContentLoaded", () => {
         },
         body: JSON.stringify({
           message: text,
-          history, // 将来 Worker 側で会話履歴を活用するために送っておく
+          history, // Worker 側で会話履歴を活用するために送っておく
         }),
       });
 
@@ -154,11 +185,25 @@ document.addEventListener("DOMContentLoaded", () => {
         (data && typeof data.reply === "string" && data.reply.trim()) ||
         getFallbackReply(text);
 
+      // ここで、Worker 側が今後返す予定の候補行情報を earth.html に渡す
+      // （現時点で highlightRows / exampleSpots が未実装でも問題なく動作する）
+      const highlightRows = Array.isArray(data.highlightRows)
+        ? data.highlightRows
+        : null;
+      const exampleSpots = Array.isArray(data.exampleSpots)
+        ? data.exampleSpots
+        : null;
+
+      if (highlightRows && highlightRows.length > 0) {
+        sendHighlightToEarth(highlightRows, exampleSpots);
+      }
+
       // 「考え中」行を消してから本回答を追加
       thinkingLine.remove();
       appendMessage("assistant", reply);
     } catch (err) {
       // 通信エラー時：考え中行を消してフォールバック
+      console.error("Lucy recommend fetch error:", err);
       thinkingLine.remove();
       const fallback = getFallbackReply(text);
       appendMessage("assistant", fallback);
