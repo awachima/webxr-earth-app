@@ -8,6 +8,174 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
+
+  <!-- ===== Tag Filter UI (Index side) : Added ===== -->
+  <style>
+    /* 既存CSSに依存せず、index.html単体で完結させるため最小限のスタイルを追記 */
+    .dd-filter-dock{
+      position:absolute;
+      left:12px;
+      top:88px;
+      z-index: 30;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      pointer-events:auto;
+      font-family: "Plus Jakarta Sans","Noto Sans JP",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    }
+    .dd-filter-btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      padding:10px 12px;
+      border-radius:10px;
+      border:1px solid rgba(0,0,0,0.12);
+      background: rgba(255,255,255,0.92);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+      cursor:pointer;
+      user-select:none;
+      font-size: 0.9rem;
+      line-height: 1;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .dd-filter-panel{
+      width: 320px;
+      max-width: calc(100vw - 24px);
+      max-height: min(520px, calc(100vh - 160px));
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid rgba(0,0,0,0.12);
+      background: rgba(255,255,255,0.96);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display:none;
+    }
+    .dd-filter-panel[aria-hidden="false"]{ display:block; }
+
+    .dd-filter-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:12px 12px 10px;
+      border-bottom: 1px solid rgba(0,0,0,0.10);
+    }
+    .dd-filter-title{
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin:0;
+    }
+    .dd-filter-sub{
+      font-size: 0.78rem;
+      opacity: 0.7;
+      margin-top: 2px;
+    }
+    .dd-filter-close{
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.10);
+      background: rgba(0,0,0,0.03);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .dd-filter-body{
+      padding: 10px 12px 12px;
+      overflow:auto;
+      max-height: calc(min(520px, calc(100vh - 160px)) - 118px);
+    }
+    .dd-filter-actions{
+      display:flex;
+      gap:8px;
+      padding: 10px 12px 12px;
+      border-top: 1px solid rgba(0,0,0,0.10);
+      background: rgba(255,255,255,0.72);
+    }
+    .dd-filter-actions button{
+      flex: 1 1 auto;
+      padding: 10px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.12);
+      background: rgba(255,255,255,0.95);
+      cursor:pointer;
+      font-size: 0.88rem;
+      white-space: nowrap;
+    }
+    .dd-filter-actions button.dd-primary{
+      background: rgba(0,0,0,0.92);
+      color: #fff;
+      border-color: rgba(0,0,0,0.92);
+    }
+
+    .dd-tree-group{
+      margin: 10px 0 14px;
+      padding: 10px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(0,0,0,0.02);
+    }
+    .dd-tree-l1{
+      font-weight: 700;
+      font-size: 0.92rem;
+      margin: 0 0 8px;
+    }
+    .dd-tree-l2{
+      margin: 10px 0 8px;
+      font-weight: 700;
+      font-size: 0.86rem;
+      opacity: 0.9;
+    }
+    .dd-tree-items{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding-left: 2px;
+    }
+    .dd-check{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size: 0.88rem;
+      line-height: 1.25;
+    }
+    .dd-check input{
+      width: 16px;
+      height: 16px;
+      cursor:pointer;
+    }
+    .dd-muted{
+      font-size: 0.78rem;
+      opacity: 0.65;
+      margin-top: 6px;
+    }
+    .dd-filter-loading{
+      padding: 10px 0;
+      font-size: 0.88rem;
+      opacity: 0.75;
+    }
+    .dd-filter-error{
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(200,0,0,0.15);
+      background: rgba(200,0,0,0.06);
+      font-size: 0.86rem;
+      line-height: 1.4;
+    }
+
+    /* スマホ等で被りが気になる場合に少し下げる */
+    @media (max-width: 520px){
+      .dd-filter-dock{ top: 96px; left: 10px; }
+      .dd-filter-panel{ width: 300px; }
+    }
+  </style>
+  <!-- ===== /Tag Filter UI ===== -->
 </head>
 <body>
   <div class="wrap">
@@ -26,7 +194,7 @@
       </div>
     </header>
 
-    <div class="stage">
+    <div class="stage" style="position:relative;">
       <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
 
       <!-- 白線の下に表示するボタン群 -->
@@ -46,6 +214,34 @@
         allow="xr-spatial-tracking; fullscreen"
         scrolling="no">
       </iframe>
+
+      <!-- ===== Tag Filter UI (Index side) : Added ===== -->
+      <div class="dd-filter-dock" aria-label="Tag filters">
+        <button type="button" class="dd-filter-btn" id="ddFilterToggle" aria-expanded="false" aria-controls="ddFilterPanel">
+          絞り込み
+          <span id="ddFilterCount" style="opacity:0.7; font-weight:700;">(0)</span>
+        </button>
+
+        <div class="dd-filter-panel" id="ddFilterPanel" aria-hidden="true">
+          <div class="dd-filter-head">
+            <div>
+              <div class="dd-filter-title">タグ絞り込み</div>
+              <div class="dd-filter-sub">tree から自動生成（増えても追従）</div>
+            </div>
+            <button type="button" class="dd-filter-close" id="ddFilterClose" aria-label="Close">×</button>
+          </div>
+
+          <div class="dd-filter-body" id="ddFilterBody">
+            <div class="dd-filter-loading" id="ddFilterLoading">読み込み中…</div>
+          </div>
+
+          <div class="dd-filter-actions">
+            <button type="button" id="ddFilterClear">クリア</button>
+            <button type="button" class="dd-primary" id="ddFilterApply">適用</button>
+          </div>
+        </div>
+      </div>
+      <!-- ===== /Tag Filter UI ===== -->
     </div>
 
     <!-- ★ ツアー提案カード（写真アイコン入り・A案レイアウト） -->
@@ -304,6 +500,398 @@
       </div>
     </div>
   </div>
+
+  <!-- ===== Tag Filter UI Script (Index side) : Added ===== -->
+  <script>
+  (function(){
+    'use strict';
+
+    // ---- Google Sheets (tree) ----
+    // ※ tree は将来増える前提: 常にSheetから最新を取得する（失敗時はフォールバック）
+    const TREE_SHEET_ID = '1Dnq6yPHPIlExsY9Qz-B6FrTuVM4L-ByG6xDcZk_5RlQ';
+    const TREE_SHEET_NAME = 'tree'; // 現状シート名が tree なので固定。もし変える場合はここだけ変更。
+    const TREE_CSV_URL =
+      'https://docs.google.com/spreadsheets/d/' + TREE_SHEET_ID +
+      '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(TREE_SHEET_NAME);
+
+    // フォールバック（アップロードされている tree.csv 相当の内容を最低限埋め込み）
+    // ※ fetch が通らない環境(一部ブラウザ/ネットワーク)でもUIが起動するための保険
+    const TREE_FALLBACK_ROWS = [
+      {"level1":"街並み・暮らし","level2":"街","level3":"旧市街"},
+      {"level1":"街並み・暮らし","level2":"街","level3":"路地"},
+      {"level1":"街並み・暮らし","level2":"街","level3":"繁華街"},
+      {"level1":"街並み・暮らし","level2":"街","level3":"夜景・ライトアップ"},
+      {"level1":"街並み・暮らし","level2":"街","level3":"屋台"},
+      {"level1":"街並み・暮らし","level2":"村","level3":""},
+      {"level1":"街並み・暮らし","level2":"市場","level3":""},
+      {"level1":"街並み・暮らし","level2":"空港","level3":""},
+      {"level1":"自然","level2":"水辺","level3":"海"},
+      {"level1":"自然","level2":"水辺","level3":"川"},
+      {"level1":"自然","level2":"水辺","level3":"湖"},
+      {"level1":"自然","level2":"水辺","level3":"滝"},
+      {"level1":"自然","level2":"緑","level3":"森"},
+      {"level1":"自然","level2":"緑","level3":"公園"},
+      {"level1":"自然","level2":"山","level3":""},
+      {"level1":"自然","level2":"砂漠","level3":""},
+      {"level1":"自然","level2":"花","level3":""},
+      {"level1":"自然","level2":"雪","level3":""},
+      {"level1":"自然","level2":"穴","level3":""},
+      {"level1":"自然","level2":"島","level3":""},
+      {"level1":"自然","level2":"氷河","level3":""},
+      {"level1":"宗教","level2":"仏教","level3":"寺院"},
+      {"level1":"宗教","level2":"神道","level3":"神社"},
+      {"level1":"宗教","level2":"キリスト教","level3":"教会"},
+      {"level1":"宗教","level2":"キリスト教","level3":"大聖堂"},
+      {"level1":"宗教","level2":"キリスト教","level3":"修道院"},
+      {"level1":"宗教","level2":"イスラム教","level3":"モスク"},
+      {"level1":"宗教","level2":"ヒンドゥー教","level3":"寺院"},
+      {"level1":"宗教","level2":"聖地","level3":""},
+      {"level1":"建築・ランドマーク","level2":"宮殿","level3":""},
+      {"level1":"建築・ランドマーク","level2":"神殿","level3":""},
+      {"level1":"建築・ランドマーク","level2":"城","level3":""},
+      {"level1":"建築・ランドマーク","level2":"すごい建物","level3":""},
+      {"level1":"遺跡","level2":"ピラミッド","level3":""},
+      {"level1":"娯楽施設","level2":"テーマパーク","level3":""},
+      {"level1":"娯楽施設","level2":"植物園","level3":""},
+      {"level1":"娯楽施設","level2":"水族館","level3":""},
+      {"level1":"娯楽施設","level2":"動物","level3":""},
+      {"level1":"文化","level2":"祭","level3":""},
+      {"level1":"文化","level2":"音楽","level3":""},
+      {"level1":"文化","level2":"ショー","level3":""},
+      {"level1":"文化","level2":"美術館","level3":""},
+      {"level1":"文化","level2":"博物館","level3":""},
+      {"level1":"文化","level2":"アート","level3":""},
+      {"level1":"体験","level2":"ドライブ","level3":""},
+      {"level1":"体験","level2":"ダイビング","level3":""},
+      {"level1":"体験","level2":"セスナ","level3":""},
+      {"level1":"体験","level2":"ロープウェイ・ケーブルカー","level3":""},
+      {"level1":"体験","level2":"列車","level3":""},
+      {"level1":"体験","level2":"温泉","level3":""},
+      {"level1":"体験","level2":"船","level3":""},
+      {"level1":"体験","level2":"ヘリコプター","level3":""},
+      {"level1":"体験","level2":"トレッキング","level3":""}
+    ];
+
+    // ---- DOM ----
+    const iframe = document.getElementById('webxr-iframe');
+    const btnToggle = document.getElementById('ddFilterToggle');
+    const btnClose = document.getElementById('ddFilterClose');
+    const panel = document.getElementById('ddFilterPanel');
+    const body = document.getElementById('ddFilterBody');
+    const loading = document.getElementById('ddFilterLoading');
+    const btnClear = document.getElementById('ddFilterClear');
+    const btnApply = document.getElementById('ddFilterApply');
+    const countEl = document.getElementById('ddFilterCount');
+
+    // ---- State ----
+    let treeRows = null;     // [{level1, level2, level3}]
+    let selected = new Set(); // タグ文字列の集合（最終的に earth.html へ渡す配列）
+    let renderedOnce = false;
+
+    function safeStr(v){
+      return String(v == null ? '' : v).trim();
+    }
+
+    function parseCSV(text){
+      // シンプルCSV（カンマ、ダブルクォート）対応。改行は \n 想定（\r\nも吸収）
+      const rows = [];
+      const s = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+      let i = 0, field = '', row = [], inQuotes = false;
+
+      function pushField(){
+        row.push(field);
+        field = '';
+      }
+      function pushRow(){
+        // 空行は捨てる
+        const allEmpty = row.every(c => safeStr(c) === '');
+        if (!allEmpty) rows.push(row.slice());
+        row = [];
+      }
+
+      while (i < s.length){
+        const ch = s[i];
+
+        if (inQuotes){
+          if (ch === '"'){
+            const next = s[i+1];
+            if (next === '"'){ field += '"'; i += 2; continue; }
+            inQuotes = false; i += 1; continue;
+          } else {
+            field += ch; i += 1; continue;
+          }
+        } else {
+          if (ch === '"'){ inQuotes = true; i += 1; continue; }
+          if (ch === ','){ pushField(); i += 1; continue; }
+          if (ch === '\n'){
+            pushField();
+            pushRow();
+            i += 1;
+            continue;
+          }
+          field += ch;
+          i += 1;
+        }
+      }
+      pushField();
+      pushRow();
+
+      if (!rows.length) return { header: [], data: [] };
+      const header = rows[0].map(safeStr);
+      const data = rows.slice(1);
+      return { header, data };
+    }
+
+    function normalizeTreeRows(rawRows){
+      // rawRows: [{level1, level2, level3, ...}] or arrays
+      const out = [];
+      for (const r of rawRows || []){
+        const level1 = safeStr(r.level1);
+        const level2 = safeStr(r.level2);
+        const level3 = safeStr(r.level3);
+        if (!level1 && !level2 && !level3) continue;
+        out.push({ level1, level2, level3 });
+      }
+      return out;
+    }
+
+    async function loadTree(){
+      if (treeRows) return treeRows;
+
+      try{
+        const res = await fetch(TREE_CSV_URL, { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const text = await res.text();
+        const parsed = parseCSV(text);
+
+        // ヘッダ名は level1/level2/level3 を期待。違う場合でも列順で救う。
+        const idx1 = parsed.header.findIndex(h => h === 'level1');
+        const idx2 = parsed.header.findIndex(h => h === 'level2');
+        const idx3 = parsed.header.findIndex(h => h === 'level3');
+
+        const rows = [];
+        for (const line of parsed.data){
+          const v1 = idx1 >= 0 ? line[idx1] : (line[0] || '');
+          const v2 = idx2 >= 0 ? line[idx2] : (line[1] || '');
+          const v3 = idx3 >= 0 ? line[idx3] : (line[2] || '');
+          rows.push({ level1: safeStr(v1), level2: safeStr(v2), level3: safeStr(v3) });
+        }
+        treeRows = normalizeTreeRows(rows);
+        if (!treeRows.length) throw new Error('empty tree');
+        return treeRows;
+      } catch (e){
+        console.warn('[TagFilter] tree fetch failed, fallback used:', e);
+        treeRows = normalizeTreeRows(TREE_FALLBACK_ROWS);
+        return treeRows;
+      }
+    }
+
+    function buildTreeIndex(rows){
+      // { level1: { level2: [leafTags...] } }
+      // leafTag は level3 があれば level3、なければ level2、さらにそれもなければ level1
+      const root = {};
+      for (const r of rows){
+        const l1 = safeStr(r.level1);
+        const l2 = safeStr(r.level2);
+        const l3 = safeStr(r.level3);
+
+        if (!l1) continue;
+        if (!root[l1]) root[l1] = {};
+
+        const groupKey = l2 || ''; // l2無しは空グループ扱い
+        if (!root[l1][groupKey]) root[l1][groupKey] = [];
+
+        let tag = '';
+        if (l3) tag = l3;
+        else if (l2) tag = l2;
+        else tag = l1;
+
+        // 重複排除
+        if (tag && !root[l1][groupKey].includes(tag)){
+          root[l1][groupKey].push(tag);
+        }
+      }
+      return root;
+    }
+
+    function updateCount(){
+      countEl.textContent = '(' + selected.size + ')';
+    }
+
+    function renderTreeUI(treeIndex){
+      body.innerHTML = '';
+
+      const keysL1 = Object.keys(treeIndex);
+      if (!keysL1.length){
+        body.innerHTML = '<div class="dd-filter-error">tree が空です。</div>';
+        return;
+      }
+
+      for (const l1 of keysL1){
+        const box = document.createElement('div');
+        box.className = 'dd-tree-group';
+
+        const h = document.createElement('div');
+        h.className = 'dd-tree-l1';
+        h.textContent = l1;
+        box.appendChild(h);
+
+        const l2Map = treeIndex[l1] || {};
+        const keysL2 = Object.keys(l2Map);
+
+        // l2が空のグループだけ（= l1直下）を先に出す
+        keysL2.sort((a,b)=>{
+          if (a === '' && b !== '') return -1;
+          if (a !== '' && b === '') return 1;
+          return a.localeCompare(b, 'ja');
+        });
+
+        for (const l2 of keysL2){
+          const tags = l2Map[l2] || [];
+          if (!tags.length) continue;
+
+          if (l2 !== ''){
+            const sub = document.createElement('div');
+            sub.className = 'dd-tree-l2';
+            sub.textContent = l2;
+            box.appendChild(sub);
+          }
+
+          const items = document.createElement('div');
+          items.className = 'dd-tree-items';
+
+          // 表示はタグの文字列でソート（日本語）
+          tags.slice().sort((a,b)=>a.localeCompare(b,'ja')).forEach(tag=>{
+            const id = 'ddTag_' + l1 + '__' + l2 + '__' + tag;
+            const row = document.createElement('label');
+            row.className = 'dd-check';
+            row.setAttribute('for', id);
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.id = id;
+            cb.value = tag;
+            cb.checked = selected.has(tag);
+
+            cb.addEventListener('change', ()=>{
+              if (cb.checked) selected.add(tag);
+              else selected.delete(tag);
+              updateCount();
+            });
+
+            const span = document.createElement('span');
+            span.textContent = tag;
+
+            row.appendChild(cb);
+            row.appendChild(span);
+            items.appendChild(row);
+          });
+
+          box.appendChild(items);
+        }
+
+        const note = document.createElement('div');
+        note.className = 'dd-muted';
+        note.textContent = 'OR ヒット（複数選択可）';
+        box.appendChild(note);
+
+        body.appendChild(box);
+      }
+    }
+
+    async function ensureRendered(){
+      if (renderedOnce) return;
+      loading && (loading.style.display = 'block');
+
+      const rows = await loadTree();
+      const index = buildTreeIndex(rows);
+
+      // 描画
+      renderedOnce = true;
+      renderTreeUI(index);
+
+      loading && (loading.style.display = 'none');
+    }
+
+    function openPanel(){
+      panel.setAttribute('aria-hidden','false');
+      btnToggle.setAttribute('aria-expanded','true');
+      ensureRendered();
+    }
+
+    function closePanel(){
+      panel.setAttribute('aria-hidden','true');
+      btnToggle.setAttribute('aria-expanded','false');
+    }
+
+    function isOpen(){
+      return panel.getAttribute('aria-hidden') === 'false';
+    }
+
+    function postTagsToEarth(){
+      const tags = Array.from(selected);
+
+      // earth.html 側は次で受け取る想定：
+      // window.addEventListener('message', (e)=>{ if(e.data?.type==='dd-tags-apply') ... })
+      const payload = {
+        type: 'dd-tags-apply',
+        tags: tags,
+        ts: Date.now()
+      };
+
+      try{
+        if (iframe && iframe.contentWindow){
+          iframe.contentWindow.postMessage(payload, '*');
+          console.log('[TagFilter] postMessage => earth.html', payload);
+        } else {
+          console.warn('[TagFilter] iframe not ready');
+        }
+      } catch (e){
+        console.warn('[TagFilter] postMessage failed', e);
+      }
+    }
+
+    function setAllCheckboxesChecked(checked){
+      const inputs = body.querySelectorAll('input[type="checkbox"]');
+      inputs.forEach(cb=>{
+        cb.checked = checked;
+        const tag = safeStr(cb.value);
+        if (!tag) return;
+        if (checked) selected.add(tag);
+        else selected.delete(tag);
+      });
+      updateCount();
+    }
+
+    // ---- Events ----
+    btnToggle.addEventListener('click', ()=>{
+      if (isOpen()) closePanel();
+      else openPanel();
+    });
+    btnClose.addEventListener('click', closePanel);
+
+    // パネル外クリックで閉じたい場合はここで実装可能だが、誤操作防止のため現段階では入れない
+
+    btnClear.addEventListener('click', ()=>{
+      selected.clear();
+      setAllCheckboxesChecked(false);
+    });
+
+    btnApply.addEventListener('click', ()=>{
+      postTagsToEarth();
+      closePanel();
+    });
+
+    // Esc で閉じる
+    window.addEventListener('keydown', (e)=>{
+      if (e.key === 'Escape' && isOpen()) closePanel();
+    });
+
+    updateCount();
+  })();
+  </script>
+  <!-- ===== /Tag Filter UI Script ===== -->
 
   <!-- ここから下は JS 読み込み -->
   <script src="./main.js"></script>
