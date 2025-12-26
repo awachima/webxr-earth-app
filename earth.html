@@ -552,28 +552,36 @@ AFRAME.registerComponent('marker-placer',{
       this.currentMarkers.forEach(marker => { var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('#FF7F8A'); });
     });
 
-    // index.html → earth.html 絞り込み受信（将来の拡張に備えて複数形式を許容）
+    // index.html → earth.html 絞り込み受信
     this._onFilterMessage = (event) => {
       try{
         const data = event && event.data ? event.data : null;
         if (!data) return;
 
-        // 受け付けるタイプ（将来増えても壊れないように列挙 + 後方互換）
-        const t = data.type || data.kind || '';
+        const t = (data.type || data.kind || '').toString();
+
+        // index.html（現行）: { type:'dd-tags-apply', tags:[...] }
+        // 互換: { type:'FILTER_TAGS_APPLY', payload:{selectedTags:[...]} }
         const accept =
+          (t === 'dd-tags-apply') ||
+          (t === 'DD_TAGS_APPLY') ||
           (t === 'FILTER_TAGS_APPLY') ||
           (t === 'DD_FILTER_TAGS_APPLY') ||
           (t === 'DD_TAG_FILTER_APPLY') ||
-          (t === 'TAG_FILTER_APPLY');
+          (t === 'TAG_FILTER_APPLY') ||
+          (t === 'APPLY_FILTERS');
 
-        if (!accept) return;
+        // typeが未知でも tags 配列があれば受け取る（将来拡張に強くする）
+        const hasTagsArray = Array.isArray(data.tags) ||
+          (data.payload && Array.isArray(data.payload.selectedTags)) ||
+          (data.payload && Array.isArray(data.payload.tags));
 
-        // payload.selectedTags / selectedTags を両方許容
-        const payload = data.payload || {};
-        const arr =
-          (Array.isArray(payload.selectedTags) ? payload.selectedTags :
-           Array.isArray(data.selectedTags) ? data.selectedTags :
-           []);
+        if (!accept && !hasTagsArray) return;
+
+        let arr = [];
+        if (Array.isArray(data.tags)) arr = data.tags;
+        else if (data.payload && Array.isArray(data.payload.selectedTags)) arr = data.payload.selectedTags;
+        else if (data.payload && Array.isArray(data.payload.tags)) arr = data.payload.tags;
 
         // 正規化（trim / 空排除 / 重複排除）
         const cleaned = [];
@@ -587,18 +595,15 @@ AFRAME.registerComponent('marker-placer',{
         }
 
         this.selectedTags = cleaned;
-        console.log('[marker-placer] filter tags received:', this.selectedTags);
+        console.log('[marker-placer] filter tags received:', this.selectedTags, 'type=', t || '(none)');
 
         // 受信したら即再計算（フィルタ後にクラスタ再作成）
         this.updateClusters();
 
-        // 反映通知（index.html 側が必要なら利用）
+        // 任意: 反映通知（index.html が必要なら使える）
         try{
           const targetWin = window.parent || window;
-          targetWin.postMessage({
-            type: 'FILTER_TAGS_APPLIED',
-            payload: { selectedTags: this.selectedTags }
-          }, '*');
+          targetWin.postMessage({ type:'FILTER_TAGS_APPLIED', payload:{ selectedTags: this.selectedTags } }, '*');
         }catch(_){}
       }catch(e){
         console.warn('[marker-placer] message handler error:', e);
@@ -616,12 +621,6 @@ AFRAME.registerComponent('marker-placer',{
       }else{ console.error('CSV fetch failed:', res.status); }
     }catch(e){ console.error("データ取得エラー:",e); }
     this.updateClusters();
-  },
-
-  remove:function(){
-    try{
-      if (this._onFilterMessage) window.removeEventListener('message', this._onFilterMessage);
-    }catch(_){ }
   },
 
   // ★ CSV解析（タグ列は将来増えても壊れないように「後ろ側をまとめて拾う」）
@@ -853,38 +852,30 @@ AFRAME.registerComponent('marker-placer',{
     return 2*Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
   },
   tick:function(){
-    try{
-      if(!this.currentMarkers || this.currentMarkers.length===0 || !this.cameraEl) return;
+    if(this.currentMarkers.length===0 || !this.cameraEl) return;
+    var s=this.el.object3D.scale.x; if(Math.abs(s-this.previousEarthScale)>0.1){ this.updateClusters(); this.previousEarthScale=s; }
+    this.el.object3D.getWorldPosition(this.earthPos); this.cameraEl.object3D.getWorldPosition(this.cameraPos);
+    for(var i=0;i<this.currentMarkers.length;i++){
+      var marker=this.currentMarkers[i];
+      var t = (s-1)/(3-1);
+var targetWorld = this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier - this.data.minWorldMultiplier);
+var markerScale = targetWorld / s;
+marker.object3D.scale.set(markerScale, markerScale, markerScale);
+      marker.object3D.scale.set(markerScale,markerScale,markerScale);
+// ループの外（forの前）で1回だけ計算してもOK
+// var toEye = this.cameraPos.clone().sub(this.earthPos).normalize();
 
-      var s=this.el.object3D.scale.x;
-      if(Math.abs(s-this.previousEarthScale)>0.1){
-        this.updateClusters();
-        this.previousEarthScale=s;
-      }
+marker.object3D.getWorldPosition(this.markerPos);
+var normal = this.markerPos.clone().sub(this.earthPos).normalize();
 
-      this.el.object3D.getWorldPosition(this.earthPos);
-      this.cameraEl.object3D.getWorldPosition(this.cameraPos);
-      var toEye = this.cameraPos.clone().sub(this.earthPos).normalize();
+// ここで「地球中心→カメラ」を使う（毎回計算するなら↓）
+var toEye = this.cameraPos.clone().sub(this.earthPos).normalize();
 
-      for(var i=0;i<this.currentMarkers.length;i++){
-        var marker=this.currentMarkers[i];
+// 境界のチラつきを避けたい場合は 0.0→0.001〜0.01 くらいのεを加える
+var visible = (normal.dot(toEye) > 0.001);
 
-        var t = (s-1)/(3-1);
-        var targetWorld = this.data.maxMarkerMultiplier - t*(this.data.maxMarkerMultiplier - this.data.minWorldMultiplier);
-        var markerScale = targetWorld / s;
-        marker.object3D.scale.set(markerScale, markerScale, markerScale);
-
-        marker.object3D.getWorldPosition(this.markerPos);
-        var normal = this.markerPos.clone().sub(this.earthPos).normalize();
-
-        var cos = normal.dot(toEye);
-        var visible = cos > 0.001;
-
-        marker.object3D.visible = visible;
-        if (marker.textEl) marker.textEl.object3D.visible = visible;
-      }
-    }catch(e){
-      console.warn('[marker-placer] tick error:', e);
+marker.object3D.visible = visible;
+if (marker.textEl) marker.textEl.object3D.visible = visible;
     }
   },
   latLonTo3D:function(lat,lon,R){ var phi=(90-lat)*(Math.PI/180), theta=(lon+180)*(Math.PI/180);
@@ -1369,7 +1360,6 @@ AFRAME.registerComponent('panel-raf-proxy', {
   }
 
   // A-Frame の初期化タイミング差を吸収
-
   function tryRestoreLoop(tries){
     if (tries <= 0) return;
     const earth = document.getElementById('earth');
