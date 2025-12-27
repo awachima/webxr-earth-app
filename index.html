@@ -275,30 +275,6 @@
   gap: 12px;
 }
 
-/* ===== Tag Filter UI improvements (crumbs + active) ===== */
-.tag-filter-crumbs{
-  display:flex;
-  align-items:center;
-  flex-wrap:wrap;
-  gap: 6px;
-  padding: 8px 14px 0;
-  font-size: 12px;
-  opacity: 0.92;
-}
-.tag-filter-crumbs .crumb{
-  display:inline-flex;
-  align-items:center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,0.10);
-  background: rgba(255,255,255,0.75);
-  cursor: pointer;
-  user-select: none;
-}
-.tag-filter-crumbs .crumb:hover{ background: rgba(0,0,0,0.06); }
-.tag-filter-crumbs .sep{ opacity: 0.55; }
-
 .node{
   align-items: center;
 }
@@ -345,14 +321,16 @@
       <div class="modal tag-filter-modal" role="dialog" aria-labelledby="tagFilterTitle" aria-describedby="tagFilterBody">
         <header>
           <div id="tagFilterTitle">絞り込み</div>
-          <div class="tag-filter-actions">
-            <button type="button" class="btn" id="tagFilterClear">全て解除</button>
-            <button type="button" class="btn primary" id="tagFilterApply">適用</button>
-            <div class="close" id="tagFilterClose" aria-label="Close">×</div>
-          </div>
+          <div class="close" id="tagFilterClose" aria-label="Close">×</div>
         </header>
 
         <div class="body" id="tagFilterBody">
+          <div class="tag-filter-toolbar">
+            <button type="button" class="btn" id="tagFilterClear" style="display:none" aria-hidden="true" tabindex="-1">全て解除</button>
+            <div class="tag-filter-spacer"></div>
+            <button type="button" class="btn primary" id="tagFilterApply">適用</button>
+          </div>
+
           <div id="tagFilterColumns" class="tag-filter-columns" aria-label="Tag tree"></div>
         </div>
       </div>
