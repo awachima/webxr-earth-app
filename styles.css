@@ -3,260 +3,321 @@
 }
 
 /* =========================
-   カラートークン / グローバル
+   変数（添付の上部デザインに合わせる）
    ========================= */
 :root{
-  /* レイアウト調整用（JSで上書きする場合あり） */
+  /* index.js等で上書きされる想定があるので残す */
   --header-offset: 120px;
 
   --primary-color: #0f172a;
   --accent-color: #3b82f6;
   --bg-color: #ffffff;
-  --card-bg: #ffffff;
   --text-main: #334155;
   --text-sub: #64748b;
-  --border: rgba(15, 23, 42, 0.10);
 
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 18px;
-  --r-xl: 22px;
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.06);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.10), 0 8px 10px -6px rgb(0 0 0 / 0.06);
+
+  --radius-lg: 24px;
+  --radius-md: 16px;
+
+  /* 待合室など下部用 */
+  --wrap-max: 1080px;
+  --card: rgba(255,255,255,0.92);
+  --card-border: rgba(15,23,42,0.10);
 
   --shadow-sm: 0 6px 16px rgba(15, 23, 42, 0.06);
   --shadow-md: 0 12px 28px rgba(15, 23, 42, 0.10);
 
-  --wrap-max: 1080px;
+  --r-lg: 18px;
+  --r-xl: 22px;
 
-  --card: rgba(255,255,255,0.92);
-  --card-border: rgba(15,23,42,0.10);
-
-  --font-sans: "Plus Jakarta Sans", "Noto Sans JP", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Noto Sans JP", system-ui, -apple-system,
+               BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* =========================
-   ベース
-   ========================= */
-html, body{
+html{
+  height: 100%;
+  overflow-y: scroll;
+  scrollbar-gutter: stable both-edges;
+}
+
+body{
+  min-height: 100%;
   margin: 0;
-  padding: 0;
-  font-family: var(--font-sans);
+  background-color: var(--bg-color);
   color: var(--text-main);
-  background: var(--bg-color);
+  overflow-x: hidden;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.6;
 }
 
-a{
-  color: #2563eb;
-  text-decoration: none;
-}
+a{ color: #2563eb; text-decoration: none; }
 a:hover{ text-decoration: underline; }
 
 img{ max-width: 100%; display: block; }
-
-button, input, select{
-  font-family: var(--font-sans);
-}
+button, input, select{ font-family: inherit; }
 
 /* =========================
-   ラップ（header を幅いっぱいにするため 100%）
+   wrap（添付：中央寄せの縦レイアウト）
    ========================= */
 .wrap{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100%;
   width: 100%;
-  margin: 0;
-  padding: 0 0 64px;
+  padding-bottom: 64px;
 }
 
 /* =========================
-   ヘッダー（幅いっぱい + 中身は stage と同じ左右余白）
+   ヘッダー（添付に合わせる：固定・中央・流体タイトル）
    ========================= */
 header{
-  position: sticky;
-  top: 0;
+  position: fixed;
+  top: 0; left: 0; right: 0;
   z-index: 1000;
   width: 100%;
-
-  /* ★ 中身を stage と同じ左右余白に揃える */
-  padding-left: max(16px, calc((100vw - var(--wrap-max)) / 2));
-  padding-right: max(16px, calc((100vw - var(--wrap-max)) / 2));
-  padding-top: 14px;
-  padding-bottom: 14px;
-
+  padding: 12px 20px 14px;
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--primary-color);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-
-  background: rgba(255,255,255,0.86);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
+  justify-content: center;
+  text-align: center;
+  border-bottom: 1px solid rgba(148,163,184,0.35);
+  box-shadow: 0 10px 25px rgba(15,23,42,0.08);
+  overflow: visible;
 }
 
-/* brand */
+/* サイトタイトル（ページタイトル） */
 .brand-logo-text{
-  margin: 0;
-  padding: 0;
-  font-weight: 800;
-  letter-spacing: .01em;
+  font-family: var(--font-sans);
+  font-weight: 700;
   color: var(--primary-color);
-  font-size: 26px;
-}
-
-/* 言語スイッチ */
-.lang-switch{
+  margin: 0 auto;
+  margin-top: 4px;
+  letter-spacing: -0.02em;
+  z-index: 2;
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
+  pointer-events: auto;
+  max-width: calc(100% - 160px);
+  text-align: center;
+
+  /* 添付：475pxで14px、1280pxで30px */
+  font-size: clamp(
+    14px,
+    calc(14px + (30 - 14) * ((100vw - 475px) / (1280 - 475))),
+    30px
+  );
 }
 
-@media (max-width: 900px){
-  header{
-    padding-left: 12px;
-    padding-right: 12px;
-    padding-top: 12px;
-    padding-bottom: 12px;
-  }
-  .brand-logo-text{
-    font-size: 22px;
-  }
+/* 言語スイッチ（右上） */
+.lang-switch{
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
 }
 
 .lang-switch__toggle{
-  border: 1px solid var(--border);
-  background: #fff;
+  border: 1px solid rgba(148,163,184,0.5);
+  background: rgba(255,255,255,0.9);
+  padding: 8px 14px;
   border-radius: 999px;
-  padding: 8px 12px;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  color: var(--primary-color);
+  font-weight: 600;
+  box-shadow: 0 10px 20px rgba(15,23,42,0.06);
+}
+.lang-switch__toggle::after{
+  content: " ▼";
+  font-size: 0.8em;
+  opacity: 0.75;
 }
 
 .lang-switch__menu{
   position: absolute;
   right: 0;
-  top: calc(100% + 10px);
-  background: #fff;
-  border: 1px solid var(--border);
+  top: 44px;
+  min-width: 140px;
+  background: rgba(255,255,255,0.98);
+  border: 1px solid rgba(148,163,184,0.45);
   border-radius: 14px;
+  box-shadow: 0 18px 30px rgba(15,23,42,0.10);
   padding: 8px;
-  min-width: 180px;
-  box-shadow: var(--shadow-md);
-  z-index: 2000;
 }
 
 .lang-switch__menu button{
   width: 100%;
   text-align: left;
   padding: 10px 10px;
-  border-radius: 10px;
   border: 0;
   background: transparent;
+  border-radius: 10px;
   cursor: pointer;
+  color: var(--primary-color);
 }
 .lang-switch__menu button:hover{
-  background: rgba(15,23,42,0.05);
+  background: rgba(59,130,246,0.10);
 }
 
 /* =========================
-   ステージ（地球表示まわり）
+   ステージ（地球儀より上の見た目を添付に合わせる）
    ========================= */
 .stage{
-  width: min(var(--wrap-max), calc(100vw - 32px));
-  margin: 0 auto;
-  padding-top: 22px;
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  /* 添付：ヘッダー分を空ける（固定ヘッダー前提） */
+  padding: calc(var(--header-offset) + 72px) 16px 40px;
+
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #fcfcff 40%,
+    #ffffff 100%
+  );
+  margin-top: 0;
 }
 
-@media (max-width: 900px){
-  .stage{
-    width: min(var(--wrap-max), calc(100vw - 24px));
-    padding-top: 18px;
-  }
-}
-
-/* ロゴ（★センタリング復元 + 大きくなりすぎ防止） */
+/* ロゴ（添付：小さめ＆絶対配置で中央） */
 .site-logo{
-  width: 220px;
-  max-width: 220px;
-  height: auto;
-  margin: 22px auto 10px; /* ★中央寄せ */
-  opacity: 0.98;
+  pointer-events: none;
+  position: absolute;
+  top: calc(var(--header-offset) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(20vw, 134px);
+  opacity: .95;
+  z-index: 1;
+  filter: drop-shadow(0 4px 6px rgba(15,23,42,0.35));
 }
 
-/* =========================
-   紹介バー（ボタン群：センタリング復元）
-   ========================= */
+/* 説明ボタン（添付：縦→PCで横） */
 .intro-bar{
   display: flex;
-  justify-content: center; /* ★ */
-  gap: 10px;
+  gap: 12px;
+  flex-direction: column;
   align-items: center;
-  padding: 10px 0 16px;
-  border-top: 1px solid rgba(15,23,42,0.08);
-  border-bottom: 1px solid rgba(15,23,42,0.08);
-  margin-bottom: 18px;
-  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 34px;
+  z-index: 2;
 }
 
 .intro-bar__button{
-  border: 1px solid rgba(15,23,42,0.12);
-  background: #fff;
+  border: 1px solid rgba(148,163,184,0.55);
+  background: rgba(255,255,255,0.94);
+  color: var(--text-main);
+  padding: 10px 16px;
   border-radius: 999px;
-  padding: 10px 14px;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 10px 22px rgba(15,23,42,0.08);
+  font-weight: 600;
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+             border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
 }
 .intro-bar__button:hover{
-  background: rgba(15,23,42,0.03);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(15,23,42,0.14);
+  color: var(--accent-color);
+  border-color: var(--accent-color);
+  background: #f9fafb;
+}
+.intro-bar__button:active{
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(15,23,42,0.10);
 }
 
 /* =========================
-   地球iframe（絞り込みボタンを中に重ねる）
+   WebXR iframe（添付：earth-frame-wrap）
    ========================= */
-.earth-frame-wrap,
-.earth-frame{
+.earth-frame-wrap{
   position: relative;
-  border-radius: var(--r-xl);
+  display: block;
+
+  width: 100%;
+  height: 70vh;
+  min-height: 480px;
+  max-width: 1000px;
+
+  margin-top: 28px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  background: #000;
+
+  overscroll-behavior: contain;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid rgba(15,23,42,0.10);
-  box-shadow: var(--shadow-md);
-  height: min(70vh, 560px);
-  min-height: 340px;
 }
 
 #webxr-iframe{
+  display: block;
   width: 100%;
   height: 100%;
-  border: 0;
-  display: block;
+  border: none;
+  margin: 0;
   background: #000;
 }
 
-/* ★ 絞り込みボタンを iframe 左上に重ねる（index.htmlの inline fixed を上書き） */
-.earth-frame-wrap .tag-filter-btn,
-.earth-frame .tag-filter-btn{
-  position: absolute !important;
-  top: 12px !important;
-  left: 12px !important;
-  z-index: 50 !important;
+/* 絞り込みボタン（iframe上左上に重ねる） */
+.earth-frame-wrap .tag-filter-btn{
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 5;
 }
 
-@media (max-width: 900px){
-  .earth-frame-wrap,
-  .earth-frame{
-    height: min(62vh, 520px);
-    min-height: 320px;
+/* =========================
+   PC時の微調整（添付）
+   ========================= */
+@media (min-width: 1024px){
+  .earth-frame-wrap{
+    width: 90%;
+    height: 80vh;
   }
-  .earth-frame-wrap .tag-filter-btn,
-  .earth-frame .tag-filter-btn{
-    left: 12px !important;
-    top: 12px !important;
-    padding: 9px 12px !important;
+  .intro-bar{
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    padding-left: 0;
+  }
+  .intro-bar__button{
+    width: auto;
+    max-width: 420px;
+    white-space: nowrap;
+  }
+
+  .brand-logo-text{
+    margin: 0;
+    margin-top: 4px;
+    margin-left: 30px;
+    margin-right: auto;
+    text-align: left;
+    max-width: calc(100% - 200px);
+  }
+
+  .stage{
+    padding: calc(var(--header-offset) + 80px) 32px 56px;
+  }
+}
+
+@media (max-width: 1023px){
+  .stage{
+    align-items: flex-start;
+    padding: calc(var(--header-offset) + 72px) 16px 40px;
   }
 }
 
 /* =========================
-   ボタン
+   共通ボタン（下部UI用）
    ========================= */
 .btn{
   display: inline-flex;
@@ -271,12 +332,9 @@ header{
   cursor: pointer;
   box-shadow: var(--shadow-sm);
 }
-
 .btn:hover{ background: rgba(15,23,42,0.03); }
 
-.btn.ghost{
-  background: rgba(255,255,255,0.9);
-}
+.btn.ghost{ background: rgba(255,255,255,0.9); }
 
 .btn.danger{
   border-color: rgba(220,38,38,0.30);
@@ -290,7 +348,7 @@ header{
 }
 
 /* =========================
-   モーダル
+   モーダル（既存用）
    ========================= */
 .backdrop{
   position: fixed;
@@ -302,7 +360,6 @@ header{
   padding: 16px;
   z-index: 9000;
 }
-
 .backdrop.open{ display: flex; }
 
 .modal{
@@ -334,15 +391,13 @@ header{
   border-radius: 12px;
   border: 1px solid rgba(15,23,42,0.14);
   background: #fff;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
-.modal .body{
-  padding: 14px 14px 16px;
-}
+.modal .body{ padding: 14px 14px 16px; }
 
 .modal .actions{
   padding: 12px 14px 16px;
@@ -352,16 +407,13 @@ header{
   border-top: 1px solid rgba(15,23,42,0.08);
 }
 
-/* =========================
-   タイポ
-   ========================= */
+/* タイポ */
 .heading-large{
   margin: 0 0 10px;
   font-weight: 800;
   font-size: 20px;
   color: var(--primary-color);
 }
-
 .heading-strong{
   margin: 12px 0 6px;
   font-weight: 800;
@@ -376,7 +428,6 @@ header{
   grid-template-columns: 1fr 1fr;
   gap: 14px;
 }
-
 @media (max-width: 900px){
   .form{ grid-template-columns: 1fr; }
 }
@@ -426,7 +477,7 @@ header{
 }
 
 /* ======================
-   Meetup Rooms (待合室)
+   Meetup Rooms（待合室：前に戻した見た目）
    ====================== */
 .meetups{
   margin: 30px auto 0;
@@ -464,7 +515,7 @@ header{
 
 .grid{
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)); /* ★ 1/3 */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -503,7 +554,7 @@ header{
   margin-top: 12px;
 }
 
-/* ★ 入室するボタン：青背景・白文字 */
+/* 入室するボタン：青背景・白文字 */
 .card .btn{
   width: 100%;
   justify-content: center;
@@ -516,6 +567,7 @@ header{
   border-color: #2563eb;
 }
 
+/* 待合室エリア：スマホ */
 @media (max-width: 900px){
   .meetups{
     width: min(var(--wrap-max), calc(100vw - 24px));
