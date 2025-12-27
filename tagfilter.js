@@ -20,6 +20,9 @@
   const applyBtn = document.getElementById('tagFilterApply');
   const clearBtn = document.getElementById('tagFilterClear');
 
+  const searchInput = document.getElementById('tagFilterSearch');
+  const crumbsRoot = document.getElementById('tagFilterCrumbs');
+
   const columnsRoot = document.getElementById('tagFilterColumns');
   const iframe = document.getElementById('webxr-iframe');
 
@@ -37,6 +40,9 @@
 
   // UI state: current drill path (array of ids)
   let path = [];
+
+  // UI state: search query
+  let searchQuery = '';
 
   function setBadgeCount(n){
     badge.textContent = `(${n})`;
@@ -234,6 +240,49 @@
     return 'indeterminate';
   }
 
+  function norm(s){
+    return (s || '').toString().trim().toLowerCase();
+  }
+
+  function matchQuery(nodeId){
+    if (!searchQuery) return true;
+    const t = norm(label.get(nodeId) || nodeId);
+    return t.includes(searchQuery);
+  }
+
+  function renderCrumbs(){
+    if (!crumbsRoot) return;
+
+    crumbsRoot.innerHTML = '';
+    if (!path || path.length === 0){
+      const span = document.createElement('div');
+      span.style.opacity = '0.7';
+      span.textContent = '左の列から選んでください';
+      crumbsRoot.appendChild(span);
+      return;
+    }
+
+    const ids = path.slice();
+    for (let i=0;i<ids.length;i++){
+      const id = ids[i];
+      const c = document.createElement('div');
+      c.className = 'crumb';
+      c.textContent = label.get(id) || id;
+      c.addEventListener('click', ()=>{
+        path = ids.slice(0, i+1);
+        renderColumns();
+      });
+      crumbsRoot.appendChild(c);
+
+      if (i < ids.length - 1){
+        const sep = document.createElement('div');
+        sep.className = 'sep';
+        sep.textContent = '›';
+        crumbsRoot.appendChild(sep);
+      }
+    }
+  }
+
   function setChecked(nodeId, on){
     const ids = collectDescTags(nodeId);
     if (on) ids.forEach(id => selected.add(id));
@@ -246,6 +295,7 @@
 
     const row = document.createElement('div');
     row.className = 'node';
+    if (path && path.includes(nodeId)) row.classList.add('active');
     row.dataset.id = nodeId;
 
     const cb = document.createElement('input');
@@ -296,6 +346,7 @@
       msg.style.opacity = '0.8';
       msg.textContent = 'tree の読み込みに失敗しました。Google Sheets の公開設定（CSV）または tree.csv の配置を確認してください。';
       columnsRoot.appendChild(msg);
+      renderCrumbs();
       setBadgeCount(selected.size);
       return;
     }
@@ -307,6 +358,7 @@
     h0.textContent = 'カテゴリ';
     col0.appendChild(h0);
     for (const id of roots){
+      if (!matchQuery(id)) continue;
       col0.appendChild(nodeRow(id));
     }
     columnsRoot.appendChild(col0);
@@ -324,11 +376,13 @@
       col.appendChild(h);
 
       for (const cid of kids){
+        if (!matchQuery(cid)) continue;
         col.appendChild(nodeRow(cid));
       }
       columnsRoot.appendChild(col);
     }
 
+    renderCrumbs();
     setBadgeCount(selected.size);
   }
 
@@ -337,7 +391,7 @@
     backdrop.classList.add('open');
     document.body.style.overflow = 'hidden';
     renderColumns();
-    setTimeout(()=>{ applyBtn.focus(); }, 30);
+    setTimeout(()=>{ if (searchInput) searchInput.focus(); else applyBtn.focus(); }, 30);
   }
 
   function closeModal(){
@@ -375,6 +429,19 @@
     saveSelection();
     renderColumns();
     postSelected();
+  });
+
+  if (searchInput){
+    searchInput.addEventListener('input', ()=>{
+      searchQuery = norm(searchInput.value);
+      renderColumns();
+    });
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape' && backdrop.classList.contains('open')){
+      closeModal();
+    }
   });
 
   async function init(){

@@ -95,7 +95,7 @@
 
     /* make backdrop/modal appear above iframe reliably */
     #tagFilterBackdrop{ z-index: 10000; }
-  
+
 
 /* ===== Tag Filter Modal (multi-column) ===== */
 .backdrop{
@@ -270,6 +270,63 @@
   gap: 12px;
 }
 
+/* ===== Tag Filter UI improvements ===== */
+.tag-filter-search{
+  flex: 0 0 260px;
+  max-width: 320px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.16);
+  font: inherit;
+  font-size: 13px;
+  background: rgba(255,255,255,0.95);
+}
+.tag-filter-search:focus{
+  outline: none;
+  border-color: rgba(50,112,166,0.65);
+  box-shadow: 0 0 0 3px rgba(50,112,166,0.18);
+}
+
+.tag-filter-crumbs{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap: 6px;
+  padding: 8px 14px 0;
+  font-size: 12px;
+  opacity: 0.92;
+}
+.tag-filter-crumbs .crumb{
+  display:inline-flex;
+  align-items:center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.10);
+  background: rgba(255,255,255,0.75);
+  cursor: pointer;
+  user-select: none;
+}
+.tag-filter-crumbs .crumb:hover{ background: rgba(0,0,0,0.06); }
+.tag-filter-crumbs .sep{ opacity: 0.55; }
+
+.node{
+  align-items: center;
+}
+.node.active{
+  background: rgba(50,112,166,0.12);
+}
+.node input[type="checkbox"]{
+  width: 18px;
+  height: 18px;
+  accent-color: #3270A6;
+}
+.node .label{
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
 </style>
 
 </head>
@@ -306,11 +363,14 @@
         <div class="body" id="tagFilterBody">
           <div class="tag-filter-toolbar">
             <button type="button" class="btn" id="tagFilterClear">全て解除</button>
+            <input type="text" id="tagFilterSearch" class="tag-filter-search" placeholder="検索（部分一致）" aria-label="タグ検索">
             <div class="tag-filter-spacer"></div>
             <button type="button" class="btn primary" id="tagFilterApply">適用</button>
           </div>
 
-          <div id="tagFilterColumns" class="tag-filter-columns" aria-label="Tag tree"></div>
+           <div id="tagFilterCrumbs" class="tag-filter-crumbs" aria-label="選択中の階層"></div>
+
+           <div id="tagFilterColumns" class="tag-filter-columns" aria-label="Tag tree"></div>
         </div>
       </div>
     </div>
@@ -569,37 +629,15 @@
       </div>
       <div class="actions">
         <div class="left">
-          <button class="btn danger" id="delete" style="display:none">Delete this room</button>
+          <button class="btn danger" id="delete" style="display:none">Delete</button>
         </div>
-        <button class="btn ghost" id="duplicate" style="display:none">Duplicate this room</button>
-        <button class="btn ghost" id="close2">Close</button>
-        <button class="btn" id="submit">Create</button>
-      </div>
-      <div class="status" id="statusMsg">Room created</div>
-    </div>
-  </div>
-
-  <!-- Custom alert (destination URL info) -->
-  <div class="backdrop" id="alertBackdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
-      <header>
-        <div id="alertTitle">About the URL</div>
-        <div class="close" id="alertClose" aria-label="Close">×</div>
-      </header>
-      <div class="body" id="alertBody">
-        Please enter a Dokodemo Doors tour or world URL.
-      </div>
-      <div class="actions">
-        <button class="btn" id="alertOk">OK</button>
+        <button class="btn" id="cancel">Cancel</button>
+        <button class="btn primary" id="save">Save</button>
       </div>
     </div>
   </div>
 
-  <!-- ここから下は JS 読み込み -->
-  <script src="./main.js"></script>
-  <script src="./recommend.js"></script>
-
-  <footer></footer>
   <script src="./tagfilter.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
