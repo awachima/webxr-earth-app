@@ -827,3 +827,30 @@ header *{
 .meetups .grid .card a.btn[data-enter]{
   max-width: 100%;
 }
+
+/* 編集ボタン：言語に依存せず常にカード右上へ */
+.meetups .grid .card .tools{
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+}
+
+/* tools内の編集ボタン（a/button/div等、実体が何でも同じ見た目に） */
+.meetups .grid .card .tools > *{
+  width: 40px;
+  height: 40px;
+  padding: 0;
+
+  border-radius: 12px;
+  background: rgba(255,255,255,0.98);
+  color: #334155;
+  border: 1px solid rgba(15,23,42,0.14);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  box-shadow: 0 10px 20px rgba(15,23,42,0.08);
+  cursor: pointer;
+}
