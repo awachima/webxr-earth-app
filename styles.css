@@ -806,3 +806,10 @@ header *{
     font-size: 28px;
   }
 }
+
+.card .row > a,
+.card .row > button {
+  background: #0B3559;
+  color: #fff;
+  width: 100%;
+}
