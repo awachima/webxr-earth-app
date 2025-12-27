@@ -9,6 +9,72 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
 
+  <!-- ===== 言語の永続化を「複数キー」に同期（他のJSに上書きされにくくする） ===== -->
+  <script>
+    (function(){
+      const LANG_KEYS = [
+        "dd_lang",
+        "lang",
+        "language",
+        "ddLang",
+        "ddLanguage",
+        "selectedLang",
+        "selectedLanguage",
+        "i18n_lang",
+        "i18nextLng"
+      ];
+
+      function safeGet(k){
+        try { return localStorage.getItem(k); } catch(_) { return null; }
+      }
+      function safeSet(k,v){
+        try { localStorage.setItem(k, v); } catch(_) {}
+      }
+      function normalizeLang(v){
+        if(!v) return null;
+        const s = String(v).trim();
+        if(!s) return null;
+        // 想定外の値が入っても壊れないよう軽く正規化
+        const low = s.toLowerCase();
+        // このプロジェクトで使っている候補に合わせる
+        const allow = ["ja","en","zh","fa","hi","he"];
+        if(allow.includes(low)) return low;
+        // 例: en-US -> en / zh-CN -> zh
+        const base = low.split("-")[0];
+        if(allow.includes(base)) return base;
+        return low; // それ以外はそのまま
+      }
+
+      // 既に保存されている言語を優先して拾う（どのキーでもOK）
+      let picked = null;
+      for(const k of LANG_KEYS){
+        const v = normalizeLang(safeGet(k));
+        if(v){ picked = v; break; }
+      }
+
+      // 何もなければ HTML の lang / ブラウザ言語から決める
+      if(!picked){
+        const htmlLang = normalizeLang(document.documentElement.getAttribute("lang"));
+        if(htmlLang) picked = htmlLang;
+      }
+      if(!picked){
+        const nav = normalizeLang(navigator.language || navigator.userLanguage);
+        picked = nav || "ja";
+      }
+
+      // ★ ここが重要：起動直後に全部のキーを同じ言語で揃える（後続JSが参照するキーを問わない）
+      for(const k of LANG_KEYS){
+        safeSet(k, picked);
+      }
+
+      // HTML属性も同期
+      document.documentElement.setAttribute("lang", picked);
+
+      // 参照用にグローバルにも置く（必要なら他JSが使える）
+      window.__DD_LANG = picked;
+    })();
+  </script>
+
   <style>
     /* ===== Tag filter UI (multi-column) ===== */
     .tag-filter-btn{
@@ -582,12 +648,26 @@
   <!-- 絞り込み（tagfilter） -->
   <script src="./tagfilter.js"></script>
 
-  <!-- 言語メニュー（復活） -->
+  <!-- 言語メニュー（クリックが潰されても確実に動作 / 複数キー同期） -->
   <script>
     (function(){
       const toggle = document.getElementById('langToggle');
       const menu = document.getElementById('langMenu');
       if(!toggle || !menu) return;
+
+      const LANG_KEYS = [
+        "dd_lang",
+        "lang",
+        "language",
+        "ddLang",
+        "ddLanguage",
+        "selectedLang",
+        "selectedLanguage",
+        "i18n_lang",
+        "i18nextLng"
+      ];
+
+      const safeSet = (k,v)=>{ try{ localStorage.setItem(k,v); }catch(_){ } };
 
       // ARIA
       toggle.setAttribute('aria-haspopup','menu');
@@ -624,20 +704,29 @@
         e.stopPropagation();
       }, { capture:true });
 
-      // 外側クリックで閉じる（pointerdown の capture で先に閉じる判定）
+      // 外側クリックで閉じる
       document.addEventListener('pointerdown', (e)=>{
         if(!menu.contains(e.target) && !toggle.contains(e.target)){
           closeMenu();
         }
       }, { capture:true });
 
-      // 言語選択
+      // 言語選択（★複数キーに同時保存して、他のJSに「ja上書き」されにくくする）
       menu.querySelectorAll('button[data-lang]').forEach((btn)=>{
         btn.addEventListener('click', (e)=>{
           e.preventDefault();
           e.stopPropagation();
-          const lang = btn.getAttribute('data-lang');
-          try{ localStorage.setItem('dd_lang', lang); }catch(_){}
+          const lang = (btn.getAttribute('data-lang') || 'ja').toLowerCase();
+
+          // すべてのキーを統一
+          for(const k of LANG_KEYS){
+            safeSet(k, lang);
+          }
+          // HTML属性も同期
+          document.documentElement.setAttribute('lang', lang);
+          // 参照用
+          window.__DD_LANG = lang;
+
           closeMenu();
           location.reload();
         }, { capture:true });
@@ -667,18 +756,13 @@
       iframe.addEventListener('mouseenter', onEnter);
       iframe.addEventListener('mouseleave', onLeave);
 
-      // wheel / touchmove をブロック（passive:false が重要）
       const blockIfHover = (e)=>{
         if(!hovering) return;
-        // iframe領域でのスクロールを抑止（地球側の拡大縮小が目的）
         e.preventDefault();
       };
 
-      // iframe 自体にも付ける（ブラウザによってはこっちが効く）
       iframe.addEventListener('wheel', blockIfHover, { passive:false });
       iframe.addEventListener('touchmove', blockIfHover, { passive:false });
-
-      // 念のため window 側でも捕まえる（ホイールが親に回る系の対策）
       window.addEventListener('wheel', blockIfHover, { passive:false });
       window.addEventListener('touchmove', blockIfHover, { passive:false });
     })();
