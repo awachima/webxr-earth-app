@@ -589,24 +589,63 @@
       const menu = document.getElementById('langMenu');
       if(!toggle || !menu) return;
 
-      toggle.addEventListener('click', ()=>{
-        if(menu.hasAttribute('hidden')) menu.removeAttribute('hidden');
-        else menu.setAttribute('hidden','');
-      });
+      // ARIA
+      toggle.setAttribute('aria-haspopup','menu');
+      toggle.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
 
-      document.addEventListener('click', (e)=>{
+      const isOpen = ()=> !menu.hidden;
+
+      const openMenu = ()=>{
+        menu.hidden = false;
+        toggle.setAttribute('aria-expanded','true');
+      };
+
+      const closeMenu = ()=>{
+        menu.hidden = true;
+        toggle.setAttribute('aria-expanded','false');
+      };
+
+      // クリックが他のスクリプトに潰されても確実に動くよう、capture で拾う
+      toggle.addEventListener('pointerdown', (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        if(isOpen()) closeMenu();
+        else openMenu();
+      }, { capture:true });
+
+      // click は他のハンドラに影響されることがあるので抑止だけしておく
+      toggle.addEventListener('click', (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+      }, { capture:true });
+
+      // メニュー内の操作は外側の「閉じる」判定に引っかからないようにする
+      menu.addEventListener('pointerdown', (e)=>{
+        e.stopPropagation();
+      }, { capture:true });
+
+      // 外側クリックで閉じる（pointerdown の capture で先に閉じる判定）
+      document.addEventListener('pointerdown', (e)=>{
         if(!menu.contains(e.target) && !toggle.contains(e.target)){
-          menu.setAttribute('hidden','');
+          closeMenu();
         }
-      });
+      }, { capture:true });
 
-      menu.querySelectorAll('button[data-lang]').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
+      // 言語選択
+      menu.querySelectorAll('button[data-lang]').forEach((btn)=>{
+        btn.addEventListener('click', (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
           const lang = btn.getAttribute('data-lang');
           try{ localStorage.setItem('dd_lang', lang); }catch(_){}
-          menu.setAttribute('hidden','');
+          closeMenu();
           location.reload();
-        });
+        }, { capture:true });
+      });
+
+      // Esc で閉じる
+      document.addEventListener('keydown', (e)=>{
+        if(e.key === 'Escape') closeMenu();
       });
     })();
   </script>
