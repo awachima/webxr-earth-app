@@ -4,6 +4,13 @@
   // ----------------------------
   const STORAGE_KEY = 'dd_selected_tags_v1';
 
+  // 自動適用（リロード時に earth 側へ再送）
+  let hadSavedSelection = false;
+  let treeReady = false;
+  let autoApplied = false;
+  let earthReady = false;
+  let autoApplyTimer = null;
+
   // ★ Google Sheets「ウェブに公開」(CSV) を読む
   // 重要: pubhtml ではなく output=csv を使う
   const TREE_URL_PRIMARY =
@@ -20,28 +27,29 @@
   const applyBtn = document.getElementById('tagFilterApply');
   const clearBtn = document.getElementById('tagFilterClear');
 
-  const crumbsRoot = document.getElementById('tagFilterCrumbs');
-
-  const columnsRoot = document.getElementById('tagFilterColumns');
+  const colWrap = document.getElementById('tagFilterColumns');
   const iframe = document.getElementById('webxr-iframe');
 
-  if (!btn || !badge || !backdrop || !applyBtn || !clearBtn || !columnsRoot || !iframe) {
-    console.warn('[tag-filter] required elements not found');
+  if (!btn || !badge || !backdrop || !closeBtn || !applyBtn || !clearBtn || !colWrap || !iframe){
+    console.warn('[tag-filter] required elements not found.');
     return;
   }
 
-  let nodesById = new Map();
-  let selected = new Set();
-  let roots = [];
-  let children = new Map(); // id -> child ids
-  let label = new Map();    // id -> label
-  let parent = new Map();   // id -> parent id
+  // nodes
+  const nodesById = new Map(); // id -> node
+  const label = new Map();     // id -> label
+  let root = null;
 
-  // UI state: current drill path (array of ids)
+  // selection: Set(nodeId)
+  let selected = new Set();
+  // expanded path: [col0SelectedId, col1SelectedId, ...]
   let path = [];
 
-  function setBadgeCount(n){
-    badge.textContent = `(${n})`;
+  // ----------------------------
+  //  Helpers
+  // ----------------------------
+  function setBadge(){
+    badge.textContent = `(${selected.size})`;
   }
 
   function saveSelection(){
@@ -53,7 +61,8 @@
   function loadSelection(){
     try{
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
+      if (!raw) { hadSavedSelection = false; return; }
+      hadSavedSelection = true;
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)){
         selected = new Set(arr.filter(x => typeof x === 'string' && x.trim()));
@@ -62,60 +71,82 @@
   }
 
   function parseCSV(text){
-    const lines = (text || '').replace(/\r/g,'').split('\n').filter(l => l.trim() !== '');
+    const lines = (text || '').replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
     const rows = [];
-
     for (const line of lines){
-      const out = [];
+      if (!line.trim()) continue;
+      const cells = [];
       let cur = '';
       let inQ = false;
-
       for (let i=0;i<line.length;i++){
         const ch = line[i];
-        if (ch === '"'){
-          if (inQ && line[i+1] === '"'){ cur += '"'; i++; continue; }
-          inQ = !inQ;
-          continue;
-        }
-        if (ch === ',' && !inQ){
-          out.push(cur);
-          cur = '';
-        } else {
-          cur += ch;
+        if (inQ){
+          if (ch === '"'){
+            if (line[i+1] === '"'){ cur += '"'; i++; }
+            else inQ = false;
+          }else cur += ch;
+        }else{
+          if (ch === '"') inQ = true;
+          else if (ch === ','){ cells.push(cur); cur=''; }
+          else cur += ch;
         }
       }
-      out.push(cur);
-      rows.push(out.map(s => (s || '').trim()));
+      cells.push(cur);
+      rows.push(cells.map(s => (s||'').trim()));
     }
     return rows;
   }
 
-  function makeNode(id, label, parentId){
-    return { id, label, parentId, children: new Map() };
+  function makeNode(id, lab, parentId){
+    const n = {
+      id,
+      label: lab,
+      parentId,
+      children: new Map(), // label -> node
+      depth: 0
+    };
+    label.set(id, lab);
+    return n;
   }
 
-  // ★ 重要：Google Sheets のCSVは「結合セル」があると空欄で出力されることがある
-  // → それを「上の値を引き継ぐ（fill-down）」してからツリーを作る
-  function buildTreeFromRows(rows){
-    if (!rows || rows.length === 0) return makeNode('__root__','(root)', null);
+  function buildTreeFromCSV(csvText){
+    nodesById.clear();
+    label.clear();
+    root = null;
 
-    const header = rows[0].map(s=>s.trim());
+    const rows = parseCSV(csvText);
+    if (!rows.length) throw new Error('CSV empty');
+
+    // find header
+    const header = rows[0].map(s => s.trim());
+    const headerLower = header.map(s => s.toLowerCase());
+
+    // Determine which columns to treat as levels.
+    // We accept:
+    //  - "level1, level2, level3, level4" etc.
+    //  - Japanese: "1階層目", "2階層目" ...
+    //  - Or if unknown: use first 4~6 cols (excluding empty header)
     const levelIdx = [];
-    for (let i=0;i<header.length;i++){
-      const h = header[i];
-      if (/^level/i.test(h)) levelIdx.push(i);
+    for (let i=0;i<headerLower.length;i++){
+      const h = headerLower[i];
+      if (/^level\s*\d+$/.test(h)) levelIdx.push(i);
+      if (/^\d+\s*階層目$/.test(header[i])) levelIdx.push(i);
+      if (h.includes('level1') || h.includes('level 1')) levelIdx.push(i);
     }
 
-    const startRow = levelIdx.length ? 1 : 0;
+    // If we didn't find explicit columns, use first 6 columns as fallback
     const levels = levelIdx.length ? levelIdx : [0,1,2,3,4,5];
 
-    const root = makeNode('__root__', '(root)', null);
+    const rootNode = makeNode('__root__', '(root)', null);
+    nodesById.set(rootNode.id, rootNode);
+    root = rootNode;
 
     function getChild(p, lab){
       const key = lab;
       if (!p.children.has(key)){
         const id = p.id === '__root__' ? key : `${p.id} / ${key}`;
         const node = makeNode(id, key, p.id);
+        node.depth = (p.depth||0)+1;
         p.children.set(key, node);
         nodesById.set(node.id, node);
       }
@@ -125,259 +156,193 @@
     // fill-down state（階層ごとの現在値）
     const curLevels = [];
 
-    for (let r=startRow;r<rows.length;r++){
+    // skip header row
+    for (let r=1;r<rows.length;r++){
       const row = rows[r];
-
-      // この行で「何か値がある」かをチェック（全空行スキップ）
-      let hasAny = false;
-      for (const idx of levels){
-        if (idx < row.length && (row[idx] || '').trim() !== ''){
-          hasAny = true;
-          break;
-        }
-      }
-      if (!hasAny) continue;
-
-      // 1) fill-down 更新
-      //  - 値が入っている階層があれば、その階層を更新し
-      //  - それより下位階層はリセット（空扱い）にする
-      //  - 値が空の階層は「前の値を維持」
+      // normalize levels with fill-down:
+      // if a cell is empty, inherit from above
       for (let li=0; li<levels.length; li++){
-        const idx = levels[li];
-        const v = (idx < row.length ? (row[idx] || '').trim() : '');
-
-        if (v){
-          curLevels[li] = v;
-          // 下位階層をリセット
-          for (let j=li+1; j<levels.length; j++){
-            curLevels[j] = '';
-          }
-        } else {
-          // 空欄は維持（Sheets結合セル対策）
-          if (typeof curLevels[li] !== 'string') curLevels[li] = '';
-        }
+        const ci = levels[li];
+        const v = (row[ci] || '').trim();
+        if (v) curLevels[li] = v;
+        else row[ci] = curLevels[li] || '';
       }
 
-      // 2) 現在の階層パスを作る（空になるまで）
-      const pathLabels = [];
+      // Create path from non-empty levels
+      const parts = [];
       for (let li=0; li<levels.length; li++){
-        const v = (curLevels[li] || '').trim();
+        const ci = levels[li];
+        const v = (row[ci] || '').trim();
         if (!v) break;
-        pathLabels.push(v);
+        parts.push(v);
       }
-      if (pathLabels.length === 0) continue;
+      if (!parts.length) continue;
 
-      // 3) ツリーに追加
-      let p = root;
-      for (const lab of pathLabels){
+      // add nodes
+      let p = rootNode;
+      for (const lab of parts){
         p = getChild(p, lab);
       }
     }
-
-    return root;
+    return rootNode;
   }
 
-  function indexTree(root){
-    roots = [];
-    children = new Map();
-    label = new Map();
-    parent = new Map();
-
-    function ensureKids(id){
-      if (!children.has(id)) children.set(id, []);
+  function isDescendant(nodeId, ancestorId){
+    if (!nodeId || !ancestorId) return false;
+    if (nodeId === ancestorId) return true;
+    let cur = nodesById.get(nodeId);
+    while(cur && cur.parentId){
+      if (cur.parentId === ancestorId) return true;
+      cur = nodesById.get(cur.parentId);
     }
-
-    function walk(node, parentId){
-      if (node.id !== '__root__'){
-        label.set(node.id, node.label);
-        parent.set(node.id, parentId);
-        ensureKids(node.id);
-      }
-
-      const kids = Array.from(node.children.values());
-      kids.sort((a,b)=> (a.label||'').localeCompare(b.label||'', 'ja'));
-
-      for (const k of kids){
-        if (node.id === '__root__'){
-          roots.push(k.id);
-        } else {
-          ensureKids(node.id);
-          children.get(node.id).push(k.id);
-        }
-        walk(k, node.id === '__root__' ? null : node.id);
-      }
-    }
-    walk(root, null);
+    return false;
   }
 
-  function collectDescTags(nodeId){
+  function collectDescendants(ancestorId){
     const out = [];
-    if (nodeId && nodeId !== '__root__') out.push(nodeId);
-    const stack = [nodeId];
+    const start = nodesById.get(ancestorId);
+    if (!start) return out;
+    const stack = [start];
     while(stack.length){
-      const cur = stack.pop();
-      const kids = children.get(cur) || [];
-      for (const k of kids){
-        out.push(k);
-        stack.push(k);
+      const n = stack.pop();
+      out.push(n.id);
+      for (const ch of n.children.values()){
+        stack.push(ch);
       }
     }
     return out;
   }
 
-  function getState(nodeId){
-    const ids = collectDescTags(nodeId);
-    let hit = 0;
-    for (const id of ids){
-      if (selected.has(id)) hit++;
+  function hasPartialSelection(ancestorId){
+    const all = collectDescendants(ancestorId);
+    if (!all.length) return false;
+    let any = false;
+    let allOn = true;
+    for (const id of all){
+      const on = selected.has(id);
+      if (on) any = true;
+      else allOn = false;
     }
-    if (hit === 0) return 'unchecked';
-    if (hit === ids.length) return 'checked';
-    return 'indeterminate';
+    return any && !allOn;
   }
 
-  function renderCrumbs(){
-    if (!crumbsRoot) return;
-
-    crumbsRoot.innerHTML = '';
-    if (!path || path.length === 0){
-      const span = document.createElement('div');
-      span.style.opacity = '0.7';
-      span.textContent = '左の列から選んでください';
-      crumbsRoot.appendChild(span);
-      return;
-    }
-
-    const ids = path.slice();
-    for (let i=0;i<ids.length;i++){
-      const id = ids[i];
-      const c = document.createElement('div');
-      c.className = 'crumb';
-      c.textContent = label.get(id) || id;
-      c.addEventListener('click', ()=>{
-        path = ids.slice(0, i+1);
-        renderColumns();
-      });
-      crumbsRoot.appendChild(c);
-
-      if (i < ids.length - 1){
-        const sep = document.createElement('div');
-        sep.className = 'sep';
-        sep.textContent = '›';
-        crumbsRoot.appendChild(sep);
-      }
+  function setNodeAndDescendants(ancestorId, on){
+    const all = collectDescendants(ancestorId);
+    for (const id of all){
+      if (on) selected.add(id);
+      else selected.delete(id);
     }
   }
 
-  function setChecked(nodeId, on){
-    const ids = collectDescTags(nodeId);
-    if (on) ids.forEach(id => selected.add(id));
-    else ids.forEach(id => selected.delete(id));
+  // ----------------------------
+  //  UI Rendering (Columns)
+  // ----------------------------
+  function clearColumns(){
+    colWrap.innerHTML = '';
   }
 
-  function nodeRow(nodeId){
-    const kids = children.get(nodeId) || [];
-    const state = getState(nodeId);
+  function makeCol(titleText){
+    const col = document.createElement('div');
+    col.className = 'tag-filter-col';
+    const h = document.createElement('div');
+    h.className = 'tag-filter-col-title';
+    h.textContent = titleText || '';
+    col.appendChild(h);
+    return col;
+  }
 
+  function makeItem(node, isActive){
     const row = document.createElement('div');
-    row.className = 'node';
-    if (path && path.includes(nodeId)) row.classList.add('active');
-    row.dataset.id = nodeId;
+    row.className = 'tag-item' + (isActive ? ' active' : '');
 
     const cb = document.createElement('input');
     cb.type = 'checkbox';
-    cb.checked = (state === 'checked');
-    cb.indeterminate = (state === 'indeterminate');
+    cb.checked = selected.has(node.id);
+    cb.indeterminate = hasPartialSelection(node.id);
 
-    const lbl = document.createElement('div');
-    lbl.className = 'label';
-    lbl.textContent = label.get(nodeId) || nodeId;
+    const lab = document.createElement('label');
+    lab.textContent = node.label;
 
-    const chev = document.createElement('div');
-    chev.className = 'chev';
-    chev.textContent = kids.length ? '›' : '';
-
-    cb.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      const wantOn = !(state === 'checked');
-      setChecked(nodeId, wantOn);
-      saveSelection();
-      renderColumns();
-    });
-
-    row.addEventListener('click', ()=>{
-      const newPath = [];
-      let cur = nodeId;
-      while(cur){
-        newPath.push(cur);
-        cur = parent.get(cur) || null;
-      }
-      path = newPath.reverse();
-      renderColumns();
-    });
+    const chev = document.createElement('span');
+    chev.textContent = node.children.size ? '›' : '';
+    chev.style.opacity = '0.55';
+    chev.style.marginLeft = 'auto';
 
     row.appendChild(cb);
-    row.appendChild(lbl);
+    row.appendChild(lab);
     row.appendChild(chev);
+
+    // checkbox click: toggle with descendants
+    cb.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const on = cb.checked;
+      setNodeAndDescendants(node.id, on);
+      saveSelection();
+      setBadge();
+      renderColumns(); // reflect indeterminate changes
+    });
+
+    // row click: open next column (path)
+    row.addEventListener('click', ()=>{
+      // update path at current depth
+      const depth = node.depth - 1; // root children depth 1 => depth idx 0
+      path = path.slice(0, depth);
+      path[depth] = node.id;
+      renderColumns();
+    });
+
     return row;
   }
 
-  function renderColumns(){
-    columnsRoot.innerHTML = '';
-
-    if (!roots || roots.length === 0){
-      const msg = document.createElement('div');
-      msg.style.padding = '14px';
-      msg.style.fontSize = '13px';
-      msg.style.opacity = '0.8';
-      msg.textContent = 'tree の読み込みに失敗しました。Google Sheets の公開設定（CSV）または tree.csv の配置を確認してください。';
-      columnsRoot.appendChild(msg);
-      renderCrumbs();
-      setBadgeCount(selected.size);
-      return;
-    }
-
-    // 1列目（カテゴリ）
-    const col0 = document.createElement('div');
-    col0.className = 'tag-filter-col';
-    const h0 = document.createElement('div');
-    h0.className = 'tag-filter-col-title';
-    h0.textContent = 'カテゴリ';
-    col0.appendChild(h0);
-    for (const id of roots){
-      col0.appendChild(nodeRow(id));
-    }
-    columnsRoot.appendChild(col0);
-
-    // 右側に「選択中ノードの子」を列として増やす（左詰めで並ぶ）
-    for (let depth=0; depth<path.length; depth++){
-      const id = path[depth];
-      const kids = children.get(id) || [];
-      if (!kids.length) break;
-
-      const col = document.createElement('div');
-      col.className = 'tag-filter-col';
-      const h = document.createElement('div');
-      h.className = 'tag-filter-col-title';
-      h.textContent = label.get(id) || id;
-      col.appendChild(h);
-
-      for (const cid of kids){
-        col.appendChild(nodeRow(cid));
-      }
-      columnsRoot.appendChild(col);
-    }
-
-    renderCrumbs();
-    setBadgeCount(selected.size);
+  function getChildrenSorted(node){
+    const arr = Array.from(node.children.values());
+    arr.sort((a,b)=>a.label.localeCompare(b.label,'ja'));
+    return arr;
   }
 
+  function renderColumns(){
+    if (!root) return;
+
+    clearColumns();
+    setBadge();
+
+    // column 0: root children
+    let curNode = root;
+    let colIdx = 0;
+
+    while(curNode){
+      const title = (colIdx===0) ? 'カテゴリ' : (label.get(path[colIdx-1]) || '');
+      const col = makeCol(title);
+
+      const kids = getChildrenSorted(curNode);
+      for (const k of kids){
+        const active = path[colIdx] === k.id;
+        col.appendChild(makeItem(k, active));
+      }
+
+      colWrap.appendChild(col);
+
+      // next
+      const nextId = path[colIdx];
+      const nextNode = nextId ? nodesById.get(nextId) : null;
+      if (nextNode && nextNode.children.size){
+        curNode = nextNode;
+        colIdx++;
+        continue;
+      }
+      break;
+    }
+  }
+
+  // ----------------------------
+  //  Modal open/close
+  // ----------------------------
   function openModal(){
     backdrop.setAttribute('aria-hidden','false');
     backdrop.classList.add('open');
     document.body.style.overflow = 'hidden';
+    // selection already rendered
     renderColumns();
-    setTimeout(()=>{ applyBtn.focus(); }, 30);
   }
 
   function closeModal(){
@@ -400,9 +365,56 @@
     }
   }
 
+  function scheduleAutoApply(){
+    if (!hadSavedSelection) return;
+    if (autoApplied) return;
+    if (!treeReady) return;
+
+    // earth がリロード直後で listener 未準備でも拾えるように数回リトライ
+    let tries = 0;
+    const maxTries = 8;
+
+    const tick = ()=>{
+      if (autoApplied) return;
+      if (!treeReady) return;
+
+      tries += 1;
+      try{
+        postSelected();
+        // postSelected が投げなければ「送信自体」は成功。earth 側が拾えない可能性に備え、数回は送る
+      }catch(_){}
+
+      if (tries >= maxTries){
+        autoApplied = true;
+        return;
+      }
+      autoApplyTimer = setTimeout(tick, 250);
+    };
+
+    if (autoApplyTimer) clearTimeout(autoApplyTimer);
+    autoApplyTimer = setTimeout(tick, 50);
+  }
+
+  // earth 側が準備できた合図を送ってくる場合（推奨）
+  window.addEventListener('message', (ev)=>{
+    const d = ev && ev.data;
+    const t = (d && (d.type || d.kind)) ? String(d.type || d.kind) : '';
+    if (t === 'dd-earth-ready' || t === 'DD_EARTH_READY' || t === 'EARTH_READY'){
+      earthReady = true;
+      scheduleAutoApply();
+    }
+  });
+
   btn.addEventListener('click', openModal);
   closeBtn.addEventListener('click', closeModal);
   backdrop.addEventListener('click', (e)=>{ if(e.target === backdrop) closeModal(); });
+
+  // earth iframe がリロードされたら、選択を再送できるようにする
+  iframe.addEventListener('load', ()=>{
+    autoApplied = false;
+    earthReady = false;
+    scheduleAutoApply();
+  });
 
   applyBtn.addEventListener('click', ()=>{
     saveSelection();
@@ -411,19 +423,18 @@
   });
 
   clearBtn.addEventListener('click', ()=>{
-    selected = new Set();
+    selected.clear();
+    path = [];
     saveSelection();
+    setBadge();
     renderColumns();
-    postSelected();
   });
 
-  document.addEventListener('keydown', (e)=>{
-    if (e.key === 'Escape' && backdrop.classList.contains('open')){
-      closeModal();
-    }
-  });
-
+  // ----------------------------
+  //  Init
+  // ----------------------------
   async function init(){
+    // load selection from localStorage
     loadSelection();
 
     // load tree csv (Google Sheets published CSV -> local fallback)
@@ -445,13 +456,10 @@
         console.warn('[tag-filter] tree fetch failed:', url, e);
       }
     }
-    if (!csvText){
-      csvText = 'level1,level2,level3\n';
-    }
+    if (!csvText) throw new Error('Failed to load tree CSV.');
 
-    nodesById.clear();
-    const treeRoot = buildTreeFromRows(parseCSV(csvText));
-    indexTree(treeRoot);
+    // build tree
+    buildTreeFromCSV(csvText);
 
     // selection pruning
     const pruned = new Set();
@@ -461,8 +469,12 @@
     selected = pruned;
     saveSelection();
 
+    treeReady = true;
     renderColumns();
     closeModal();
+
+    // リロードで index 側に選択が残っている場合は、earth 側へ自動で再送
+    scheduleAutoApply();
   }
 
   init();
