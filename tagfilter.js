@@ -478,4 +478,5 @@
   }
 
   init();
+  window.__ddTagFilterDebug = { getRoots: () => roots, children, label };
 })();
