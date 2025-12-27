@@ -1,20 +1,20 @@
-<!DOCTYPE html>
-
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Dokodemo Doors Fan Site</title>
-<link href="./styles.css" rel="stylesheet"/>
-<link crossorigin="anonymous" href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="anonymous" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&amp;family=Plus+Jakarta+Sans:wght@500;700&amp;display=swap" rel="stylesheet"/>
-<style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dokodemo Doors Fan Site</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
+
+  <style>
     /* ===== Tag filter UI (multi-column) ===== */
-.tag-filter-btn{
-      position: absolute;
-      top: 14px;
-      left: 14px;
+    .tag-filter-btn{
+      position: fixed;
+      top: 76px;
+      left: 18px;
       z-index: 9999;
       display: inline-flex;
       align-items: center;
@@ -29,7 +29,7 @@
       cursor: pointer;
       font: inherit;
     }
-.tag-filter-count{ opacity: 0.8; }
+    .tag-filter-count{ opacity: 0.8; }
 
     /* ★ 3カラム(260px×3) + gap(10px×2) + padding(8px×2) = 852px でピッタリ */
     .tag-filter-modal{
@@ -40,238 +40,394 @@
     .tag-filter-toolbar{
       display: flex;
       align-items: center;
-      justify-content: flex-end;
       gap: 10px;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
+    .tag-filter-spacer{ flex: 1; }
 
+    /* ★ 左寄せで列を詰めて並べる（均等割りしない） */
     .tag-filter-columns{
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      min-height: 420px;
-    }
-
-    .tag-filter-col{
-      border: 1px solid rgba(0,0,0,0.10);
-      border-radius: 14px;
-      overflow: hidden;
-      background: rgba(250,250,250,0.9);
       display: flex;
-      flex-direction: column;
-      min-width: 0;
+      align-items: stretch;
+      justify-content: flex-start; /* ← 常に左寄せ */
+      gap: 10px;
+      height: min(60vh, 520px);
+      overflow: auto;
+      padding: 8px;
+      border-radius: 14px;
+      border: 1px solid rgba(0,0,0,0.10);
+      background: rgba(255,255,255,0.65);
     }
-
+    .tag-filter-col{
+      flex: 0 0 260px;         /* ← 列幅固定で左から並ぶ */
+      width: 260px;
+      border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(255,255,255,0.85);
+      padding: 10px;
+      overflow: auto;
+    }
     .tag-filter-col-title{
-      padding: 10px 10px;
       font-weight: 700;
       font-size: 13px;
-      background: rgba(255,255,255,0.95);
-      border-bottom: 1px solid rgba(0,0,0,0.08);
+      opacity: 0.8;
+      margin: 0 0 8px 0;
     }
-
     .tag-item{
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 10px 10px;
-      cursor: pointer;
-      border-bottom: 1px solid rgba(0,0,0,0.06);
-      background: transparent;
-      user-select: none;
-      min-width: 0;
-    }
-    .tag-item:last-child{ border-bottom: 0; }
-    .tag-item:hover{ background: rgba(50,112,166,0.10); }
-    .tag-item.active{ background: rgba(50,112,166,0.14); }
-    .tag-item input{ width: 16px; height: 16px; }
-    .tag-item label{
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      cursor: pointer;
-    }
-
-    /* モーダル内のヘッダーが既存headerと衝突しないよう最小 */
-    .tag-filter-modal header{
-      display:flex;
-      align-items:center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 12px 14px;
-      border-bottom: 1px solid rgba(0,0,0,0.08);
-    }
-    .tag-filter-modal header #tagFilterTitle{
-      font-weight: 800;
-      font-size: 16px;
-    }
-    .tag-filter-modal header .close{
-      width: 34px;
-      height: 34px;
+      gap: 8px;
+      padding: 6px 8px;
       border-radius: 10px;
-      border: 1px solid rgba(0,0,0,0.12);
-      display:flex;
-      align-items:center;
-      justify-content:center;
       cursor: pointer;
-      background: rgba(255,255,255,0.92);
+      user-select: none;
     }
-    .tag-filter-modal .body{
-      padding: 12px;
-      overflow: auto;
-      background: #fff;
-    }
-
-    .tag-filter-modal .btn{
-      border: 1px solid rgba(0,0,0,0.12);
-      background: rgba(255,255,255,0.92);
-      border-radius: 12px;
-      padding: 10px 14px;
+    .tag-item:hover{ background: rgba(0,0,0,0.05); }
+    .tag-item.active{ background: rgba(50,112,166,0.12); }
+    .tag-item label{
+      flex: 1;
       cursor: pointer;
-      font: inherit;
     }
-    .tag-filter-modal .btn.primary{
-      background: rgba(50,112,166,0.95);
-      color: #fff;
-      border-color: rgba(50,112,166,0.95);
-    }
-
-    /* backdrop（既存のものに合わせたまま） */
-    .backdrop{
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.35);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-      padding: 18px;
-    }
-    .backdrop.open{ display:flex; }
-
-    @media (max-width: 900px){
-      .tag-filter-columns{ grid-template-columns: 1fr; }
+    .tag-item input[type="checkbox"]{
+      width: 18px;
+      height: 18px;
+      accent-color: #3270A6;
+      cursor: pointer;
     }
 
-    /* ===== iFrame wrapper (button overlay) ===== */
-    .earth-frame-wrap{
-      position: relative;
-      width: 100%;
-    }
-    #webxr-iframe{
-      display: block;
-      width: 100% !important;
-      aspect-ratio: 16 / 9;
-      border: 0;
-      background: #000;
-    }
-</style>
+    /* make backdrop/modal appear above iframe reliably */
+    #tagFilterBackdrop{ z-index: 10000; }
+
+
+/* ===== Tag Filter Modal (multi-column) ===== */
+.backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: none;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 16px;
+  overflow: auto;
+}
+.backdrop.open{ display:flex; }
+
+/* ★ 下の定義が勝つので、ここでも 852px に統一（3カラムぴったり） */
+.tag-filter-modal{
+  background: rgba(255,255,255,0.98);
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+  border-radius: 14px;
+
+  width: min(852px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tag-filter-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+.tag-filter-title{
+  font-weight: 700;
+  font-size: 16px;
+}
+.tag-filter-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.tag-filter-actions button{
+  border: 1px solid rgba(0,0,0,0.14);
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.tag-filter-actions button.primary{
+  background:#0B3559;
+  color:#fff;
+  border-color:#0B3559;
+}
+
+.tag-filter-body{
+  display:flex;
+  flex:1;
+  min-height: 0;
+}
+
+.columns{
+  display:flex;
+  flex:1;
+  min-width:0;
+  overflow:auto;
+  padding: 12px 14px 14px;
+  gap: 14px;
+}
+.column{
+  flex: 0 0 260px;
+  width: 260px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 12px;
+  padding: 10px 10px;
+  background: rgba(255,255,255,0.96);
+  min-height: 300px;
+}
+.column h3{
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.node{
+  display:flex;
+  align-items:flex-start;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.node:hover{ background: rgba(0,0,0,0.04); }
+.node .label{
+  line-height: 1.25;
+  font-size: 13px;
+}
+
+/* ===== Modal header/body (match your markup) ===== */
+.modal.tag-filter-modal > header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+.modal.tag-filter-modal > header #tagFilterTitle{
+  font-weight: 700;
+  font-size: 16px;
+}
+.modal.tag-filter-modal > header .close{
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.14);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor: pointer;
+  background:#fff;
+}
+.modal.tag-filter-modal .body{
+  padding: 12px 14px 14px;
+}
+
+/* ===== toolbar buttons ===== */
+.modal.tag-filter-modal .btn{
+  border: 1px solid rgba(0,0,0,0.14);
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.modal.tag-filter-modal .btn.primary{
+  background:#0B3559;
+  color:#fff;
+  border-color:#0B3559;
+}
+  </style>
 </head>
+
 <body>
-<div class="wrap">
-<header>
-<div class="brand-logo-text">Dokodemo Doors Fan Site</div>
-<div class="lang-switch">
-<button class="lang-switch__toggle" id="langToggle" type="button">Language</button>
-<div class="lang-switch__menu" hidden="" id="langMenu">
-<button data-lang="en" type="button">English</button>
-<button data-lang="ja" type="button">日本語</button>
-<button data-lang="zh" type="button">中文</button>
-<button data-lang="fa" type="button">فارسی</button>
-<button data-lang="hi" type="button">हिन्दी</button>
-<button data-lang="he" type="button">עברית</button>
-</div>
-</div>
-</header>
-<!-- Tag filter modal -->
-<div aria-hidden="true" class="backdrop" id="tagFilterBackdrop">
-<div aria-describedby="tagFilterBody" aria-labelledby="tagFilterTitle" class="modal tag-filter-modal" role="dialog">
-<header>
-<div id="tagFilterTitle">絞り込み</div>
-<div aria-label="Close" class="close" id="tagFilterClose">×</div>
-</header>
-<div class="body" id="tagFilterBody">
-<div class="tag-filter-toolbar">
-<button aria-hidden="true" class="btn" id="tagFilterSelectAll" style="display:none" tabindex="-1" type="button">全て選択</button>
-<button class="btn" id="tagFilterClear" type="button">クリア</button>
-<button class="btn primary" id="tagFilterApply" type="button">適用</button>
-</div>
-<div aria-label="Tag tree" class="tag-filter-columns" id="tagFilterColumns"></div>
-</div>
-</div>
-</div>
-<div class="stage">
-<img alt="Logo" class="site-logo" src="./assets/jp-mobile-new.fffa2967.png"/>
-<!-- 白線の下に表示するボタン群 -->
-<div class="intro-bar">
-<button class="intro-bar__button" id="aboutBtn" type="button">
+  <div class="wrap">
+
+    <header>
+      <div class="brand-logo-text">Dokodemo Doors Fan Site</div>
+      <div class="lang-switch">
+        <button type="button" class="lang-switch__toggle" id="langToggle">Language</button>
+        <div class="lang-switch__menu" id="langMenu" hidden>
+          <button type="button" data-lang="en">English</button>
+          <button type="button" data-lang="ja">日本語</button>
+          <button type="button" data-lang="zh">中文</button>
+          <button type="button" data-lang="fa">فارسی</button>
+          <button type="button" data-lang="hi">हिन्दी</button>
+          <button type="button" data-lang="he">עברית</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tag filter modal -->
+    <div class="backdrop" id="tagFilterBackdrop" aria-hidden="true">
+      <div class="modal tag-filter-modal" role="dialog" aria-labelledby="tagFilterTitle" aria-describedby="tagFilterBody">
+        <header>
+          <div id="tagFilterTitle">絞り込み</div>
+          <div class="close" id="tagFilterClose" aria-label="Close">×</div>
+        </header>
+
+        <div class="body" id="tagFilterBody">
+          <div class="tag-filter-toolbar">
+            <button type="button" class="btn" id="tagFilterClear" style="display:none" aria-hidden="true" tabindex="-1">全て解除</button>
+            <div class="tag-filter-spacer"></div>
+            <button type="button" class="btn primary" id="tagFilterApply">適用</button>
+          </div>
+
+          <div id="tagFilterColumns" class="tag-filter-columns" aria-label="Tag tree"></div>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="stage">
+      <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+
+      <!-- 白線の下に表示するボタン群 -->
+      <div class="intro-bar">
+        <button type="button" id="aboutBtn" class="intro-bar__button">
           What is Dokodemo Doors?
         </button>
-<button class="intro-bar__button" id="guideBtn" type="button">
+        <button type="button" id="guideBtn" class="intro-bar__button">
           What is this fan site?
         </button>
-</div>
+      </div>
 
-<!-- ★ ここで iframe を包んで、その上にボタンを重ねる -->
-<div class="earth-frame-wrap">
-<button aria-controls="tagFilterBackdrop" aria-haspopup="dialog" class="tag-filter-btn" id="tagFilterBtn" type="button">
-      絞り込み <span class="tag-filter-count" id="tagFilterCount">(0)</span>
-</button>
-<iframe allow="xr-spatial-tracking; fullscreen" id="webxr-iframe" scrolling="no" src="./earth.html" title="WebXR Earth"></iframe>
-</div>
-</div>
+      <div class="earth-frame-wrap">
+        <button type="button" id="tagFilterBtn" class="tag-filter-btn" aria-haspopup="dialog" aria-controls="tagFilterBackdrop">
+          絞り込み <span id="tagFilterCount" class="tag-filter-count">(0)</span>
+        </button>
 
-<section id="recommendSection">
-<div class="recommend-card">
-<div class="recommend-header">
-<img alt="Lucy" class="recommend-avatar" src="./assets/lucy.png"/>
-<div class="recommend-headtext">
-<div class="recommend-name">Lucy</div>
-<div class="recommend-sub">AI tour recommendations</div>
-</div>
-</div>
+        <iframe
+          id="webxr-iframe"
+          title="WebXR Earth"
+          src="./earth.html"
+          allow="xr-spatial-tracking; fullscreen"
+          scrolling="no">
+        </iframe>
+      </div>
+    </div>
 
-<label class="recommend-label" for="tourInput">Tell Lucy what you want to experience</label>
-<textarea id="tourInput" placeholder="e.g. I want to see famous ruins and temples in South America..." rows="3"></textarea>
+    <!-- ★ ツアー提案カード（写真アイコン入り・A案レイアウト） -->
+    <section
+      id="recommendSection"
+      style="
+        margin: 24px auto;
+        max-width: 960px;
+        padding: 18px 20px;
+        border-radius: 12px;
+        border: 1px solid rgba(0,0,0,0.08);
+        background: rgba(255,255,255,0.95);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+      "
+    >
+      <!-- 写真＋タイトル＋説明文を横並び -->
+      <div style="display:flex; align-items:flex-start; gap:16px; margin-bottom:12px;">
+        <img src="./assets/assistant.jpg"
+             alt="Assistant"
+             style="
+               width:96px;
+               height:96px;
+               border-radius:50%;
+               object-fit:cover;
+               flex-shrink:0;
+             ">
+        <div>
+          <h2 id="recommendTitle" style="margin:0 0 6px; font-size:1.2rem; line-height:1.3;">
+            ツアー提案（プロトタイプ）
+          </h2>
+          <p
+            id="recommendIntro"
+            style="margin: 0; font-size: 0.9rem; line-height: 1.6;"
+          >
+            どのようなツアーを観たいかアシスタントに伝えてください。将来的には、上の地球儀にあなたの好みに合った目的地がハイライト表示されるようになります。
+          </p>
+        </div>
+      </div>
 
-<div class="recommend-actions">
-<button class="btn primary" id="askLucyBtn" type="button">Ask Lucy</button>
-<div id="lucyStatus"></div>
-</div>
+      <div
+        class="recommend-input-row"
+        style="display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; margin-bottom:12px;"
+      >
+        <input
+          id="recommendInput"
+          type="text"
+          placeholder="例：『あの場所はここだったのか！』って思えるような場所がいい"
+          style="
+            flex:1 1 240px;
+            min-width:0;
+            padding:8px 10px;
+            border-radius:8px;
+            border:1px solid rgba(0,0,0,0.2);
+            font-size:0.9rem;
+          "
+        >
+        <button
+          type="button"
+          class="btn"
+          id="recommendSend"
+          style="flex:0 0 auto; white-space:nowrap;"
+        >
+          質問する（近日公開）
+        </button>
+      </div>
 
-<div id="lucyAnswer"></div>
-</div>
-</section>
-</div>
+      <!-- ★ AI の返答ログ表示エリア（最大約10行でスクロール） -->
+      <div id="recommendChat" style="
+        margin-bottom:12px;
+        padding:10px;
+        border-radius:8px;
+        border:1px solid rgba(0,0,0,0.10);
+        background: rgba(255,255,255,0.8);
+        height: 10.5em;
+        overflow-y: auto;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      "></div>
 
-<script src="./tagfilter.js"></script>
+      <div style="font-size:0.8rem; opacity:0.7;">
+        ※この機能はデモ用です。将来的に Lucy（AI）と地球儀のハイライト表示が連携します。
+      </div>
+    </section>
 
-<script>
-(function(){
-  const toggle = document.getElementById('langToggle');
-  const menu = document.getElementById('langMenu');
-  if(toggle && menu){
-    toggle.addEventListener('click', ()=>{
-      if(menu.hasAttribute('hidden')) menu.removeAttribute('hidden');
-      else menu.setAttribute('hidden','');
-    });
-    document.addEventListener('click', (e)=>{
-      if(!menu.contains(e.target) && !toggle.contains(e.target)){
-        menu.setAttribute('hidden','');
-      }
-    });
-    menu.querySelectorAll('button[data-lang]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const lang = btn.getAttribute('data-lang');
-        try{ localStorage.setItem('dd_lang', lang); }catch(_){}
-        menu.setAttribute('hidden','');
-        location.reload();
-      });
-    });
-  }
-})();
-</script>
+    <!-- ===== Meetup rooms UI placeholder (existing) ===== -->
+    <section id="meetupSection"></section>
+
+    <script src="./tagfilter.js"></script>
+
+    <script>
+      // language menu (simple)
+      (function(){
+        const toggle = document.getElementById('langToggle');
+        const menu = document.getElementById('langMenu');
+        if(!toggle || !menu) return;
+
+        toggle.addEventListener('click', ()=>{
+          if(menu.hasAttribute('hidden')) menu.removeAttribute('hidden');
+          else menu.setAttribute('hidden','');
+        });
+
+        document.addEventListener('click', (e)=>{
+          if(!menu.contains(e.target) && !toggle.contains(e.target)){
+            menu.setAttribute('hidden','');
+          }
+        });
+
+        menu.querySelectorAll('button[data-lang]').forEach(btn=>{
+          btn.addEventListener('click', ()=>{
+            const lang = btn.getAttribute('data-lang');
+            try{ localStorage.setItem('dd_lang', lang); }catch(_){}
+            menu.setAttribute('hidden','');
+            location.reload();
+          });
+        });
+      })();
+    </script>
+  </div>
 </body>
 </html>
