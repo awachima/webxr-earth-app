@@ -807,8 +807,7 @@ header *{
   }
 }
 
-.card .row > a,
-.card .row > button {
+.card .row > div > a.btn[data-enter]{
   background: #0B3559;
   color: #fff;
   width: 100%;
