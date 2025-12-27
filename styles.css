@@ -12,20 +12,6 @@
   --accent-color: #3b82f6;
   --bg-color: #ffffff;
   --text-main: #334155;
-* {
-  box-sizing: border-box;
-}
-
-/* =========================
-   変数
-   ========================= */
-:root{
-  --header-offset: 120px;
-
-  --primary-color: #0f172a;
-  --accent-color: #3b82f6;
-  --bg-color: #ffffff;
-  --text-main: #334155;
   --text-sub: #64748b;
 
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.06);
@@ -740,5 +726,82 @@ header *{
   }
   .meetups__title{
     font-size: 26px;
+  }
+}
+
+/* =========================================================
+   Meetup Rooms（待合室）デザイン復元（全体のサイズ・枠の形）
+   ※編集ボタンの右上固定は維持
+   ========================================================= */
+
+/* セクション（白い大枠） */
+.meetups{
+  width: min(1200px, calc(100vw - 64px));
+  padding: 28px 28px 26px;
+  border-radius: 26px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(15,23,42,0.10);
+  box-shadow: 0 18px 36px rgba(15,23,42,0.10);
+  margin: 30px auto 0;
+}
+
+/* 見出し行：左にタイトル、右に作成ボタン */
+.meetups__head{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.meetups__title{
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  text-align: left;
+}
+
+.meetups .head-create{
+  margin-left: auto;
+}
+
+/* カード一覧：元の広がり方に近いレイアウト */
+.grid{
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(260px, 1fr));
+  gap: 16px;
+  justify-items: stretch;
+  align-items: stretch;
+}
+
+@media (max-width: 1100px){
+  .grid{ grid-template-columns: repeat(2, minmax(260px, 1fr)); }
+}
+@media (max-width: 700px){
+  .grid{ grid-template-columns: 1fr; }
+}
+
+/* 各待合室カード：角丸・影・余白を元の印象に戻す */
+.card{
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,0.10);
+  border-radius: 18px;
+  box-shadow: 0 12px 26px rgba(15,23,42,0.10);
+  padding: 18px;
+  position: relative; /* 右上編集ボタンの基準 */
+}
+
+/* スマホ時の見た目 */
+@media (max-width: 900px){
+  .meetups{
+    width: min(1200px, calc(100vw - 32px));
+    padding: 20px;
+    border-radius: 22px;
+  }
+  .meetups__title{
+    font-size: 28px;
   }
 }
