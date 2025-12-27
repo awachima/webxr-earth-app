@@ -807,8 +807,23 @@ header *{
   }
 }
 
-.card .row > div > a.btn[data-enter]{
-  background: #0B3559;
-  color: #fff;
+/* =========================================================
+   入室するボタン（<a class="btn" data-enter>入室する</a>）
+   ※変更は「背景 #0B3559 / 文字 #fff / 幅を右端まで」のみ
+   ※DOM上で .row が無いケースに対応（.card直下のdiv内でも効く）
+   ========================================================= */
+.meetups .grid .card a.btn[data-enter]{
+  background: #0B3559 !important;
+  color: #fff !important;
+  border-color: #0B3559 !important;
+
   width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 念のため：親divが幅を持たないケースでの保険（見た目は変えない） */
+.meetups .grid .card a.btn[data-enter]{
+  max-width: 100%;
 }
