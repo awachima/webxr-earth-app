@@ -45,10 +45,11 @@
     }
     .tag-filter-spacer{ flex: 1; }
 
+    /* ★ 左寄せで列を詰めて並べる（均等割りしない） */
     .tag-filter-columns{
-      display: grid;
-      grid-auto-flow: column;
-      grid-auto-columns: minmax(220px, 1fr);
+      display: flex;
+      align-items: stretch;
+      justify-content: flex-start; /* ← 常に左寄せ */
       gap: 10px;
       height: min(60vh, 520px);
       overflow: auto;
@@ -58,7 +59,8 @@
       background: rgba(255,255,255,0.65);
     }
     .tag-filter-col{
-      min-width: 220px;
+      flex: 0 0 260px;         /* ← 列幅固定で左から並ぶ */
+      width: 260px;
       border-radius: 12px;
       border: 1px solid rgba(0,0,0,0.08);
       background: rgba(255,255,255,0.85);
@@ -270,23 +272,7 @@
   gap: 12px;
 }
 
-/* ===== Tag Filter UI improvements ===== */
-.tag-filter-search{
-  flex: 0 0 260px;
-  max-width: 320px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.16);
-  font: inherit;
-  font-size: 13px;
-  background: rgba(255,255,255,0.95);
-}
-.tag-filter-search:focus{
-  outline: none;
-  border-color: rgba(50,112,166,0.65);
-  box-shadow: 0 0 0 3px rgba(50,112,166,0.18);
-}
-
+/* ===== Tag Filter UI improvements (crumbs + active) ===== */
 .tag-filter-crumbs{
   display:flex;
   align-items:center;
@@ -326,7 +312,6 @@
   min-width: 0;
   word-break: break-word;
 }
-
 </style>
 
 </head>
@@ -363,14 +348,13 @@
         <div class="body" id="tagFilterBody">
           <div class="tag-filter-toolbar">
             <button type="button" class="btn" id="tagFilterClear">全て解除</button>
-            <input type="text" id="tagFilterSearch" class="tag-filter-search" placeholder="検索（部分一致）" aria-label="タグ検索">
             <div class="tag-filter-spacer"></div>
             <button type="button" class="btn primary" id="tagFilterApply">適用</button>
           </div>
 
-           <div id="tagFilterCrumbs" class="tag-filter-crumbs" aria-label="選択中の階層"></div>
+          <div id="tagFilterCrumbs" class="tag-filter-crumbs" aria-label="選択中の階層"></div>
 
-           <div id="tagFilterColumns" class="tag-filter-columns" aria-label="Tag tree"></div>
+          <div id="tagFilterColumns" class="tag-filter-columns" aria-label="Tag tree"></div>
         </div>
       </div>
     </div>

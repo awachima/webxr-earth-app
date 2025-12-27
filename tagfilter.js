@@ -20,7 +20,6 @@
   const applyBtn = document.getElementById('tagFilterApply');
   const clearBtn = document.getElementById('tagFilterClear');
 
-  const searchInput = document.getElementById('tagFilterSearch');
   const crumbsRoot = document.getElementById('tagFilterCrumbs');
 
   const columnsRoot = document.getElementById('tagFilterColumns');
@@ -40,9 +39,6 @@
 
   // UI state: current drill path (array of ids)
   let path = [];
-
-  // UI state: search query
-  let searchQuery = '';
 
   function setBadgeCount(n){
     badge.textContent = `(${n})`;
@@ -240,16 +236,6 @@
     return 'indeterminate';
   }
 
-  function norm(s){
-    return (s || '').toString().trim().toLowerCase();
-  }
-
-  function matchQuery(nodeId){
-    if (!searchQuery) return true;
-    const t = norm(label.get(nodeId) || nodeId);
-    return t.includes(searchQuery);
-  }
-
   function renderCrumbs(){
     if (!crumbsRoot) return;
 
@@ -353,30 +339,30 @@
 
     // 1列目（カテゴリ）
     const col0 = document.createElement('div');
-    col0.className = 'column';
-    const h0 = document.createElement('h3');
+    col0.className = 'tag-filter-col';
+    const h0 = document.createElement('div');
+    h0.className = 'tag-filter-col-title';
     h0.textContent = 'カテゴリ';
     col0.appendChild(h0);
     for (const id of roots){
-      if (!matchQuery(id)) continue;
       col0.appendChild(nodeRow(id));
     }
     columnsRoot.appendChild(col0);
 
-    // 右側に「選択中ノードの子」を列として増やす
+    // 右側に「選択中ノードの子」を列として増やす（左詰めで並ぶ）
     for (let depth=0; depth<path.length; depth++){
       const id = path[depth];
       const kids = children.get(id) || [];
       if (!kids.length) break;
 
       const col = document.createElement('div');
-      col.className = 'column';
-      const h = document.createElement('h3');
+      col.className = 'tag-filter-col';
+      const h = document.createElement('div');
+      h.className = 'tag-filter-col-title';
       h.textContent = label.get(id) || id;
       col.appendChild(h);
 
       for (const cid of kids){
-        if (!matchQuery(cid)) continue;
         col.appendChild(nodeRow(cid));
       }
       columnsRoot.appendChild(col);
@@ -391,7 +377,7 @@
     backdrop.classList.add('open');
     document.body.style.overflow = 'hidden';
     renderColumns();
-    setTimeout(()=>{ if (searchInput) searchInput.focus(); else applyBtn.focus(); }, 30);
+    setTimeout(()=>{ applyBtn.focus(); }, 30);
   }
 
   function closeModal(){
@@ -430,13 +416,6 @@
     renderColumns();
     postSelected();
   });
-
-  if (searchInput){
-    searchInput.addEventListener('input', ()=>{
-      searchQuery = norm(searchInput.value);
-      renderColumns();
-    });
-  }
 
   document.addEventListener('keydown', (e)=>{
     if (e.key === 'Escape' && backdrop.classList.contains('open')){
