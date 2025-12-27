@@ -559,7 +559,8 @@ header *{
 }
 
 .card .title{
-  font-weight: 800;   /* or 900 */
+  font-weight: 900;
+  font-size: 18px;  
 }
 
 .card .meta{
