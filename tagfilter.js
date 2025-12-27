@@ -126,16 +126,41 @@
     //  - "level1, level2, level3, level4" etc.
     //  - Japanese: "1階層目", "2階層目" ...
     //  - Or if unknown: use first 4~6 cols (excluding empty header)
-    const levelIdx = [];
+    //
+    // ★重要: 同じ列indexを重複追加しない（重複すると L1 が L2 にも入り「親=子」になる）
+    const candidates = [];
     for (let i=0;i<headerLower.length;i++){
       const h = headerLower[i];
-      if (/^level\s*\d+$/.test(h)) levelIdx.push(i);
-      if (/^\d+\s*階層目$/.test(header[i])) levelIdx.push(i);
-      if (h.includes('level1') || h.includes('level 1')) levelIdx.push(i);
+      const raw = header[i];
+
+      // level1 / level2 / ...
+      const m1 = h.match(/^level\s*(\d+)$/);
+      if (m1){
+        candidates.push({ idx:i, order: parseInt(m1[1], 10) });
+        continue;
+      }
+
+      // 1階層目 / 2階層目 / ...
+      const m2 = String(raw).match(/^(\d+)\s*階層目$/);
+      if (m2){
+        candidates.push({ idx:i, order: parseInt(m2[1], 10) });
+        continue;
+      }
     }
 
+    // 同一 idx を排除しつつ、order昇順（level1→level2→level3...）にする
+    const seen = new Set();
+    const levels = candidates
+      .sort((a,b)=>a.order-b.order)
+      .filter(c=>{
+        if (seen.has(c.idx)) return false;
+        seen.add(c.idx);
+        return true;
+      })
+      .map(c=>c.idx);
+
     // If we didn't find explicit columns, use first 6 columns as fallback
-    const levels = levelIdx.length ? levelIdx : [0,1,2,3,4,5];
+    const finalLevels = levels.length ? levels : [0,1,2,3,4,5];
 
     const rootNode = makeNode('__root__', '(root)', null);
     nodesById.set(rootNode.id, rootNode);
@@ -161,8 +186,8 @@
       const row = rows[r];
       // normalize levels with fill-down:
       // if a cell is empty, inherit from above
-      for (let li=0; li<levels.length; li++){
-        const ci = levels[li];
+      for (let li=0; li<finalLevels.length; li++){
+        const ci = finalLevels[li];
         const v = (row[ci] || '').trim();
         if (v) curLevels[li] = v;
         else row[ci] = curLevels[li] || '';
@@ -170,8 +195,8 @@
 
       // Create path from non-empty levels
       const parts = [];
-      for (let li=0; li<levels.length; li++){
-        const ci = levels[li];
+      for (let li=0; li<finalLevels.length; li++){
+        const ci = finalLevels[li];
         const v = (row[ci] || '').trim();
         if (!v) break;
         parts.push(v);
@@ -478,5 +503,4 @@
   }
 
   init();
-  window.__ddTagFilterDebug = { getRoots: () => roots, children, label };
 })();
