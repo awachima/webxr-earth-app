@@ -555,7 +555,11 @@ header *{
 .card h3{
   margin: 0 0 6px;
   font-size: 18px;
-  font-weight: 900;
+  font-weight: 800;
+}
+
+.card .title{
+  font-weight: 800;   /* or 900 */
 }
 
 .card .meta{
