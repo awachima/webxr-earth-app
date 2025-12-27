@@ -572,6 +572,7 @@ header *{
 /* row */
 .card .row{
   display: flex;
+  width: 100%;
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
@@ -579,16 +580,16 @@ header *{
   position: static; /* ★相対にしない（カード基準にする） */
 }
 
-/* ★入室する：rowの最初の要素を必ず青に（.btn有無に依存しない） */
+/* ★入室する：rowの最初の要素を必ず「待合室を作成」と同じ色に */
 .card .row > :first-child{
   width: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 
-  background: #3b82f6;
+  background: #0B3559;
   color: #fff;
-  border: 1px solid #3b82f6;
+  border: 1px solid #0B3559;
 
   border-radius: 12px;
   padding: 10px 14px;
@@ -598,8 +599,8 @@ header *{
   box-shadow: var(--shadow-sm);
 }
 .card .row > :first-child:hover{
-  background: #2563eb;
-  border-color: #2563eb;
+  background: #0B3559;
+  border-color: #0B3559;
 }
 
 /* ★編集：2個目以降の要素をカード右上の正方形にする */
