@@ -98,164 +98,163 @@
     /* make backdrop/modal appear above iframe reliably */
     #tagFilterBackdrop{ z-index: 10000; }
 
+    /* ===== Tag Filter Modal (multi-column) ===== */
+    .backdrop{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      display: none;
+      padding: 0;
+      overflow: hidden;
+    }
+    .backdrop.open{ display:block; }
 
-/* ===== Tag Filter Modal (multi-column) ===== */
-.backdrop{
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.35);
-  display: none;
-  padding: 0;
-  overflow: hidden;
-}
-.backdrop.open{ display:block; }
+    /* ★ 下の定義が勝つので、ここでも 852px に統一（3カラムぴったり） */
+    .tag-filter-modal{
+      position: fixed;
+      top: 0;
+      left: 0;
+      margin: 0;
+      background: rgba(255,255,255,0.98);
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+      border-radius: 14px;
 
-/* ★ 下の定義が勝つので、ここでも 852px に統一（3カラムぴったり） */
-.tag-filter-modal{
-  position: fixed;
-  top: 0;
-  left: 0;
-  margin: 0;
-  background: rgba(255,255,255,0.98);
-  border: 1px solid rgba(0,0,0,0.08);
-  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
-  border-radius: 14px;
+      width: min(852px, calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
 
-  width: min(852px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
+      min-height: 440px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
 
-  min-height: 440px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
+    .tag-filter-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .tag-filter-title{
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .tag-filter-actions{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .tag-filter-actions button{
+      border: 1px solid rgba(0,0,0,0.14);
+      background: #fff;
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+    .tag-filter-actions button.primary{
+      background:#0B3559;
+      color:#fff;
+      border-color:#0B3559;
+    }
 
-.tag-filter-header{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-}
-.tag-filter-title{
-  font-weight: 700;
-  font-size: 16px;
-}
-.tag-filter-actions{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-.tag-filter-actions button{
-  border: 1px solid rgba(0,0,0,0.14);
-  background: #fff;
-  border-radius: 10px;
-  padding: 8px 10px;
-  cursor: pointer;
-}
-.tag-filter-actions button.primary{
-  background:#0B3559;
-  color:#fff;
-  border-color:#0B3559;
-}
+    .tag-filter-body{
+      display:flex;
+      flex:1;
+      min-height: 0;
+    }
 
-.tag-filter-body{
-  display:flex;
-  flex:1;
-  min-height: 0;
-}
+    .columns{
+      display:flex;
+      flex:1;
+      min-width:0;
+      overflow:auto;
+      padding: 12px 14px 14px;
+      gap: 14px;
+    }
+    .column{
+      flex: 0 0 260px;
+      width: 260px;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 10px 10px;
+      background: rgba(255,255,255,0.96);
+      min-height: 300px;
+    }
+    .column h3{
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .node{
+      display:flex;
+      align-items:flex-start;
+      gap: 8px;
+      padding: 6px 6px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .node:hover{ background: rgba(0,0,0,0.04); }
+    .node .label{
+      line-height: 1.25;
+      font-size: 13px;
+    }
+    .node .chev{
+      margin-left:auto;
+      opacity: 0.55;
+    }
 
-.columns{
-  display:flex;
-  flex:1;
-  min-width:0;
-  overflow:auto;
-  padding: 12px 14px 14px;
-  gap: 14px;
-}
-.column{
-  flex: 0 0 260px;
-  width: 260px;
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 12px;
-  padding: 10px 10px;
-  background: rgba(255,255,255,0.96);
-  min-height: 300px;
-}
-.column h3{
-  margin: 0 0 8px 0;
-  font-size: 14px;
-  font-weight: 700;
-}
-.node{
-  display:flex;
-  align-items:flex-start;
-  gap: 8px;
-  padding: 6px 6px;
-  border-radius: 10px;
-  cursor: pointer;
-}
-.node:hover{ background: rgba(0,0,0,0.04); }
-.node .label{
-  line-height: 1.25;
-  font-size: 13px;
-}
-.node .chev{
-  margin-left:auto;
-  opacity: 0.55;
-}
+    .tag-filter-footer{
+      padding: 10px 14px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+    }
 
-.tag-filter-footer{
-  padding: 10px 14px;
-  border-top: 1px solid rgba(0,0,0,0.08);
-  display:flex;
-  justify-content:flex-end;
-  gap:10px;
-}
+    /* ===== Modal header/body (match your markup) ===== */
+    .modal.tag-filter-modal > header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .modal.tag-filter-modal > header #tagFilterTitle{
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .modal.tag-filter-modal > header .close{
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.14);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor: pointer;
+      background:#fff;
+    }
+    .modal.tag-filter-modal .body{
+      padding: 12px 14px 14px;
+    }
 
-/* ===== Modal header/body (match your markup) ===== */
-.modal.tag-filter-modal > header{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-}
-.modal.tag-filter-modal > header #tagFilterTitle{
-  font-weight: 700;
-  font-size: 16px;
-}
-.modal.tag-filter-modal > header .close{
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.14);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  cursor: pointer;
-  background:#fff;
-}
-.modal.tag-filter-modal .body{
-  padding: 12px 14px 14px;
-}
-
-/* ===== toolbar buttons ===== */
-.modal.tag-filter-modal .btn{
-  border: 1px solid rgba(0,0,0,0.14);
-  background: #fff;
-  border-radius: 10px;
-  padding: 8px 10px;
-  cursor: pointer;
-  font: inherit;
-}
-.modal.tag-filter-modal .btn.primary{
-  background:#0B3559;
-  color:#fff;
-  border-color:#0B3559;
-}
+    /* ===== toolbar buttons ===== */
+    .modal.tag-filter-modal .btn{
+      border: 1px solid rgba(0,0,0,0.14);
+      background: #fff;
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .modal.tag-filter-modal .btn.primary{
+      background:#0B3559;
+      color:#fff;
+      border-color:#0B3559;
+    }
   </style>
 </head>
 
@@ -297,7 +296,6 @@
       </div>
     </div>
 
-
     <div class="stage">
       <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
 
@@ -311,7 +309,7 @@
         </button>
       </div>
 
-      <div class="earth-frame-wrap">
+      <div class="earth-frame-wrap" id="earthFrameWrap">
         <button type="button" id="tagFilterBtn" class="tag-filter-btn" aria-haspopup="dialog" aria-controls="tagFilterBackdrop">
           絞り込み <span id="tagFilterCount" class="tag-filter-count">(0)</span>
         </button>
@@ -409,39 +407,248 @@
       </div>
     </section>
 
-    <!-- ===== Meetup rooms UI placeholder (existing) ===== -->
-    <section id="meetupSection"></section>
+    <!-- ===== Meetup rooms UI (復活) ===== -->
+    <section class="meetups">
+      <div class="meetups__head">
+        <h2 class="meetups__title">Meetup Rooms</h2>
+        <button class="btn ghost head-create" id="openCreate">Create a room</button>
+      </div>
+      <div id="grid" class="grid"></div>
+    </section>
 
-    <script src="./tagfilter.js"></script>
-
-    <script>
-      // language menu (simple)
-      (function(){
-        const toggle = document.getElementById('langToggle');
-        const menu = document.getElementById('langMenu');
-        if(!toggle || !menu) return;
-
-        toggle.addEventListener('click', ()=>{
-          if(menu.hasAttribute('hidden')) menu.removeAttribute('hidden');
-          else menu.setAttribute('hidden','');
-        });
-
-        document.addEventListener('click', (e)=>{
-          if(!menu.contains(e.target) && !toggle.contains(e.target)){
-            menu.setAttribute('hidden','');
-          }
-        });
-
-        menu.querySelectorAll('button[data-lang]').forEach(btn=>{
-          btn.addEventListener('click', ()=>{
-            const lang = btn.getAttribute('data-lang');
-            try{ localStorage.setItem('dd_lang', lang); }catch(_){}
-            menu.setAttribute('hidden','');
-            location.reload();
-          });
-        });
-      })();
-    </script>
   </div>
+
+  <!-- Site description modal -->
+  <div class="backdrop" id="aboutBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="aboutTitle" aria-describedby="aboutBody">
+      <header>
+        <div id="aboutTitle">What is Dokodemo Doors?</div>
+        <div class="close" id="aboutClose" aria-label="Close">×</div>
+      </header>
+      <div class="body" id="aboutBody">
+        <p class="heading-large">A place where you can explore the world together, even when you're far apart</p>
+        <p style="padding-left: 1em;">
+          <a href="https://dokodemodoors.com/" target="_blank">Dokodemo Doors</a> is an online VR platform that offers a wide collection of 360-degree VR travel videos from around the world.
+        </p>
+        <p class="heading-strong">More than 1,700 videos available</p>
+        <p style="padding-left: 1em;">
+          Although YouTube also has VR content, no other site gathers this many VR travel videos in one place.
+        </p>
+        <p class="heading-strong">Watch together in perfect sync</p>
+        <p style="padding-left: 1em;">
+          By starting the video at the same time, you can share the exact same scenery while talking or using gestures.
+        </p>
+        <p>
+          Learn more
+          <a href="https://dokodemodoors.com/info/about-dokodemodoor" target="_blank">here</a>.
+        </p>
+      </div>
+      <div class="actions">
+        <button class="btn" id="aboutOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fan site guide modal -->
+  <div class="backdrop" id="guideBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="guideTitle" aria-describedby="guideBody">
+      <header>
+        <div id="guideTitle">What is this fan site?</div>
+        <div class="close" id="guideClose" aria-label="Close">×</div>
+      </header>
+      <div class="body" id="guideBody">
+        <p class="heading-large">An unofficial fan-made site that lets you choose destinations from a 3D globe</p>
+        <p>
+          I created this site with official permission because I wanted to pick destinations visually on a globe instead of from a traditional list view on the
+          <a href="https://dokodemodoors.com/" target="_blank">official site</a>.
+        </p>
+        <p class="heading-strong">1. Subscription required</p>
+        <p style="padding-left: 1em;">
+          Viewing each world requires a subscription through the official website. If you're not subscribed, entering a world will redirect you to the subscription page.<br>
+          Some worlds are available for free during limited periods, and those are easiest to find from the
+          <a href="https://dokodemodoors.com/" target="_blank">official homepage</a>
+          under “Recommended Worlds.”
+        </p>
+        <p class="heading-strong">2. Meta Quest 2 or higher recommended</p>
+        <p style="padding-left: 1em;">
+          Although the service works on various devices, the VR experience is overwhelmingly superior. For best results, Meta Quest 2 or higher is recommended.
+        </p>
+      </div>
+      <div class="actions">
+        <button class="btn" id="guideOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create / Edit modal -->
+  <div class="backdrop" id="backdrop">
+    <div class="modal">
+      <header>
+        <div id="modalTitle">Create a meetup room</div>
+        <div class="close" id="close" aria-label="Close">×</div>
+      </header>
+      <div class="body">
+        <!-- ★ 多言語対応用の説明文コンテナ（中身は JS で差し替え） -->
+        <p class="modal-description" id="modalDescription" style="margin-bottom:12px; font-size:0.9rem; line-height:1.5;"></p>
+
+        <div class="form">
+          <div>
+            <label for="mTitle">Title</label>
+            <input id="mTitle" placeholder="e.g. Tokyo Night Tour" inputmode="text" maxlength="60">
+          </div>
+
+          <div>
+            <label for="mLimit">Participant limit</label>
+            <select id="mLimit" aria-label="Select max participants">
+              <option>10</option><option>9</option><option>8</option><option>7</option><option>6</option>
+              <option>5</option><option>4</option><option>3</option><option>2</option><option>1</option>
+            </select>
+          </div>
+
+          <!-- Free / Paid 選択＋金額 -->
+          <div>
+            <label id="mEventTypeLabel">Free or paid event</label>
+            <div style="margin-top:4px; display:flex; gap:24px; align-items:center;">
+              <label style="display:flex; align-items:center; gap:4px;">
+                <input type="radio" name="mEventType" value="free" checked>
+                <span id="mEventTypeFreeLabel">Free event</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:4px;">
+                <input type="radio" name="mEventType" value="paid">
+                <span id="mEventTypePaidLabel">Paid event</span>
+              </label>
+            </div>
+            <div id="priceWrapper" style="margin-top:8px; display:none;">
+              <label for="mPrice" id="mPriceLabel" style="display:block; margin-bottom:4px;">Price</label>
+              <input
+                id="mPrice"
+                type="text"
+                placeholder="e.g. 1500 JPY / $10 / 10 EUR"
+                inputmode="text">
+            </div>
+          </div>
+
+          <div>
+            <label for="mStart">Meeting time (JST)</label>
+            <!-- 通常（対応ブラウザ向け） -->
+            <input id="mStart" type="datetime-local" inputmode="none">
+
+            <!-- フォールバック（Quest 等）：月/日/時/分 セレクト -->
+            <div id="mStartFallback" style="display:none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px">
+              <select id="mMonth" aria-label="Month"></select>
+              <select id="mDay" aria-label="Day"></select>
+              <select id="mHour" aria-label="Hour"></select>
+              <select id="mMinute" aria-label="Minute"></select>
+            </div>
+          </div>
+
+          <div>
+            <label for="mTarget">Tour / world URL</label>
+            <input id="mTarget" placeholder="https://dokodemodoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
+            <div class="note">
+              After creation, the URL cannot be changed. To change it, duplicate the room and create a new one.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <div class="left">
+          <button class="btn danger" id="delete" style="display:none">Delete this room</button>
+        </div>
+        <button class="btn ghost" id="duplicate" style="display:none">Duplicate this room</button>
+        <button class="btn ghost" id="close2">Close</button>
+        <button class="btn" id="submit">Create</button>
+      </div>
+      <div class="status" id="statusMsg">Room created</div>
+    </div>
+  </div>
+
+  <!-- Custom alert (destination URL info) -->
+  <div class="backdrop" id="alertBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
+      <header>
+        <div id="alertTitle">About the URL</div>
+        <div class="close" id="alertClose" aria-label="Close">×</div>
+      </header>
+      <div class="body" id="alertBody">
+        Please enter a Dokodemo Doors tour or world URL.
+      </div>
+      <div class="actions">
+        <button class="btn" id="alertOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 絞り込み（tagfilter） -->
+  <script src="./tagfilter.js"></script>
+
+  <!-- 言語メニュー（復活） -->
+  <script>
+    (function(){
+      const toggle = document.getElementById('langToggle');
+      const menu = document.getElementById('langMenu');
+      if(!toggle || !menu) return;
+
+      toggle.addEventListener('click', ()=>{
+        if(menu.hasAttribute('hidden')) menu.removeAttribute('hidden');
+        else menu.setAttribute('hidden','');
+      });
+
+      document.addEventListener('click', (e)=>{
+        if(!menu.contains(e.target) && !toggle.contains(e.target)){
+          menu.setAttribute('hidden','');
+        }
+      });
+
+      menu.querySelectorAll('button[data-lang]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const lang = btn.getAttribute('data-lang');
+          try{ localStorage.setItem('dd_lang', lang); }catch(_){}
+          menu.setAttribute('hidden','');
+          location.reload();
+        });
+      });
+    })();
+  </script>
+
+  <!-- ★ iframe 上にカーソルがある間、ページ全体のスクロールを抑止（復活） -->
+  <script>
+    (function(){
+      const wrap = document.getElementById('earthFrameWrap');
+      const iframe = document.getElementById('webxr-iframe');
+      if(!wrap || !iframe) return;
+
+      let hovering = false;
+
+      const onEnter = ()=>{ hovering = true; };
+      const onLeave = ()=>{ hovering = false; };
+
+      wrap.addEventListener('mouseenter', onEnter);
+      wrap.addEventListener('mouseleave', onLeave);
+      iframe.addEventListener('mouseenter', onEnter);
+      iframe.addEventListener('mouseleave', onLeave);
+
+      // wheel / touchmove をブロック（passive:false が重要）
+      const blockIfHover = (e)=>{
+        if(!hovering) return;
+        // iframe領域でのスクロールを抑止（地球側の拡大縮小が目的）
+        e.preventDefault();
+      };
+
+      // iframe 自体にも付ける（ブラウザによってはこっちが効く）
+      iframe.addEventListener('wheel', blockIfHover, { passive:false });
+      iframe.addEventListener('touchmove', blockIfHover, { passive:false });
+
+      // 念のため window 側でも捕まえる（ホイールが親に回る系の対策）
+      window.addEventListener('wheel', blockIfHover, { passive:false });
+      window.addEventListener('touchmove', blockIfHover, { passive:false });
+    })();
+  </script>
+
+  <!-- 待合室（Meetup）＋他の既存JS（復活） -->
+  <script src="./main.js"></script>
+  <script src="./recommend.js"></script>
+
+  <footer></footer>
 </body>
 </html>
