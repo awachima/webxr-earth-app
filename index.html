@@ -345,18 +345,14 @@
       <div class="modal tag-filter-modal" role="dialog" aria-labelledby="tagFilterTitle" aria-describedby="tagFilterBody">
         <header>
           <div id="tagFilterTitle">絞り込み</div>
-          <div class="close" id="tagFilterClose" aria-label="Close">×</div>
+          <div class="tag-filter-actions">
+            <button type="button" class="btn" id="tagFilterClear">全て解除</button>
+            <button type="button" class="btn primary" id="tagFilterApply">適用</button>
+            <div class="close" id="tagFilterClose" aria-label="Close">×</div>
+          </div>
         </header>
 
         <div class="body" id="tagFilterBody">
-          <div class="tag-filter-toolbar">
-            <button type="button" class="btn" id="tagFilterClear">全て解除</button>
-            <div class="tag-filter-spacer"></div>
-            <button type="button" class="btn primary" id="tagFilterApply">適用</button>
-          </div>
-
-          <div id="tagFilterCrumbs" class="tag-filter-crumbs" aria-label="選択中の階層"></div>
-
           <div id="tagFilterColumns" class="tag-filter-columns" aria-label="Tag tree"></div>
         </div>
       </div>
