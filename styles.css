@@ -1,103 +1,102 @@
-* {
+/* =========================================================
+   Dokodemo Doors Fan Site - styles.css
+   ========================================================= */
+
+*{
   box-sizing: border-box;
 }
 
-/* =========================
-   変数
-   ========================= */
 :root{
-  --header-offset: 120px;
+  --primary-color:#0f172a;
+  --accent-color:#3b82f6;
+  --bg:#ffffff;
+  --text:#0f172a;
+  --muted:#64748b;
 
-  --primary-color: #0f172a;
-  --accent-color: #3b82f6;
-  --bg-color: #ffffff;
-  --text-main: #334155;
-  --text-sub: #64748b;
-
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.06);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.10), 0 8px 10px -6px rgb(0 0 0 / 0.06);
-
-  --radius-lg: 24px;
-  --radius-md: 16px;
-
-  --wrap-max: 1080px;
-  --card: rgba(255,255,255,0.92);
-  --card-border: rgba(15,23,42,0.10);
+  --card:#ffffff;
+  --card-border:rgba(15,23,42,0.10);
 
   --shadow-sm: 0 6px 16px rgba(15, 23, 42, 0.06);
   --shadow-md: 0 12px 28px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 20px 30px rgba(15, 23, 42, 0.12);
 
+  --r-sm: 12px;
+  --r-md: 16px;
   --r-lg: 18px;
   --r-xl: 22px;
 
-  --font-sans: "Plus Jakarta Sans", "Noto Sans JP", system-ui, -apple-system,
-               BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --header-offset:120px;
+
+  --backdrop: rgba(0,0,0,0.40);
+
+  --font-sans: "Plus Jakarta Sans","Noto Sans JP",system-ui,-apple-system,
+               BlinkMacSystemFont,"Segoe UI",sans-serif;
 }
 
 html{
-  height: 100%;
+  height:100%;
   overflow-y: scroll;
   scrollbar-gutter: stable both-edges;
 }
 
 body{
-  min-height: 100%;
-  margin: 0;
-  background-color: var(--bg-color);
-  color: var(--text-main);
-  overflow-x: hidden;
+  min-height:100%;
+  margin:0;
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
-  line-height: 1.6;
+  line-height:1.6;
+  overflow-x:hidden;
 }
 
-a{ color: #2563eb; text-decoration: none; }
-a:hover{ text-decoration: underline; }
+a{ color:#2563eb; text-decoration:none; }
+a:hover{ text-decoration:underline; }
 
-img{ max-width: 100%; display: block; }
-button, input, select{ font-family: inherit; }
+img{ max-width:100%; display:block; }
+button, input, select, textarea{ font-family: inherit; }
 
-/* =========================
-   wrap
-   ========================= */
+/* =========================================================
+   Layout wrappers
+   ========================================================= */
+
 .wrap{
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100%;
-  width: 100%;
-  padding-bottom: 64px;
+  width:100%;
+  min-height:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding-bottom:64px;
 }
 
-/* =========================
-   ヘッダー（最前面）
-   ========================= */
+/* =========================================================
+   Header (言語ボタンのクリック不能対策：最前面 + pointer-events制御)
+   ========================================================= */
+
 header{
   position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 999999;              /* ★とにかく最前面 */
-  width: 100%;
-  padding: 12px 20px 14px;
+  top:0; left:0; right:0;
+  z-index: 1000000;  /* ★最前面（#tagFilterBackdrop 10000より必ず上） */
+  width:100%;
+  padding:12px 20px 14px;
   background: rgba(255,255,255,0.97);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   color: var(--primary-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
   border-bottom: 1px solid rgba(148,163,184,0.35);
   box-shadow: 0 10px 25px rgba(15,23,42,0.08);
   overflow: visible;
-
-  pointer-events: auto;         /* ★念のため */
+  pointer-events: auto;
 }
 
 header *{
-  pointer-events: auto;         /* ★念のため */
+  pointer-events: auto;
 }
 
-/* サイトタイトル（クリックを奪わない） */
 .brand-logo-text{
   font-family: var(--font-sans);
   font-weight: 700;
@@ -107,11 +106,12 @@ header *{
   letter-spacing: -0.02em;
   z-index: 2;
   position: relative;
+
+  /* ★タイトルがクリックを奪うのを防ぐ（言語ボタンを確実に押せる） */
+  pointer-events: none;
+
   max-width: calc(100% - 160px);
   text-align: center;
-
-  pointer-events: none;         /* ★言語ボタンの邪魔をしない */
-
   font-size: clamp(
     14px,
     calc(14px + (30 - 14) * ((100vw - 475px) / (1280 - 475))),
@@ -119,14 +119,14 @@ header *{
   );
 }
 
-/* 言語スイッチ（右上） */
 .lang-switch{
-  position: absolute;
-  right: 14px;
-  top: 12px;
-  z-index: 1000000;             /* ★ヘッダー内でも最前面 */
-  display: flex;
-  align-items: center;
+  position:absolute;
+  right:14px;
+  top:12px;
+  z-index: 1000001; /* ★ヘッダー内でも最前面 */
+  display:flex;
+  align-items:center;
+  pointer-events:auto;
 }
 
 .lang-switch__toggle{
@@ -138,113 +138,97 @@ header *{
   color: var(--primary-color);
   font-weight: 600;
   box-shadow: 0 10px 20px rgba(15,23,42,0.06);
+  pointer-events:auto;
 }
 
 .lang-switch__toggle::after{
-  content: " ▼";
-  font-size: 0.8em;
-  opacity: 0.75;
+  content:" ▼";
+  font-size:0.8em;
+  opacity:0.75;
 }
 
 .lang-switch__menu{
-  position: absolute;
-  right: 0;
-  top: 44px;
-  min-width: 140px;
+  position:absolute;
+  right:0;
+  top:44px;
+  min-width:140px;
   background: rgba(255,255,255,0.98);
   border: 1px solid rgba(148,163,184,0.45);
   border-radius: 14px;
   box-shadow: 0 18px 30px rgba(15,23,42,0.10);
-  padding: 8px;
-  z-index: 1000001;
+  padding:8px;
+  z-index: 1000002;
+  pointer-events:auto;
 }
 
 .lang-switch__menu button{
-  width: 100%;
-  text-align: left;
-  padding: 10px 10px;
-  border: 0;
-  background: transparent;
-  border-radius: 10px;
-  cursor: pointer;
+  width:100%;
+  text-align:left;
+  padding:10px 10px;
+  border:0;
+  background:transparent;
+  border-radius:10px;
+  cursor:pointer;
   color: var(--primary-color);
 }
+
 .lang-switch__menu button:hover{
   background: rgba(59,130,246,0.10);
 }
 
 @media (max-width: 900px){
-  header{ padding: 12px 12px 12px; }
+  header{ padding:12px 12px 12px; }
 }
 
-/* =========================
-   ★重要：透明オーバーレイがクリックを奪う対策
-   （タグ絞り込み用の backdrop などを想定）
-   ========================= */
-.backdrop{
-  pointer-events: none;         /* ★閉じている時は必ずクリック無効 */
-}
-.backdrop.open{
-  pointer-events: auto;         /* ★開いている時だけ有効 */
-}
+/* =========================================================
+   Stage (hero area)
+   ========================================================= */
 
-/* =========================
-   ステージ
-   ========================= */
 .stage{
-  position: relative;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-
+  position:relative;
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
   padding: calc(var(--header-offset) + 72px) 16px 40px;
-
-  background: linear-gradient(
-    180deg,
-    #ffffff 0%,
-    #fcfcff 40%,
-    #ffffff 100%
-  );
-  margin-top: 0;
+  background: linear-gradient(180deg,#ffffff 0%,#fcfcff 40%,#ffffff 100%);
+  margin-top:0;
 }
 
-/* ロゴ */
 .site-logo{
-  pointer-events: none;
-  position: absolute;
+  pointer-events:none;
+  position:absolute;
   top: calc(var(--header-offset) + 16px);
-  left: 50%;
+  left:50%;
   transform: translateX(-50%);
   width: min(20vw, 134px);
-  opacity: .95;
-  z-index: 1;
+  opacity:.95;
+  z-index:1;
   filter: drop-shadow(0 4px 6px rgba(15,23,42,0.35));
 }
 
-/* 説明ボタン */
 .intro-bar{
-  display: flex;
-  gap: 12px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  margin-top: 34px;
-  z-index: 2;
+  display:flex;
+  gap:12px;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  margin-top:34px;
+  z-index:2;
 }
 
 .intro-bar__button{
   border: 1px solid rgba(148,163,184,0.55);
   background: rgba(255,255,255,0.94);
-  color: var(--text-main);
-  padding: 10px 16px;
-  border-radius: 999px;
-  cursor: pointer;
+  color: #334155;
+  padding:10px 16px;
+  border-radius:999px;
+  cursor:pointer;
   box-shadow: 0 10px 22px rgba(15,23,42,0.08);
-  font-weight: 600;
-  transition: transform 0.18s ease, box-shadow 0.18s ease,
-             border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+  font-weight:600;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, color .18s ease, background .18s ease;
 }
+
 .intro-bar__button:hover{
   transform: translateY(-2px);
   box-shadow: 0 8px 18px rgba(15,23,42,0.14);
@@ -252,75 +236,32 @@ header *{
   border-color: var(--accent-color);
   background: #f9fafb;
 }
+
 .intro-bar__button:active{
   transform: translateY(0);
   box-shadow: 0 4px 10px rgba(15,23,42,0.10);
 }
 
-/* =========================
-   WebXR iframe
-   ========================= */
-.earth-frame-wrap{
-  position: relative;
-  display: block;
-
-  width: 100%;
-  height: 70vh;
-  min-height: 480px;
-  max-width: 1000px;
-
-  margin-top: 28px;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
-  background: #000;
-
-  overscroll-behavior: contain;
-  overflow: hidden;
-}
-
-#webxr-iframe{
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: none;
-  margin: 0;
-  background: #000;
-}
-
-/* 絞り込みボタン（iframe上左上） */
-.earth-frame-wrap .tag-filter-btn{
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  z-index: 5;
-}
-
 @media (min-width: 1024px){
-  .earth-frame-wrap{
-    width: 90%;
-    height: 80vh;
-  }
   .intro-bar{
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    padding-left: 0;
+    flex-direction:row;
+    justify-content:center;
+    align-items:center;
+    padding-left:0;
   }
   .intro-bar__button{
-    width: auto;
-    max-width: 420px;
-    white-space: nowrap;
+    width:auto;
+    max-width:420px;
+    white-space:nowrap;
   }
-
   .brand-logo-text{
-    margin: 0;
-    margin-top: 4px;
-    margin-left: 30px;
-    margin-right: auto;
-    text-align: left;
+    margin:0;
+    margin-top:4px;
+    margin-left:30px;
+    margin-right:auto;
+    text-align:left;
     max-width: calc(100% - 200px);
   }
-
   .stage{
     padding: calc(var(--header-offset) + 80px) 32px 56px;
   }
@@ -328,323 +269,217 @@ header *{
 
 @media (max-width: 1023px){
   .stage{
-    align-items: flex-start;
+    align-items:flex-start;
     padding: calc(var(--header-offset) + 72px) 16px 40px;
   }
 }
 
-/* =========================
-   共通ボタン
-   ========================= */
-.btn{
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 12px;
-  padding: 10px 14px;
-  border: 1px solid rgba(15,23,42,0.14);
-  background: #fff;
-  color: var(--text-main);
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-}
-.btn:hover{ background: rgba(15,23,42,0.03); }
+/* =========================================================
+   WebXR iframe
+   ========================================================= */
 
-.btn.ghost{ background: rgba(255,255,255,0.9); }
+.earth-frame-wrap{
+  position:relative;
+  display:block;
 
-.btn.danger{
-  border-color: rgba(220,38,38,0.30);
-  color: #b91c1c;
+  width:100%;
+  height:70vh;
+  min-height:480px;
+  max-width:1000px;
+
+  margin-top:28px;
+  border-radius:24px;
+  box-shadow: var(--shadow-lg);
+  background:#000;
+
+  overscroll-behavior: contain;
+  overflow:hidden;
 }
 
-.btn.primary{
-  background: #0B3559;
-  color: #fff;
-  border-color: #0B3559;
+#webxr-iframe{
+  display:block;
+  width:100%;
+  height:100%;
+  border:none;
+  margin:0;
+  background:#000;
 }
 
-/* =========================
-   モーダル
-   ========================= */
+.earth-frame-wrap .tag-filter-btn{
+  position:absolute;
+  top:14px;
+  left:14px;
+  z-index:5;
+}
+
+/* =========================================================
+   Backdrop / Modal
+   （★ここが重要：閉じている時は pointer-events:none でクリック奪取を防ぐ）
+   ========================================================= */
+
 .backdrop{
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.40);
+  background: var(--backdrop);
   display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  z-index: 9000;
-}
-.backdrop.open{ display: flex; }
-
-.modal{
-  width: min(860px, calc(100vw - 32px));
-  background: rgba(255,255,255,0.98);
-  border-radius: var(--r-xl);
-  border: 1px solid rgba(15,23,42,0.10);
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
+  z-index: 90;
+  pointer-events: none; /* ★閉じている時にクリックを奪わない */
 }
 
-.modal header{
-  position: static;
-  width: 100%;
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-bottom: 1px solid rgba(15,23,42,0.08);
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.modal header .close{
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  border: 1px solid rgba(15,23,42,0.14);
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.modal .body{ padding: 14px 14px 16px; }
-
-.modal .actions{
-  padding: 12px 14px 16px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  border-top: 1px solid rgba(15,23,42,0.08);
-}
-
-/* タイポ */
-.heading-large{
-  margin: 0 0 10px;
-  font-weight: 800;
-  font-size: 20px;
-  color: var(--primary-color);
-}
-.heading-strong{
-  margin: 12px 0 6px;
-  font-weight: 800;
-  color: var(--primary-color);
-}
-
-/* =========================
-   フォーム
-   ========================= */
-.form{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-@media (max-width: 900px){
-  .form{ grid-template-columns: 1fr; }
-}
-
-.form label{
+.backdrop.open{
   display: block;
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 6px;
-  color: var(--primary-color);
+  pointer-events: auto; /* ★開いている時だけ有効 */
 }
 
-.form input, .form select{
-  width: 100%;
-  padding: 10px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(15,23,42,0.14);
-  outline: none;
-  background: #fff;
+/* ★タグ絞り込み用（index.html内で z-index:10000 が指定されている想定） */
+#tagFilterBackdrop{
+  pointer-events: none; /* ★open付与まではクリックを奪わない */
+}
+#tagFilterBackdrop.open{
+  pointer-events: auto;
 }
 
-.form input:focus, .form select:focus{
-  border-color: rgba(59,130,246,0.55);
-  box-shadow: 0 0 0 4px rgba(59,130,246,0.15);
-}
+/* =========================================================
+   Section（一般）
+   ========================================================= */
 
-.note{
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-sub);
-}
-
-.status{
-  margin: 10px 14px 14px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(59,130,246,0.10);
-  color: rgba(15,23,42,0.85);
-  border: 1px solid rgba(59,130,246,0.20);
-  opacity: 0;
-  transform: translateY(6px);
-  transition: .18s ease;
-}
-.status.show{
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* ======================
-   Meetup Rooms（待合室）
-   ====================== */
-.meetups{
-  margin: 30px auto 0;
-  width: min(var(--wrap-max), calc(100vw - 32px));
-  padding: 24px;
-  border-radius: var(--r-xl);
-  background: var(--card);
-  border: 1px solid var(--card-border);
+.section{
+  width: min(1080px, calc(100vw - 32px));
+  margin: 26px auto 0;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(15,23,42,0.10);
+  border-radius: 22px;
   box-shadow: var(--shadow-md);
+  padding: 18px;
 }
 
-.meetups__head{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.meetups__title{
-  margin: 0;
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: .01em;
-}
-
-.meetups .head-create{
-  border-radius: 999px;
-  padding: 10px 16px;
-  box-shadow: var(--shadow-md);
-  background: #0B3559;
-  color: #fff;
-  border-color: #0B3559;
-}
-
-.grid{
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-@media (max-width: 1100px){
-  .grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 700px){
-  .grid{ grid-template-columns: 1fr; }
-}
-
-.card{
-  position: relative; /* ★編集ボタンをカード右上に置く */
-  border-radius: var(--r-lg);
-  background: rgba(255,255,255,0.95);
-  border: 1px solid rgba(0,0,0,0.10);
-  box-shadow: var(--shadow-sm);
-  padding: 16px;
-}
-
-.card h3{
-  margin: 0 0 6px;
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.card .meta{
-  font-size: 13px;
-  opacity: .75;
+.section h2{
   margin: 0 0 10px;
+  font-size: 18px;
 }
 
-/* row */
-.card .row{
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: 12px;
-  position: static; /* ★相対にしない（カード基準にする） */
+.section p{
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
-/* ★入室する：rowの最初の要素を必ず青に（.btn有無に依存しない） */
-.card .row > :first-child{
-  width: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* =========================================================
+   Buttons (base)
+   ========================================================= */
 
-  background: #3b82f6;
-  color: #fff;
-  border: 1px solid #3b82f6;
-
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
   border-radius: 12px;
   padding: 10px 14px;
-
+  border: 1px solid rgba(15,23,42,0.14);
+  background: #fff;
+  color: #334155;
   cursor: pointer;
-  text-decoration: none;
   box-shadow: var(--shadow-sm);
 }
-.card .row > :first-child:hover{
-  background: #2563eb;
-  border-color: #2563eb;
+
+.btn:hover{ background: rgba(15,23,42,0.03); }
+
+.btn.primary{
+  background:#0B3559;
+  color:#fff;
+  border-color:#0B3559;
 }
 
-/* ★編集：2個目以降の要素をカード右上の正方形にする */
-.card .row > :not(:first-child){
-  position: absolute;
-  top: 12px;
-  right: 12px;
+/* =========================================================
+   ★Meet Room（待合室）ボタン整形：クラスが違っても効く保険
+   ========================================================= */
 
-  width: 40px;
-  height: 40px;
-  padding: 0;
+/* カードっぽい要素を相対配置にする（編集ボタンを右上固定するため） */
+#meetupSection .card,
+#meetupSection .roomCard,
+#meetupSection .room-card,
+#meetupSection .meetCard,
+#meetupSection .meet-card,
+#meetupSection [data-room-id],
+#meetupSection [data-room]{
+  position: relative;
+}
 
-  border-radius: 12px;
-  background: rgba(255,255,255,0.98);
-  color: var(--text-main);
-  border: 1px solid rgba(15,23,42,0.14);
+/* 行コンテナ */
+#meetupSection .row,
+#meetupSection .actions{
+  position: static;
+}
 
+/* 入室する：その行の最初の操作ボタンを必ず青背景＋白文字に */
+#meetupSection .row > :first-child,
+#meetupSection .actions > :first-child{
+  background: #3b82f6 !important;
+  color: #fff !important;
+  border: 1px solid #3b82f6 !important;
+  border-radius: 12px !important;
+  padding: 10px 14px !important;
+  width: auto;
+  min-width: 120px;
+  text-decoration: none;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
 
-  box-shadow: 0 10px 20px rgba(15,23,42,0.08);
+/* 入室するが横いっぱいにしたい場合（元の見た目に寄せる） */
+#meetupSection .row > :first-child{
+  width: 100% !important;
+}
+
+/* 編集：2個目以降をカード右上に正方形で固定 */
+#meetupSection .row > :not(:first-child),
+#meetupSection .actions > :not(:first-child){
+  position: absolute !important;
+  top: 12px !important;
+  right: 12px !important;
+
+  width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+
+  border-radius: 12px !important;
+  background: rgba(255,255,255,0.98) !important;
+  color: #334155 !important;
+  border: 1px solid rgba(15,23,42,0.14) !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  box-shadow: 0 10px 20px rgba(15,23,42,0.08) !important;
+
+  white-space: nowrap;
+  overflow: hidden;
   cursor: pointer;
+}
 
-  /* テキストは隠してアイコン化 */
+/* 編集ボタンの中身が文字だけで変な時の保険（既にアイコンならそのまま見える） */
+#meetupSection .row > :not(:first-child),
+#meetupSection .actions > :not(:first-child){
   font-size: 0;
   line-height: 0;
 }
-
-/* 鉛筆アイコン */
-.card .row > :not(:first-child)::before{
+#meetupSection .row > :not(:first-child)::before,
+#meetupSection .actions > :not(:first-child)::before{
   content: "✎";
   font-size: 16px;
   line-height: 1;
 }
 
-/* hover */
-.card .row > :not(:first-child):hover{
-  transform: translateY(-1px);
-  box-shadow: 0 14px 26px rgba(15,23,42,0.12);
-  border-color: rgba(59,130,246,0.55);
-}
+/* =========================================================
+   Responsive
+   ========================================================= */
 
-/* 待合室エリア：スマホ */
 @media (max-width: 900px){
-  .meetups{
-    width: min(var(--wrap-max), calc(100vw - 24px));
-    padding: 18px;
-  }
-  .meetups__title{
-    font-size: 26px;
+  .section{
+    width: min(1080px, calc(100vw - 24px));
+    padding: 16px;
   }
 }
