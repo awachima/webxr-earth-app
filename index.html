@@ -328,35 +328,55 @@
   <div class="wrap">
 
     <header>
-      <div class="brand-logo-text">Dokodemo Doors Fan Site</div>
+      <h1 class="brand-logo-text" id="siteTitle">Dokodemo Doors Fan Site</h1>
+
+      <!-- 言語スイッチ -->
       <div class="lang-switch">
-        <button type="button" class="lang-switch__toggle" id="langToggle">Language</button>
-        <div class="lang-switch__menu" id="langMenu" hidden>
-          <button type="button" data-lang="en">English</button>
+        <button id="langToggle" class="lang-switch__toggle" type="button">Language</button>
+        <div id="langMenu" class="lang-switch__menu" hidden>
           <button type="button" data-lang="ja">日本語</button>
+          <button type="button" data-lang="en">English</button>
           <button type="button" data-lang="zh">中文</button>
-          <button type="button" data-lang="fa">فارسی</button>
           <button type="button" data-lang="hi">हिन्दी</button>
           <button type="button" data-lang="he">עברית</button>
+          <button type="button" data-lang="fa">فارسی</button>
         </div>
       </div>
     </header>
 
-    <!-- Tag filter modal -->
-    <div class="backdrop" id="tagFilterBackdrop" aria-hidden="true">
-      <div class="modal tag-filter-modal" role="dialog" aria-labelledby="tagFilterTitle" aria-describedby="tagFilterBody">
+    <!-- ===== About modals ===== -->
+    <div id="aboutBackdrop" class="backdrop" aria-hidden="true">
+      <div class="modal about-modal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+        <header>
+          <div id="aboutTitle" style="font-weight:700;">What is Dokodemo Doors?</div>
+          <button type="button" class="close" id="aboutClose" aria-label="Close">✕</button>
+        </header>
+        <div class="body" id="aboutBody">
+          ...
+        </div>
+      </div>
+    </div>
+
+    <div id="guideBackdrop" class="backdrop" aria-hidden="true">
+      <div class="modal about-modal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+        <header>
+          <div id="guideTitle" style="font-weight:700;">What is this fan site?</div>
+          <button type="button" class="close" id="guideClose" aria-label="Close">✕</button>
+        </header>
+        <div class="body" id="guideBody">
+          ...
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Tag filter modal ===== -->
+    <div id="tagFilterBackdrop" class="backdrop" aria-hidden="true">
+      <div class="modal tag-filter-modal" role="dialog" aria-modal="true" aria-labelledby="tagFilterTitle">
         <header>
           <div id="tagFilterTitle">絞り込み</div>
-          <div class="close" id="tagFilterClose" aria-label="Close">×</div>
+          <button type="button" class="close" id="tagFilterClose" aria-label="Close">✕</button>
         </header>
-
-        <div class="body" id="tagFilterBody">
-          <div class="tag-filter-toolbar">
-            <button type="button" class="btn" id="tagFilterClear" style="display:none" aria-hidden="true" tabindex="-1">全て解除</button>
-            <div class="tag-filter-spacer"></div>
-            <button type="button" class="btn primary" id="tagFilterApply">適用</button>
-          </div>
-
+        <div class="body">
           <div id="tagFilterColumns" class="tag-filter-columns" aria-label="Tag tree"></div>
         </div>
       </div>
@@ -380,6 +400,10 @@
           絞り込み <span id="tagFilterCount" class="tag-filter-count">(0)</span>
         </button>
 
+        <button type="button" id="touristInfoBtn" class="tourist-info-btn" aria-controls="recommendSection" aria-expanded="false">
+          観光案内
+        </button>
+
         <iframe
           id="webxr-iframe"
           title="WebXR Earth"
@@ -392,7 +416,7 @@
 
     <!-- ★ ツアー提案カード（写真アイコン入り・A案レイアウト） -->
     <section
-      id="recommendSection"
+      id="recommendSection" class="lucy-panel is-collapsed"
       style="
         margin: 24px auto;
         max-width: 960px;
@@ -479,299 +503,85 @@
         <h2 class="meetups__title">Meetup Rooms</h2>
         <button class="btn ghost head-create" id="openCreate">Create a room</button>
       </div>
-      <div id="grid" class="grid"></div>
+
+      <div id="grid" class="grid">
+        <!-- cards inserted by JS -->
+      </div>
     </section>
 
-  </div>
-
-  <!-- Site description modal -->
-  <div class="backdrop" id="aboutBackdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-labelledby="aboutTitle" aria-describedby="aboutBody">
-      <header>
-        <div id="aboutTitle">What is Dokodemo Doors?</div>
-        <div class="close" id="aboutClose" aria-label="Close">×</div>
-      </header>
-      <div class="body" id="aboutBody">
-        <p class="heading-large">A place where you can explore the world together, even when you're far apart</p>
-        <p style="padding-left: 1em;">
-          <a href="https://dokodemodoors.com/" target="_blank">Dokodemo Doors</a> is an online VR platform that offers a wide collection of 360-degree VR travel videos from around the world.
-        </p>
-        <p class="heading-strong">More than 1,700 videos available</p>
-        <p style="padding-left: 1em;">
-          Although YouTube also has VR content, no other site gathers this many VR travel videos in one place.
-        </p>
-        <p class="heading-strong">Watch together in perfect sync</p>
-        <p style="padding-left: 1em;">
-          By starting the video at the same time, you can share the exact same scenery while talking or using gestures.
-        </p>
-        <p>
-          Learn more
-          <a href="https://dokodemodoors.com/info/about-dokodemodoor" target="_blank">here</a>.
-        </p>
-      </div>
-      <div class="actions">
-        <button class="btn" id="aboutOk">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Fan site guide modal -->
-  <div class="backdrop" id="guideBackdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-labelledby="guideTitle" aria-describedby="guideBody">
-      <header>
-        <div id="guideTitle">What is this fan site?</div>
-        <div class="close" id="guideClose" aria-label="Close">×</div>
-      </header>
-      <div class="body" id="guideBody">
-        <p class="heading-large">An unofficial fan-made site that lets you choose destinations from a 3D globe</p>
-        <p>
-          I created this site with official permission because I wanted to pick destinations visually on a globe instead of from a traditional list view on the
-          <a href="https://dokodemodoors.com/" target="_blank">official site</a>.
-        </p>
-        <p class="heading-strong">1. Subscription required</p>
-        <p style="padding-left: 1em;">
-          Viewing each world requires a subscription through the official website. If you're not subscribed, entering a world will redirect you to the subscription page.<br>
-          Some worlds are available for free during limited periods, and those are easiest to find from the
-          <a href="https://dokodemodoors.com/" target="_blank">official homepage</a>
-          under “Recommended Worlds.”
-        </p>
-        <p class="heading-strong">2. Meta Quest 2 or higher recommended</p>
-        <p style="padding-left: 1em;">
-          Although the service works on various devices, the VR experience is overwhelmingly superior. For best results, Meta Quest 2 or higher is recommended.
-        </p>
-      </div>
-      <div class="actions">
-        <button class="btn" id="guideOk">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Create / Edit modal -->
-  <div class="backdrop" id="backdrop">
-    <div class="modal">
-      <header>
-        <div id="modalTitle">Create a meetup room</div>
-        <div class="close" id="close" aria-label="Close">×</div>
-      </header>
-      <div class="body">
-        <!-- ★ 多言語対応用の説明文コンテナ（中身は JS で差し替え） -->
-        <p class="modal-description" id="modalDescription" style="margin-bottom:12px; font-size:0.9rem; line-height:1.5;"></p>
-
-        <div class="form">
-          <div>
-            <label for="mTitle">Title</label>
-            <input id="mTitle" placeholder="e.g. Tokyo Night Tour" inputmode="text" maxlength="60">
+    <!-- ===== Modal (Create/Edit) ===== -->
+    <div id="backdrop" class="backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <header>
+          <div id="modalTitle">Create meetup</div>
+          <button type="button" class="close" id="close" aria-label="Close">✕</button>
+        </header>
+        <div class="body">
+          <div class="row">
+            <label id="labelTitle" for="mTitle">Title</label>
+            <input id="mTitle" type="text" />
           </div>
 
-          <div>
-            <label for="mLimit">Participant limit</label>
-            <select id="mLimit" aria-label="Select max participants">
-              <option>10</option><option>9</option><option>8</option><option>7</option><option>6</option>
-              <option>5</option><option>4</option><option>3</option><option>2</option><option>1</option>
-            </select>
+          <div class="row">
+            <label id="labelLimit" for="mLimit">Participants</label>
+            <input id="mLimit" type="number" min="1" max="30" value="6" />
           </div>
 
-          <!-- Free / Paid 選択＋金額 -->
-          <div>
-            <label id="mEventTypeLabel">Free or paid event</label>
-            <div style="margin-top:4px; display:flex; gap:24px; align-items:center;">
-              <label style="display:flex; align-items:center; gap:4px;">
+          <div class="row">
+            <label id="labelStart" for="mStart">Start</label>
+            <input id="mStart" type="datetime-local" />
+          </div>
+
+          <!-- Quest など datetime-local 非対応用 -->
+          <div class="row" id="mStartFallback" style="display:none;">
+            <label id="labelStartFallback">Start</label>
+            <div class="start-grid">
+              <select id="mMonth"></select>
+              <select id="mDay"></select>
+              <select id="mHour"></select>
+              <select id="mMinute"></select>
+            </div>
+          </div>
+
+          <div class="row">
+            <label id="labelTarget" for="mTarget">URL</label>
+            <input id="mTarget" type="url" placeholder="https://..." />
+          </div>
+
+          <!-- Free / Paid -->
+          <div class="row">
+            <label id="labelEventType">Event type</label>
+            <div class="radio-row">
+              <label class="radio">
                 <input type="radio" name="mEventType" value="free" checked>
-                <span id="mEventTypeFreeLabel">Free event</span>
+                <span id="eventTypeFree">Free</span>
               </label>
-              <label style="display:flex; align-items:center; gap:4px;">
+              <label class="radio">
                 <input type="radio" name="mEventType" value="paid">
-                <span id="mEventTypePaidLabel">Paid event</span>
+                <span id="eventTypePaid">Paid</span>
               </label>
             </div>
-            <div id="priceWrapper" style="margin-top:8px; display:none;">
-              <label for="mPrice" id="mPriceLabel" style="display:block; margin-bottom:4px;">Price</label>
-              <input
-                id="mPrice"
-                type="text"
-                placeholder="e.g. 1500 JPY / $10 / 10 EUR"
-                inputmode="text">
-            </div>
           </div>
 
-          <div>
-            <label for="mStart">Meeting time (JST)</label>
-            <!-- 通常（対応ブラウザ向け） -->
-            <input id="mStart" type="datetime-local" inputmode="none">
-
-            <!-- フォールバック（Quest 等）：月/日/時/分 セレクト -->
-            <div id="mStartFallback" style="display:none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px">
-              <select id="mMonth" aria-label="Month"></select>
-              <select id="mDay" aria-label="Day"></select>
-              <select id="mHour" aria-label="Hour"></select>
-              <select id="mMinute" aria-label="Minute"></select>
-            </div>
+          <div class="row" id="priceWrapper" style="display:none;">
+            <label id="labelPrice" for="mPrice">Price</label>
+            <input id="mPrice" type="text" placeholder="e.g. 500" />
           </div>
 
-          <div>
-            <label for="mTarget">Tour / world URL</label>
-            <input id="mTarget" placeholder="https://dokodemodoors.com/..." inputmode="url" spellcheck="false" autocapitalize="off" autocomplete="off">
-            <div class="note">
-              After creation, the URL cannot be changed. To change it, duplicate the room and create a new one.
-            </div>
+          <p id="statusMsg" class="status" style="display:none;"></p>
+
+          <div class="actions">
+            <button class="btn" id="duplicate" type="button">Duplicate</button>
+            <div class="spacer"></div>
+            <button class="btn danger" id="delete" type="button">Delete</button>
+            <button class="btn primary" id="submit" type="button">Create meetup</button>
           </div>
         </div>
       </div>
-      <div class="actions">
-        <div class="left">
-          <button class="btn danger" id="delete" style="display:none">Delete this room</button>
-        </div>
-        <button class="btn ghost" id="duplicate" style="display:none">Duplicate this room</button>
-        <button class="btn ghost" id="close2">Close</button>
-        <button class="btn" id="submit">Create</button>
-      </div>
-      <div class="status" id="statusMsg">Room created</div>
     </div>
+
   </div>
 
-  <!-- Custom alert (destination URL info) -->
-  <div class="backdrop" id="alertBackdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-labelledby="alertTitle" aria-describedby="alertBody">
-      <header>
-        <div id="alertTitle">About the URL</div>
-        <div class="close" id="alertClose" aria-label="Close">×</div>
-      </header>
-      <div class="body" id="alertBody">
-        Please enter a Dokodemo Doors tour or world URL.
-      </div>
-      <div class="actions">
-        <button class="btn" id="alertOk">OK</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 絞り込み（tagfilter） -->
-  <script src="./tagfilter.js"></script>
-
-  <!-- 言語メニュー（クリックが潰されても確実に動作 / 複数キー同期） -->
-  <script>
-    (function(){
-      const toggle = document.getElementById('langToggle');
-      const menu = document.getElementById('langMenu');
-      if(!toggle || !menu) return;
-
-      const LANG_KEYS = [
-        "dd_lang",
-        "lang",
-        "language",
-        "ddLang",
-        "ddLanguage",
-        "selectedLang",
-        "selectedLanguage",
-        "i18n_lang",
-        "i18nextLng"
-      ];
-
-      const safeSet = (k,v)=>{ try{ localStorage.setItem(k,v); }catch(_){ } };
-
-      // ARIA
-      toggle.setAttribute('aria-haspopup','menu');
-      toggle.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
-
-      const isOpen = ()=> !menu.hidden;
-
-      const openMenu = ()=>{
-        menu.hidden = false;
-        toggle.setAttribute('aria-expanded','true');
-      };
-
-      const closeMenu = ()=>{
-        menu.hidden = true;
-        toggle.setAttribute('aria-expanded','false');
-      };
-
-      // クリックが他のスクリプトに潰されても確実に動くよう、capture で拾う
-      toggle.addEventListener('pointerdown', (e)=>{
-        e.preventDefault();
-        e.stopPropagation();
-        if(isOpen()) closeMenu();
-        else openMenu();
-      }, { capture:true });
-
-      // click は他のハンドラに影響されることがあるので抑止だけしておく
-      toggle.addEventListener('click', (e)=>{
-        e.preventDefault();
-        e.stopPropagation();
-      }, { capture:true });
-
-      // メニュー内の操作は外側の「閉じる」判定に引っかからないようにする
-      menu.addEventListener('pointerdown', (e)=>{
-        e.stopPropagation();
-      }, { capture:true });
-
-      // 外側クリックで閉じる
-      document.addEventListener('pointerdown', (e)=>{
-        if(!menu.contains(e.target) && !toggle.contains(e.target)){
-          closeMenu();
-        }
-      }, { capture:true });
-
-      // 言語選択（★複数キーに同時保存して、他のJSに「ja上書き」されにくくする）
-      menu.querySelectorAll('button[data-lang]').forEach((btn)=>{
-        btn.addEventListener('click', (e)=>{
-          e.preventDefault();
-          e.stopPropagation();
-          const lang = (btn.getAttribute('data-lang') || 'ja').toLowerCase();
-
-          // すべてのキーを統一
-          for(const k of LANG_KEYS){
-            safeSet(k, lang);
-          }
-          // HTML属性も同期
-          document.documentElement.setAttribute('lang', lang);
-          // 参照用
-          window.__DD_LANG = lang;
-
-          closeMenu();
-          location.reload();
-        }, { capture:true });
-      });
-
-      // Esc で閉じる
-      document.addEventListener('keydown', (e)=>{
-        if(e.key === 'Escape') closeMenu();
-      });
-    })();
-  </script>
-
-  <!-- ★ iframe 上にカーソルがある間、ページ全体のスクロールを抑止（復活） -->
-  <script>
-    (function(){
-      const wrap = document.getElementById('earthFrameWrap');
-      const iframe = document.getElementById('webxr-iframe');
-      if(!wrap || !iframe) return;
-
-      let hovering = false;
-
-      const onEnter = ()=>{ hovering = true; };
-      const onLeave = ()=>{ hovering = false; };
-
-      wrap.addEventListener('mouseenter', onEnter);
-      wrap.addEventListener('mouseleave', onLeave);
-      iframe.addEventListener('mouseenter', onEnter);
-      iframe.addEventListener('mouseleave', onLeave);
-
-      const blockIfHover = (e)=>{
-        if(!hovering) return;
-        e.preventDefault();
-      };
-
-      iframe.addEventListener('wheel', blockIfHover, { passive:false });
-      iframe.addEventListener('touchmove', blockIfHover, { passive:false });
-      window.addEventListener('wheel', blockIfHover, { passive:false });
-      window.addEventListener('touchmove', blockIfHover, { passive:false });
-    })();
-  </script>
-
-  <!-- 待合室（Meetup）＋他の既存JS（復活） -->
   <script src="./main.js"></script>
-  <script src="./recommend.js"></script>
-
-  <footer></footer>
 </body>
 </html>
