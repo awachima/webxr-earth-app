@@ -958,3 +958,52 @@ header *{
 .meetups .grid .card a.btn[data-enter]{
   max-width: 100%;
 }
+
+
+
+/* =========================================================
+   ツアー提案（Lucy）パネル：デフォルト非表示 + スライド表示
+   - main.js が #recommendSection に is-collapsed / is-open を付け外しする前提
+   ========================================================= */
+#recommendSection{
+  overflow: hidden;
+  max-height: 1400px;                 /* 中身が多くても収まる上限（十分大きく） */
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+
+  transition:
+    max-height 0.45s ease,
+    opacity    0.35s ease,
+    transform  0.45s ease,
+    padding    0.45s ease,
+    margin     0.45s ease;
+
+  will-change: max-height, opacity, transform;
+}
+
+/* デフォルト非表示（JSが初期化時に付ける） */
+#recommendSection.is-collapsed{
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-12px);
+  pointer-events: none;
+
+  /* 折りたたみ時に余白も消す（にゅるっと締まる） */
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* 開いている状態（念のため） */
+#recommendSection.is-open{
+  pointer-events: auto;
+}
+
+/* 動きを減らす設定の人向け */
+@media (prefers-reduced-motion: reduce){
+  #recommendSection{
+    transition: none !important;
+  }
+}

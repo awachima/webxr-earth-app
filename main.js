@@ -742,6 +742,9 @@ function startApp(){
   // 読み込み直後は確実に非表示（チラ見え対策）
   closeModal();
 
+  // ツアー提案（Lucy）パネル：tourist-information ボタンで開閉
+  setupRecommendPanelToggle();
+
   document.getElementById('close').onclick=closeModal;
   document.getElementById('close2').onclick=closeModal;
   document.getElementById('submit').onclick=onSubmit;
@@ -760,6 +763,45 @@ async function sha256(s){
   return toHex(buf);
 }
 function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i);return r===0;}
+
+// ===== ツアー提案（Lucy）パネル：表示/非表示トグル =====
+function setupRecommendPanelToggle(){
+  const btn = document.getElementById('touristInfoBtn');
+  const panel = document.getElementById('recommendSection');
+  if (!btn || !panel) return;
+
+  // 初期状態（チラ見え対策：HTML側に is-collapsed が付いていても念のため）
+  panel.classList.add('is-collapsed');
+  panel.classList.remove('is-open');
+  panel.setAttribute('aria-hidden', 'true');
+  btn.setAttribute('aria-expanded', 'false');
+
+  const setOpen = (open)=>{
+    if (open){
+      panel.classList.remove('is-collapsed');
+      panel.classList.add('is-open');
+      panel.setAttribute('aria-hidden', 'false');
+      btn.setAttribute('aria-expanded', 'true');
+    } else {
+      panel.classList.add('is-collapsed');
+      panel.classList.remove('is-open');
+      panel.setAttribute('aria-hidden', 'true');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+  };
+
+  btn.addEventListener('click', ()=>{
+    const open = panel.classList.contains('is-open');
+    setOpen(!open);
+  });
+
+  // ESC で閉じる（必要なら便利）
+  document.addEventListener('keydown', (ev)=>{
+    if (ev.key === 'Escape'){
+      setOpen(false);
+    }
+  });
+}
 
 // ===== iframe ホバー時のスクロールロック =====
 (function(){
