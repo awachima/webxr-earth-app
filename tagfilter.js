@@ -20,18 +20,23 @@
   const TREE_URL_FALLBACK = './tree.csv';
 
   const btn = document.getElementById('tagFilterBtn');
+
+  // ★ badge は任意（「数字を出さない」場合は存在しない）
   const badge = document.getElementById('tagFilterCount');
 
   const backdrop = document.getElementById('tagFilterBackdrop');
   const modal = backdrop ? backdrop.querySelector('.tag-filter-modal') : null;
   const closeBtn = document.getElementById('tagFilterClose');
   const applyBtn = document.getElementById('tagFilterApply');
+
+  // ★ clearBtn も任意（UIによっては消している可能性がある）
   const clearBtn = document.getElementById('tagFilterClear');
 
   const colWrap = document.getElementById('tagFilterColumns');
   const iframe = document.getElementById('webxr-iframe');
 
-  if (!btn || !badge || !backdrop || !modal || !closeBtn || !applyBtn || !colWrap || !iframe){
+  // ★ badge / clearBtn は必須にしない
+  if (!btn || !backdrop || !modal || !closeBtn || !applyBtn || !colWrap || !iframe){
     return;
   }
 
@@ -129,7 +134,9 @@
     }catch(e){}
   }
 
+  // ★ badge が無い場合は何もしない
   function setBadge(){
+    if (!badge) return;
     badge.textContent = `(${selected.size})`;
   }
 
@@ -213,10 +220,9 @@
 
     const { checked, indeterminate } = computeIndeterminateStates();
 
-    // Determine current chain to render columns:
     // column 1: root children (depth 1)
-    // column 2: children of selected path[0]
-    // column 3: children of selected path[1]
+    // column 2: children of path[0]
+    // column 3: children of path[1]
     const cols = [];
     const col1 = createColumn('カテゴリ');
     renderList(col1, ROOT_ID, 1, checked, indeterminate);
@@ -234,21 +240,22 @@
 
     cols.forEach(c=>colWrap.appendChild(c));
 
-    // clear button visibility
-    if (selected.size > 0){
-      clearBtn.style.display = '';
-      clearBtn.removeAttribute('aria-hidden');
-      clearBtn.removeAttribute('tabindex');
-    }else{
-      clearBtn.style.display = 'none';
-      clearBtn.setAttribute('aria-hidden','true');
-      clearBtn.setAttribute('tabindex','-1');
+    // ★ clearBtn がある場合のみ表示制御
+    if (clearBtn){
+      if (selected.size > 0){
+        clearBtn.style.display = '';
+        clearBtn.removeAttribute('aria-hidden');
+        clearBtn.removeAttribute('tabindex');
+      }else{
+        clearBtn.style.display = 'none';
+        clearBtn.setAttribute('aria-hidden','true');
+        clearBtn.setAttribute('tabindex','-1');
+      }
     }
   }
 
   function renderList(colEl, parentId, depth, checked, indeterminate){
     if (!parentId){
-      // empty column
       return;
     }
     const ch = childrenByParent.get(parentId);
@@ -256,7 +263,6 @@
       return;
     }
 
-    // sort by label
     const arr = Array.from(ch).map(id=>nodesById.get(id)).filter(Boolean);
     arr.sort((a,b)=> (a.label || '').localeCompare((b.label || ''), 'ja'));
 
@@ -283,24 +289,20 @@
       row.appendChild(lab);
       row.appendChild(chev);
 
-      // checkbox click: toggle with descendants
       cb.addEventListener('click', (e)=>{
         e.stopPropagation();
         const on = cb.checked;
         setNodeAndDescendants(node.id, on);
         saveSelection();
         setBadge();
-        renderColumns(); // reflect indeterminate changes
+        renderColumns();
       });
 
-      // row click: open next column (path)
       row.addEventListener('click', ()=>{
-        // update path at current depth
-        const depthIdx = node.depth - 1; // root children depth 1 => depth idx 0
+        const depthIdx = node.depth - 1;
         path = path.slice(0, depthIdx);
         path[depthIdx] = node.id;
 
-        // If clicked node has children, keep going; else, set deeper path to empty
         if (!hasKids){
           path = path.slice(0, depthIdx+1);
         }
@@ -315,7 +317,6 @@
   //  Earth messaging
   // ----------------------------
   function postSelected(){
-    // earth側は「タグ名」を期待しているので label を送る
     const tags = Array.from(selected)
       .map(id => label.get(id) || id)
       .map(s => s.trim())
@@ -332,8 +333,6 @@
     if (autoApplied) return;
     if (!earthReady) return;
     if (!treeReady) return;
-
-    // 以前の選択がある場合のみ自動送信
     if (!hadSavedSelection) return;
 
     autoApplied = true;
@@ -357,8 +356,7 @@
     backdrop.classList.add('open');
     document.body.style.overflow = 'hidden';
 
-    // --- position modal so its top-left matches the button position ---
-    // (Overlaying the iframe is OK; clamp to viewport to avoid going off-screen)
+    // position modal so its top-left matches the button position
     modal.style.visibility = 'hidden';
     modal.style.left = '0px';
     modal.style.top = '0px';
@@ -371,20 +369,19 @@
         let left = Math.round(b.left);
         let top  = Math.round(b.top);
 
-        const margin = 8; // keep a tiny safety margin
+        const margin = 8;
         if (left + m.width > window.innerWidth - margin) left = Math.max(margin, Math.round(window.innerWidth - margin - m.width));
         if (top + m.height > window.innerHeight - margin) top = Math.max(margin, Math.round(window.innerHeight - margin - m.height));
 
         modal.style.left = left + 'px';
         modal.style.top  = top  + 'px';
       }catch(e){
-        // fallback: leave at (0,0)
+        // leave at (0,0)
       }finally{
         modal.style.visibility = 'visible';
       }
     });
 
-    // selection already rendered
     renderColumns();
   }
 
@@ -392,7 +389,6 @@
     backdrop.setAttribute('aria-hidden','true');
     backdrop.classList.remove('open');
     document.body.style.overflow = '';
-    // reset (next open will position again)
     modal.style.visibility = '';
   }
 
@@ -402,7 +398,6 @@
   btn.addEventListener('click', openModal);
   closeBtn.addEventListener('click', closeModal);
 
-  // click backdrop closes only when clicking outside modal
   backdrop.addEventListener('click', (e)=>{
     if (e.target === backdrop) closeModal();
   });
@@ -414,14 +409,16 @@
     closeModal();
   });
 
-  clearBtn.addEventListener('click', ()=>{
-    selected = new Set();
-    saveSelection();
-    setBadge();
-    renderColumns();
-  });
+  // ★ clearBtn がある場合のみイベントを付ける
+  if (clearBtn){
+    clearBtn.addEventListener('click', ()=>{
+      selected = new Set();
+      saveSelection();
+      setBadge();
+      renderColumns();
+    });
+  }
 
-  // esc closes
   document.addEventListener('keydown', (e)=>{
     if (e.key === 'Escape' && backdrop.classList.contains('open')){
       closeModal();
@@ -445,7 +442,6 @@
     depthById.clear();
     pathById.clear();
 
-    // create root container
     nodesById.set(ROOT_ID, { id: ROOT_ID, label:'ROOT', depth:0, parentId:null, children:new Set() });
     label.set(ROOT_ID, 'ROOT');
     parent.set(ROOT_ID, null);
@@ -481,7 +477,6 @@
       }
     }
 
-    // link children sets
     childrenByParent.forEach((set, pid)=>{
       const pnode = nodesById.get(pid);
       if (pnode){
@@ -506,8 +501,9 @@
       }
     }
 
+    treeReady = true;
+
     if (!csvText){
-      treeReady = true;
       renderColumns();
       tryAutoApply();
       return;
@@ -515,12 +511,8 @@
 
     buildTreeFromCsv(csvText);
 
-    treeReady = true;
-
-    // if selection has nodes no longer exist, drop them
     selected = new Set(Array.from(selected).filter(id=>nodesById.has(id)));
 
-    // init default path from saved selection or first item
     const firstL1 = (childrenByParent.get(ROOT_ID) && childrenByParent.get(ROOT_ID).size>0)
       ? Array.from(childrenByParent.get(ROOT_ID))[0]
       : null;
