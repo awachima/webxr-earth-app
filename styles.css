@@ -1007,3 +1007,33 @@ header *{
     transition: none !important;
   }
 }
+
+/* =========================================================
+   クリック不能対策：iframe上のボタン（絞り込み等）を最前面に固定
+   - recommendSection の折りたたみ時にレイヤーが残ってクリックを奪うのを防ぐ
+   ========================================================= */
+
+/* 地球儀エリア自体を前面に */
+.earth-frame-wrap{
+  position: relative; /* 念のため（すでにあってもOK） */
+  z-index: 20;
+}
+
+/* iframe上のボタンはさらに前面＆クリック可能を保証 */
+.earth-frame-wrap .tag-filter-btn,
+.earth-frame-wrap .tourist-info-btn{
+  z-index: 25;
+  pointer-events: auto;
+}
+
+/* Lucyパネル側は前面に出ないように（下の通常レイヤーへ） */
+#recommendSection{
+  position: relative;
+  z-index: 1;
+}
+
+/* 折りたたみ中は境界（border等）も消して“薄い当たり判定”を消す */
+#recommendSection.is-collapsed{
+  border: 0 !important;
+  box-shadow: none !important;
+}
