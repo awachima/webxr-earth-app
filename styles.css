@@ -331,6 +331,54 @@ header *{
   box-shadow: 0 8px 18px rgba(0,0,0,0.12) !important;
 }
 
+
+/* =========================================================
+   ★ 観光案内ボタン（tourist-information.png）
+   - iframe上 左下 / 丸アイコン / 46px
+   ========================================================= */
+.earth-frame-wrap .tourist-info-btn{
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 5;
+
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  min-height: 46px;
+
+  padding: 0;
+  border-radius: 999px;
+
+  background-color: rgba(255,255,255,0.92);
+  background-image: url("./assets/tourist-information.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 46px 46px;
+
+  border: 1px solid rgba(0,0,0,0.12);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+
+  /* テキストは見せない（将来JS用にDOMは残す） */
+  font-size: 0;
+  line-height: 0;
+  color: transparent;
+
+  cursor: pointer;
+}
+
+/* hover / active の軽い反応 */
+.earth-frame-wrap .tourist-info-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(0,0,0,0.14);
+}
+
+.earth-frame-wrap .tourist-info-btn:active{
+  transform: translateY(0);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+}
+
+
 /* ========================================================= */
 
 @media (min-width: 1024px){
