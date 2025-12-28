@@ -742,6 +742,9 @@ function startApp(){
   // 読み込み直後は確実に非表示（チラ見え対策）
   closeModal();
 
+  // タグ絞り込みモーダル（iframe上 左上ボタン）
+  setupTagFilterModal();
+
   // ツアー提案（Lucy）パネル：tourist-information ボタンで開閉
   setupRecommendPanelToggle();
 
@@ -755,26 +758,63 @@ function startApp(){
   setInterval(loadShared, 30000);
 }
 
-// （将来用）管理者パスワード関連
-const ADMIN_HASH="27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
-function toHex(buf){return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");}
-async function sha256(s){
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return toHex(buf);
+
+// ===== タグ絞り込みモーダル（#tagFilterBtn → #tagFilterBackdrop） =====
+function setupTagFilterModal(){
+  const btn = document.getElementById('tagFilterBtn');
+  const backdrop = document.getElementById('tagFilterBackdrop');
+  const closeBtn = document.getElementById('tagFilterClose');
+  if (!btn || !backdrop || !closeBtn) return;
+
+  const open = ()=>{
+    backdrop.style.display = 'flex';
+    backdrop.setAttribute('aria-hidden', 'false');
+    btn.setAttribute('aria-expanded', 'true');
+  };
+
+  const close = ()=>{
+    backdrop.style.display = 'none';
+    backdrop.setAttribute('aria-hidden', 'true');
+    btn.setAttribute('aria-expanded', 'false');
+  };
+
+  // ボタンで開く
+  btn.addEventListener('click', (ev)=>{
+    ev.preventDefault();
+    ev.stopPropagation();
+    open();
+  });
+
+  // ×で閉じる
+  closeBtn.addEventListener('click', (ev)=>{
+    ev.preventDefault();
+    close();
+  });
+
+  // 背景クリックで閉じる（中身クリックでは閉じない）
+  backdrop.addEventListener('click', (ev)=>{
+    if (ev.target === backdrop){
+      close();
+    }
+  });
+
+  // ESC で閉じる
+  document.addEventListener('keydown', (ev)=>{
+    if (ev.key === 'Escape'){
+      // 他モーダルの ESC と競合しても「閉じる」だけなので安全
+      close();
+    }
+  });
+
+  // もし初期状態が表示されてしまう環境があれば、確実に閉じる
+  close();
 }
-function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i);return r===0;}
 
 // ===== ツアー提案（Lucy）パネル：表示/非表示トグル =====
 function setupRecommendPanelToggle(){
   const btn = document.getElementById('touristInfoBtn');
   const panel = document.getElementById('recommendSection');
   if (!btn || !panel) return;
-
-  // 初期状態（チラ見え対策：HTML側に is-collapsed が付いていても念のため）
-  panel.classList.add('is-collapsed');
-  panel.classList.remove('is-open');
-  panel.setAttribute('aria-hidden', 'true');
-  btn.setAttribute('aria-expanded', 'false');
 
   const setOpen = (open)=>{
     if (open){
@@ -790,18 +830,31 @@ function setupRecommendPanelToggle(){
     }
   };
 
+  // 初期状態：HTML側に is-collapsed が付いていれば尊重、無ければ閉じる
+  const initiallyOpen = panel.classList.contains('is-open') && !panel.classList.contains('is-collapsed');
+  setOpen(initiallyOpen);
+
   btn.addEventListener('click', ()=>{
-    const open = panel.classList.contains('is-open');
+    const open = panel.classList.contains('is-open') && !panel.classList.contains('is-collapsed');
     setOpen(!open);
   });
 
-  // ESC で閉じる（必要なら便利）
+  // ESC で閉じる
   document.addEventListener('keydown', (ev)=>{
     if (ev.key === 'Escape'){
       setOpen(false);
     }
   });
 }
+
+// （将来用）管理者パスワード関連
+const ADMIN_HASH="27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
+function toHex(buf){return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");}
+async function sha256(s){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return toHex(buf);
+}
+function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i);return r===0;}
 
 // ===== iframe ホバー時のスクロールロック =====
 (function(){
