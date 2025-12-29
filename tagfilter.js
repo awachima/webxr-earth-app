@@ -119,9 +119,11 @@
   }
 
   function setBadge() {
-    const n = selected.size;
-    badge.textContent = n > 0 ? String(n) : "";
-    badge.style.display = n > 0 ? "inline-flex" : "none";
+    // (0) も含めて常に表示（既存UI仕様に合わせる）
+    try {
+      badge.textContent = `(${selected.size})`;
+      badge.style.display = "inline";
+    } catch (e) {}
   }
 
   function saveSelection() {
@@ -253,7 +255,11 @@
   }
 
   function renderList(colEl, parentId, depth, checked, indeterminate) {
-    const kids = getChildren(parentId || ROOT_ID).map((id) => nodesById.get(id)).filter(Boolean);
+    if (!parentId) return;
+
+    const kids = getChildren(parentId)
+      .map((id) => nodesById.get(id))
+      .filter(Boolean);
 
     // stable sort by label
     kids.sort((a, b) => (a.label || "").localeCompare(b.label || "", "ja"));
@@ -341,17 +347,16 @@
 
     cols.forEach((c) => colWrap.appendChild(c));
 
-    // ★ clearBtn が存在する時だけ制御（無ければ何もしない）
+    // ★ クリアボタンは常時表示（選択が無い時だけ無効化）
     if (clearBtn) {
-      if (selected.size > 0) {
-        clearBtn.style.display = "";
-        clearBtn.removeAttribute("aria-hidden");
-        clearBtn.removeAttribute("tabindex");
-      } else {
-        clearBtn.style.display = "none";
-        clearBtn.setAttribute("aria-hidden", "true");
-        clearBtn.setAttribute("tabindex", "-1");
-      }
+      clearBtn.style.display = "";
+      clearBtn.removeAttribute("aria-hidden");
+      clearBtn.removeAttribute("tabindex");
+
+      const hasSelection = selected.size > 0;
+      clearBtn.disabled = !hasSelection;
+      clearBtn.style.opacity = hasSelection ? "1" : "0.55";
+      clearBtn.style.pointerEvents = hasSelection ? "auto" : "none";
     }
   }
 
@@ -554,14 +559,19 @@
       const csv = await fetchCsv(TREE_URL_PRIMARY);
       buildTreeFromCsv(csv);
       treeReady = true;
-    } catch (e) {
-      try {
-        const csv = await fetchCsv(TREE_URL_FALLBACK);
-        buildTreeFromCsv(csv);
-        treeReady = true;
-      } catch (e2) {
-        treeReady = false;
-      }
+      renderColumns();
+      tryAutoApply();
+      return;
+    } catch (e) {}
+
+    try {
+      const csv = await fetchCsv(TREE_URL_FALLBACK);
+      buildTreeFromCsv(csv);
+      treeReady = true;
+      renderColumns();
+      tryAutoApply();
+    } catch (e2) {
+      treeReady = false;
     }
   }
 
@@ -570,9 +580,5 @@
   // ----------------------------
   loadSelection();
   setBadge();
-
-  loadTree().then(() => {
-    renderColumns();
-    tryAutoApply();
-  });
+  loadTree();
 })();
