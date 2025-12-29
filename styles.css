@@ -906,3 +906,41 @@ header *{
 }
 
 .spacer{ flex: 1; }
+
+/* =========================================================
+   ★ 追記：ツアー提案エリア（#recommendSection / .lucy-panel）
+   - デフォルト非表示（.is-collapsed）
+   - tourist-information ボタンで開閉（main.js の setupRecommendPanelToggle）
+   - 既存デザイン（index.html の inline style）を壊さず、
+     閉じている時だけ「見えない＆余白ゼロ」にする
+   ========================================================= */
+.lucy-panel{
+  overflow: hidden;
+  max-height: 2400px; /* 開いた状態のための上限（十分大きく） */
+  transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.35s ease,
+              margin 0.35s ease, padding 0.35s ease;
+  will-change: max-height, opacity, transform;
+}
+
+.lucy-panel.is-collapsed{
+  max-height: 0 !important;
+  opacity: 0;
+  transform: translateY(-8px);
+
+  /* 閉じた時に余白だけ残るのを防ぐ（index.html の inline margin/padding を上書き） */
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+
+  /* 枠や影も消して“完全に隠れる”状態にする */
+  border-width: 0 !important;
+  box-shadow: none !important;
+
+  pointer-events: none;
+}
+
+.lucy-panel.is-open{
+  opacity: 1;
+  transform: translateY(0);
+}
