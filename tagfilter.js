@@ -56,6 +56,30 @@
   let earthReady = false;
   let autoApplied = false;
 
+
+  // iframe の load が tagfilter.js 読み込みより先に発火していると、
+  // earth.html 側の dd-earth-ready が受け取れず、自動再適用が走らないことがある。
+  // そのため「iframeが読み込まれている」こと自体でも earthReady を立てる。
+  function markEarthReadyFromIframe() {
+    if (earthReady) return;
+    earthReady = true;
+    tryAutoApply();
+  }
+
+  // 通常: iframe load で確実に検知
+  iframe.addEventListener('load', () => {
+    markEarthReadyFromIframe();
+  });
+
+  // 既に読み込み済み（load が先に終わっている）ケースも拾う
+  setTimeout(() => {
+    try {
+      if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+        markEarthReadyFromIframe();
+      }
+    } catch (e) {}
+  }, 0);
+
   // apply のスパムを避けるため軽くデバウンス
   let postTimer = null;
   function schedulePostSelected(delayMs = 120) {
