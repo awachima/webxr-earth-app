@@ -73,196 +73,207 @@
     return (s || "").toString().trim();
   }
 
+  function safeIdFromLabel(s) {
+    // stable-ish id: depth/label path
+    return String(s || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/[|]/g, "/");
+  }
+
   function csvParseLine(line) {
-    // simple CSV parse (handles quoted)
+    // minimal CSV parser (handles quotes)
     const out = [];
     let cur = "";
-    let q = false;
+    let inQ = false;
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
-      if (q) {
+      if (inQ) {
         if (ch === '"') {
           if (line[i + 1] === '"') {
             cur += '"';
             i++;
           } else {
-            q = false;
+            inQ = false;
           }
         } else {
           cur += ch;
         }
       } else {
-        if (ch === '"') q = true;
+        if (ch === '"') inQ = true;
         else if (ch === ",") {
           out.push(cur);
           cur = "";
-        } else cur += ch;
+        } else {
+          cur += ch;
+        }
       }
     }
     out.push(cur);
     return out;
   }
 
-  function ensureNode(id, labelText, depth, parentId) {
-    if (!nodesById.has(id)) {
-      const node = { id, label: labelText, depth, parentId, children: new Set() };
-      nodesById.set(id, node);
-      label.set(id, labelText);
-      parent.set(id, parentId);
-      depthById.set(id, depth);
-
-      if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, new Set());
-      childrenByParent.get(parentId).add(id);
-    }
-    // parent children link
-    const p = nodesById.get(parentId);
-    if (p) p.children.add(id);
+  function ensureSet(map, key) {
+    if (!map.has(key)) map.set(key, new Set());
+    return map.get(key);
   }
 
-  function getDescendants(id) {
-    const out = [];
-    const stack = [id];
-    while (stack.length) {
-      const cur = stack.pop();
-      const ch = childrenByParent.get(cur);
-      if (!ch) continue;
-      ch.forEach((cid) => {
-        out.push(cid);
-        stack.push(cid);
-      });
-    }
-    return out;
-  }
-
-  function setNodeAndDescendants(id, on) {
-    if (on) {
-      selected.add(id);
-      getDescendants(id).forEach((d) => selected.add(d));
-    } else {
-      selected.delete(id);
-      getDescendants(id).forEach((d) => selected.delete(d));
-    }
-  }
-
-  function computeIndeterminateStates() {
-    // returns { checked:Set, indeterminate:Set }
-    const checked = new Set(selected);
-    const ind = new Set();
-
-    // post-order by depth (deep -> shallow)
-    const nodes = Array.from(nodesById.values()).sort((a, b) => b.depth - a.depth);
-    nodes.forEach((node) => {
-      const ch = childrenByParent.get(node.id);
-      if (!ch || ch.size === 0) return;
-
-      let allOn = true;
-      let anyOn = false;
-      ch.forEach((cid) => {
-        if (checked.has(cid)) anyOn = true;
-        else allOn = false;
-        if (ind.has(cid)) anyOn = true;
-      });
-
-      if (allOn) {
-        checked.add(node.id);
-        ind.delete(node.id);
-      } else if (anyOn) {
-        checked.delete(node.id);
-        ind.add(node.id);
-      } else {
-        checked.delete(node.id);
-        ind.delete(node.id);
-      }
-    });
-
-    return { checked, indeterminate: ind };
+  function setBadge() {
+    const n = selected.size;
+    badge.textContent = n > 0 ? String(n) : "";
+    badge.style.display = n > 0 ? "inline-flex" : "none";
   }
 
   function saveSelection() {
     try {
-      const arr = Array.from(selected);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-    } catch (_) {}
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(selected)));
+    } catch (e) {}
   }
 
   function loadSelection() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        hadSavedSelection = false;
-        selected = new Set();
-        return;
-      }
+      if (!raw) return;
       const arr = JSON.parse(raw);
-      if (Array.isArray(arr) && arr.length > 0) {
-        hadSavedSelection = true;
-        selected = new Set(arr.filter((x) => typeof x === "string"));
-      } else {
-        hadSavedSelection = false;
-        selected = new Set();
+      if (Array.isArray(arr)) {
+        selected = new Set(arr.map((x) => String(x)));
+        hadSavedSelection = selected.size > 0;
       }
-    } catch (_) {
-      hadSavedSelection = false;
-      selected = new Set();
-    }
-  }
-
-  function setBadge() {
-    // (0) 表示を維持
-    try {
-      badge.textContent = `(${selected.size})`;
-    } catch (_) {}
+    } catch (e) {}
   }
 
   // ----------------------------
-  //  Render columns
+  //  Tree build / selection helpers
+  // ----------------------------
+  function addNode(nodeId, nodeLabel, depth, parentId) {
+    if (!nodesById.has(nodeId)) {
+      nodesById.set(nodeId, {
+        id: nodeId,
+        label: nodeLabel,
+        depth,
+        parentId,
+        children: new Set(),
+      });
+    }
+    label.set(nodeId, nodeLabel);
+    parent.set(nodeId, parentId);
+    depthById.set(nodeId, depth);
+
+    const kids = ensureSet(childrenByParent, parentId);
+    kids.add(nodeId);
+
+    const pNode = nodesById.get(parentId);
+    if (pNode) pNode.children.add(nodeId);
+
+    // build path
+    const ancestors = [];
+    let cur = nodeId;
+    while (cur && cur !== ROOT_ID) {
+      const p = parent.get(cur);
+      if (!p || p === ROOT_ID) break;
+      ancestors.unshift(p);
+      cur = p;
+    }
+    pathById.set(nodeId, ancestors);
+  }
+
+  function getChildren(parentId) {
+    const s = childrenByParent.get(parentId || ROOT_ID);
+    return s ? Array.from(s) : [];
+  }
+
+  function nodeHasChildren(nodeId) {
+    const s = childrenByParent.get(nodeId);
+    return s && s.size > 0;
+  }
+
+  function setNodeAndDescendants(nodeId, on) {
+    // set node
+    if (on) selected.add(nodeId);
+    else selected.delete(nodeId);
+
+    // set descendants
+    const kids = childrenByParent.get(nodeId);
+    if (!kids) return;
+    kids.forEach((k) => setNodeAndDescendants(k, on));
+  }
+
+  function computeIndeterminateStates() {
+    // For each node, compute if it should be indeterminate based on descendants selection.
+    const checked = new Set();
+    const indeterminate = new Set();
+
+    function walk(nodeId) {
+      const kids = childrenByParent.get(nodeId);
+      if (!kids || kids.size === 0) {
+        const isChecked = selected.has(nodeId);
+        if (isChecked) checked.add(nodeId);
+        return { any: isChecked, all: isChecked };
+      }
+
+      let any = false;
+      let all = true;
+      kids.forEach((k) => {
+        const r = walk(k);
+        any = any || r.any;
+        all = all && r.all;
+      });
+
+      const selfChecked = selected.has(nodeId);
+      if (selfChecked) {
+        any = true;
+      } else {
+        all = false; // if self isn't checked, cannot be "all" in this simple model
+      }
+
+      if (selfChecked) checked.add(nodeId);
+      if (any && !all) indeterminate.add(nodeId);
+      return { any, all };
+    }
+
+    // walk from ROOT's children
+    getChildren(ROOT_ID).forEach((id) => walk(id));
+    return { checked, indeterminate };
+  }
+
+  // ----------------------------
+  //  UI build
   // ----------------------------
   function clearColumns() {
-    colWrap.innerHTML = "";
+    while (colWrap.firstChild) colWrap.removeChild(colWrap.firstChild);
   }
 
-  function createColumn(titleText) {
+  function createColumn(title) {
     const col = document.createElement("div");
-    col.className = "tag-filter-col";
-
-    const h = document.createElement("div");
-    h.className = "tag-filter-col-title";
-    h.textContent = titleText;
-
+    col.className = "column";
+    const h = document.createElement("h3");
+    h.textContent = title || "";
     col.appendChild(h);
     return col;
   }
 
   function renderList(colEl, parentId, depth, checked, indeterminate) {
-    if (!parentId) return;
+    const kids = getChildren(parentId || ROOT_ID).map((id) => nodesById.get(id)).filter(Boolean);
 
-    const ch = childrenByParent.get(parentId);
-    if (!ch || ch.size === 0) return;
+    // stable sort by label
+    kids.sort((a, b) => (a.label || "").localeCompare(b.label || "", "ja"));
 
-    // sort by label
-    const arr = Array.from(ch)
-      .map((id) => nodesById.get(id))
-      .filter(Boolean);
-    arr.sort((a, b) => (a.label || "").localeCompare((b.label || ""), "ja"));
-
-    arr.forEach((node) => {
+    kids.forEach((node) => {
       const row = document.createElement("div");
-      row.className = "tag-item";
-      if (path[depth - 1] === node.id) row.classList.add("active");
+      row.className = "node";
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
-      cb.checked = checked.has(node.id);
+      cb.checked = selected.has(node.id);
       cb.indeterminate = indeterminate.has(node.id);
 
-      const lab = document.createElement("label");
-      lab.textContent = node.label;
+      const lab = document.createElement("div");
+      lab.className = "label";
+      lab.textContent = node.label || "";
 
+      const hasKids = nodeHasChildren(node.id);
       const chev = document.createElement("div");
-      chev.style.opacity = "0.5";
-      chev.style.marginLeft = "auto";
-      const hasKids =
-        childrenByParent.get(node.id) && childrenByParent.get(node.id).size > 0;
+      chev.className = "chev";
       chev.textContent = hasKids ? "›" : "";
 
       row.appendChild(cb);
@@ -384,8 +395,14 @@
   //  Modal open/close
   // ----------------------------
   function openModal() {
+    // main.js が style.display で開閉している構成でも確実に開く
+    backdrop.style.display = "flex";
     backdrop.setAttribute("aria-hidden", "false");
+    btn.setAttribute("aria-expanded", "true");
+
+    // tagfilter.js 側の open 判定（ESC など）にも使う
     backdrop.classList.add("open");
+
     document.body.style.overflow = "hidden";
 
     // position modal so its top-left matches the button position
@@ -423,7 +440,12 @@
 
   function closeModal() {
     backdrop.setAttribute("aria-hidden", "true");
+    btn.setAttribute("aria-expanded", "false");
+
+    // class も display も両方閉じる（どちらの方式でも確実に閉じる）
     backdrop.classList.remove("open");
+    backdrop.style.display = "none";
+
     document.body.style.overflow = "";
 
     modal.style.visibility = "";
@@ -501,25 +523,26 @@
     const idx1 = header.indexOf("level1");
     const idx2 = header.indexOf("level2");
     const idx3 = header.indexOf("level3");
+    if (idx1 < 0) return;
 
+    // Each row creates nodes for each level; nodeId is built from path
     for (let i = 1; i < lines.length; i++) {
       const cols = csvParseLine(lines[i]);
       const l1 = normalize(cols[idx1]);
-      const l2 = normalize(cols[idx2]);
-      const l3 = normalize(cols[idx3]);
-
+      const l2 = idx2 >= 0 ? normalize(cols[idx2]) : "";
+      const l3 = idx3 >= 0 ? normalize(cols[idx3]) : "";
       if (!l1) continue;
 
-      const id1 = "L1:" + l1;
-      ensureNode(id1, l1, 1, ROOT_ID);
+      const id1 = "L1|" + safeIdFromLabel(l1);
+      addNode(id1, l1, 1, ROOT_ID);
 
       if (l2) {
-        const id2 = "L2:" + l1 + ">" + l2;
-        ensureNode(id2, l2, 2, id1);
+        const id2 = id1 + "|L2|" + safeIdFromLabel(l2);
+        addNode(id2, l2, 2, id1);
 
         if (l3) {
-          const id3 = "L3:" + l1 + ">" + l2 + ">" + l3;
-          ensureNode(id3, l3, 3, id2);
+          const id3 = id2 + "|L3|" + safeIdFromLabel(l3);
+          addNode(id3, l3, 3, id2);
         }
       }
     }
@@ -527,34 +550,19 @@
 
   async function loadTree() {
     treeReady = false;
-    renderColumns();
-
-    let csv = null;
     try {
-      csv = await fetchCsv(TREE_URL_PRIMARY);
-    } catch (e1) {
+      const csv = await fetchCsv(TREE_URL_PRIMARY);
+      buildTreeFromCsv(csv);
+      treeReady = true;
+    } catch (e) {
       try {
-        csv = await fetchCsv(TREE_URL_FALLBACK);
+        const csv = await fetchCsv(TREE_URL_FALLBACK);
+        buildTreeFromCsv(csv);
+        treeReady = true;
       } catch (e2) {
-        csv = null;
+        treeReady = false;
       }
     }
-
-    if (!csv) {
-      treeReady = true;
-      clearColumns();
-      const msg = document.createElement("div");
-      msg.style.padding = "10px";
-      msg.style.opacity = "0.9";
-      msg.textContent = "タグ一覧の読み込みに失敗しました（CSV）。";
-      colWrap.appendChild(msg);
-      return;
-    }
-
-    buildTreeFromCsv(csv);
-    treeReady = true;
-    renderColumns();
-    tryAutoApply();
   }
 
   // ----------------------------
@@ -562,5 +570,9 @@
   // ----------------------------
   loadSelection();
   setBadge();
-  loadTree();
+
+  loadTree().then(() => {
+    renderColumns();
+    tryAutoApply();
+  });
 })();
