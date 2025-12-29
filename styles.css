@@ -465,6 +465,13 @@ header *{
 }
 .backdrop.open{ display: flex; }
 
+/* ★ About / Fan site モーダルは style.display='flex' で開くため、openクラス依存ではない
+   かつヘッダー(z-index:999999)の上に必ず出す */
+#aboutBackdrop,
+#guideBackdrop{
+  z-index: 1000005; /* ヘッダーより上 */
+}
+
 .modal{
   width: min(860px, calc(100vw - 32px));
   background: rgba(255,255,255,0.98);
@@ -519,12 +526,28 @@ header *{
     padding: 16px;
   }
 
+  /* ★ About / Fan site は「ヘッダーの下」から開始する（×が隠れない） */
+  #aboutBackdrop,
+  #guideBackdrop{
+    padding-top: calc(var(--header-offset) + env(safe-area-inset-top) + 12px);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+    padding-left: 16px;
+    padding-right: 16px;
+    align-items: flex-start;
+  }
+
   /* モーダル自体を「画面内(100vh)」に収める */
   .modal{
     width: calc(100vw - 32px);
     max-height: calc(100vh - 32px);
     display: flex;
     flex-direction: column;
+  }
+
+  /* ★ About / Fan site はヘッダー分を引いた高さにする */
+  #aboutBackdrop .modal,
+  #guideBackdrop .modal{
+    max-height: calc(100vh - (var(--header-offset) + env(safe-area-inset-top) + env(safe-area-inset-bottom) + 32px));
   }
 
   /* ×が常に見えるように上部を固定 */
@@ -550,58 +573,6 @@ header *{
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* =========================================================
-     ★ 追加：スマホで「About系（×がある）」モーダルが
-        ヘッダーに隠れないように、上端をヘッダー下へずらす
-     - 対象: #aboutBackdrop / #guideBackdrop のみ（他モーダルに影響しない）
-     ========================================================= */
-
-  /* open時のbackdropを強制的にflex表示にして、上に余白を作る */
-  #aboutBackdrop.open,
-  #guideBackdrop.open{
-    display: flex !important; /* index.html内styleの display:block を上書き */
-    align-items: flex-start !important;
-    justify-content: center !important;
-
-    /* ヘッダー + セーフエリア分だけ下げる */
-    padding-top: calc(var(--header-offset) + env(safe-area-inset-top) + 8px) !important;
-    padding-right: 16px !important;
-    padding-bottom: 16px !important;
-    padding-left: 16px !important;
-
-    /* 画面が小さい時の保険 */
-    overflow: auto !important;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* モーダルの縦幅も「ヘッダー分」を引いて収める */
-  #aboutBackdrop.open .about-modal,
-  #guideBackdrop.open .about-modal{
-    width: calc(100vw - 32px) !important;
-    max-height: calc(100vh - (var(--header-offset) + env(safe-area-inset-top) + 32px)) !important;
-
-    display: flex !important;
-    flex-direction: column !important;
-  }
-
-  /* ×が常に見えるようにヘッダーをsticky */
-  #aboutBackdrop.open .about-modal > header,
-  #guideBackdrop.open .about-modal > header{
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 3 !important;
-    background: rgba(255,255,255,0.98) !important;
-  }
-
-  /* 本文だけスクロール */
-  #aboutBackdrop.open .about-modal > .body,
-  #guideBackdrop.open .about-modal > .body{
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    overflow: auto !important;
     -webkit-overflow-scrolling: touch;
   }
 }
