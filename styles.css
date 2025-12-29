@@ -359,7 +359,7 @@ header *{
   border: 1px solid rgba(0,0,0,0.12);
   box-shadow: 0 10px 24px rgba(0,0,0,0.12);
 
-  /* 文字を見せない（HTMLは触らない） */
+  /* テキストは見せない（将来JS用にDOMは残す） */
   font-size: 0;
   line-height: 0;
   color: transparent;
@@ -367,57 +367,19 @@ header *{
   cursor: pointer;
 }
 
+/* hover / active の軽い反応 */
 .earth-frame-wrap .tourist-info-btn:hover{
   transform: translateY(-1px);
   box-shadow: 0 14px 28px rgba(0,0,0,0.14);
 }
+
 .earth-frame-wrap .tourist-info-btn:active{
   transform: translateY(0);
   box-shadow: 0 8px 18px rgba(0,0,0,0.12);
 }
 
 
-/* =========================================================
-   ★ ツアー提案パネル（recommendSection）
-   - デフォルトは非表示（is-collapsed）
-   - tourist-information ボタンで開閉
-   - 既存の見た目（index.html の inline style）を壊さず、
-     閉じている時だけ“見えない＆余白ゼロ”にする
-   ========================================================= */
-.lucy-panel{
-  overflow: hidden;
-  max-height: 2400px; /* 開いた状態のための上限（十分大きく） */
-  transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.35s ease,
-              margin 0.35s ease, padding 0.35s ease;
-  will-change: max-height, opacity, transform;
-}
-
-.lucy-panel.is-collapsed{
-  max-height: 0 !important;
-  opacity: 0;
-  transform: translateY(-8px);
-
-  /* 閉じた時に余白だけ残るのを防ぐ（index.html の inline margin/padding を上書き） */
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-
-  /* 枠や影も消して“完全に隠れる”状態にする */
-  border-width: 0 !important;
-  box-shadow: none !important;
-
-  pointer-events: none;
-}
-
-.lucy-panel.is-open{
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* =========================
-   ここから下：既存レイアウト/レスポンシブ
-   ========================= */
+/* ========================================================= */
 
 @media (min-width: 1024px){
   .earth-frame-wrap{
@@ -435,240 +397,512 @@ header *{
     max-width: 420px;
     white-space: nowrap;
   }
+
+  .brand-logo-text{
+    margin: 0;
+    margin-top: 4px;
+    margin-left: 30px;
+    margin-right: auto;
+    text-align: left;
+    max-width: calc(100% - 200px);
+  }
+
+  .stage{
+    padding: calc(var(--header-offset) + 80px) 32px 56px;
+  }
 }
 
-@media (max-width: 600px){
-  .earth-frame-wrap{
-    height: 62vh;
-    min-height: 380px;
-  }
-  .site-logo{
-    width: min(28vw, 110px);
+@media (max-width: 1023px){
+  .stage{
+    align-items: flex-start;
+    padding: calc(var(--header-offset) + 72px) 16px 40px;
   }
 }
 
 /* =========================
-   Meetups grid (cards)
+   共通ボタン
    ========================= */
-#grid{
-  width: min(100%, var(--wrap-max));
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  margin: 28px auto 0;
-  padding: 0 16px;
-}
-
-.card{
-  position: relative;
-  background: var(--card);
-  border: 1px solid var(--card-border);
-  border-radius: var(--r-xl);
-  padding: 16px 16px 16px;
-  box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  overflow: hidden;
-}
-
-.card .title{
-  font-weight: 700;
-  font-size: 1.05rem;
-  margin-bottom: 8px;
-  color: var(--primary-color);
-}
-
-.card .meta{
-  font-size: .9rem;
-  color: var(--text-sub);
-  margin-bottom: 12px;
-}
-
-.card .btn{
+.btn{
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-
-  width: 100%;
-  padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid rgba(148,163,184,0.5);
-  background: rgba(255,255,255,0.92);
+  padding: 10px 14px;
+  border: 1px solid rgba(15,23,42,0.14);
+  background: #fff;
+  color: var(--text-main);
   cursor: pointer;
-  font-weight: 700;
-  box-shadow: 0 10px 18px rgba(15,23,42,0.06);
+  box-shadow: var(--shadow-sm);
+}
+.btn:hover{ background: rgba(15,23,42,0.03); }
+
+.btn.ghost{ background: rgba(255,255,255,0.9); }
+
+.btn.danger{
+  border-color: rgba(220,38,38,0.30);
+  color: #b91c1c;
 }
 
-.card .btn:hover{
-  transform: translateY(-1px);
-  box-shadow: 0 14px 24px rgba(15,23,42,0.10);
-}
-
-.card .btn:active{
-  transform: translateY(0);
-}
-
-.card .btn.primary{
+.btn.primary{
   background: #0B3559;
-  border-color: #0B3559;
   color: #fff;
-}
-
-.card .tools{
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: flex;
-  gap: 8px;
-  z-index: 2;
-}
-
-.card .btn.icon{
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  min-height: 42px;
-  padding: 0;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
+  border-color: #0B3559;
 }
 
 /* =========================
-   modal
+   モーダル
    ========================= */
 .backdrop{
   position: fixed;
   inset: 0;
+  background: rgba(0,0,0,0.40);
   display: none;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 18px 16px;
-  background: rgba(0,0,0,0.38);
-  z-index: 100000;
+  padding: 16px;
+  z-index: 9000;
 }
 .backdrop.open{ display: flex; }
 
+/* ★About / Fan site モーダルはヘッダーより前面に出す */
+#aboutBackdrop,
+#guideBackdrop{
+  z-index: 1000005; /* header(999999)より上 */
+}
+
 .modal{
-  width: min(720px, 100%);
+  width: min(860px, calc(100vw - 32px));
   background: rgba(255,255,255,0.98);
-  border-radius: 18px;
-  border: 1px solid rgba(148,163,184,0.45);
-  box-shadow: var(--shadow-xl);
+  border-radius: var(--r-xl);
+  border: 1px solid rgba(15,23,42,0.10);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
 .modal header{
-  position: relative;
-  z-index: 1;
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(148,163,184,0.35);
-  box-shadow: none;
-}
+  /* ★グローバルの header スタイルを完全に打ち消す（モーダル内ヘッダー崩れ対策） */
+  all: unset;
+  box-sizing: border-box;
 
-.modal header h2{
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-.modal .close{
-  position: absolute;
-  right: 12px;
-  top: 10px;
-  border: 0;
-  background: transparent;
-  font-size: 22px;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 10px;
-}
-.modal .close:hover{
-  background: rgba(15,23,42,0.06);
-}
-
-.modal .body{
-  padding: 14px 16px 16px;
-}
-
-.modal .row{
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.modal label{
-  font-weight: 700;
-  font-size: .92rem;
-}
-
-.modal input[type="text"],
-.modal input[type="number"],
-.modal input[type="datetime-local"],
-.modal input[type="url"],
-.modal select{
   width: 100%;
-  border: 1px solid rgba(148,163,184,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(15,23,42,0.08);
+
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+
+  position: relative;
+}
+
+.modal header .close{
+  width: 36px;
+  height: 36px;
   border-radius: 12px;
-  padding: 10px 12px;
+  border: 1px solid rgba(15,23,42,0.14);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.modal .body{ padding: 14px 14px 16px; }
+
+.modal .actions{
+  padding: 12px 14px 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid rgba(15,23,42,0.08);
+}
+
+/* ===== ここから追記：スマホでモーダルを画面内に収め、本文をスクロール可能にする ===== */
+@media (max-width: 700px){
+  /* 背景側は上詰めにして、確実に画面内に収める（ヘッダー分だけ下げる） */
+  .backdrop{
+    align-items: flex-start;
+    justify-content: center;
+
+    /* ★上端：ヘッダーの下へ（×が隠れない） */
+    padding-top: calc(var(--header-offset) + 12px + env(safe-area-inset-top));
+
+    /* ★下端：画面外に出ないよう余白＋Safe Area */
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  /* モーダル自体を「ヘッダー下の画面内」に収める */
+  .modal{
+    width: calc(100vw - 32px);
+
+    /* ★上下padding分を差し引いて、必ず画面内に収める */
+    max-height: calc(
+      100vh
+      - (var(--header-offset) + 12px + env(safe-area-inset-top))
+      - (16px + env(safe-area-inset-bottom))
+    );
+
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ×が常に見えるように上部を固定 */
+  .modal > header{
+    flex: 0 0 auto;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: rgba(255,255,255,0.98);
+  }
+
+  /* OKが常に見えるように下部を固定 */
+  .modal > .actions{
+    flex: 0 0 auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: rgba(255,255,255,0.98);
+  }
+
+  /* 本文だけスクロール */
+  .modal > .body{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+/* ===== 追記ここまで ===== */
+
+/* ===== 追加：Create/Edit（#backdrop）モーダルはスマホ/タブレット幅でも必ずヘッダー下から表示 ===== */
+@media (max-width: 900px){
+  /* 「待合室を作成」(Create/Edit) モーダルだけを対象にする */
+  #backdrop.backdrop{
+    align-items: flex-start;
+    justify-content: center;
+
+    /* ヘッダーの下へ（×が押せない問題の根本対策） */
+    padding-top: calc(var(--header-offset) + 12px + env(safe-area-inset-top));
+
+    /* 画面下の Safe Area も確保 */
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  #backdrop .modal{
+    width: calc(100vw - 32px);
+    max-height: calc(
+      100vh
+      - (var(--header-offset) + 12px + env(safe-area-inset-top))
+      - (16px + env(safe-area-inset-bottom))
+    );
+
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ×（ヘッダー）を常に見える/押せるように固定 */
+  #backdrop .modal > header{
+    flex: 0 0 auto;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: rgba(255,255,255,0.98);
+  }
+
+  /* 下部ボタンも見失わないように固定 */
+  #backdrop .modal > .actions{
+    flex: 0 0 auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: rgba(255,255,255,0.98);
+  }
+
+  /* 本文だけスクロール */
+  #backdrop .modal > .body{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* 横向き等で高さが小さい場合も同様にヘッダー下へ */
+@media (max-height: 700px){
+  #backdrop.backdrop{
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: calc(var(--header-offset) + 12px + env(safe-area-inset-top));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  #backdrop .modal{
+    max-height: calc(
+      100vh
+      - (var(--header-offset) + 12px + env(safe-area-inset-top))
+      - (16px + env(safe-area-inset-bottom))
+    );
+    display: flex;
+    flex-direction: column;
+  }
+
+  #backdrop .modal > .body{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* タイポ */
+.heading-large{
+  margin: 0 0 10px;
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--primary-color);
+}
+.heading-strong{
+  margin: 12px 0 6px;
+  font-weight: 800;
+  color: var(--primary-color);
+}
+
+/* =========================
+   フォーム
+   ========================= */
+.form{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 900px){
+  .form{ grid-template-columns: 1fr; }
+}
+
+.form label{
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--primary-color);
+}
+
+.form input, .form select{
+  width: 100%;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(15,23,42,0.14);
   outline: none;
   background: #fff;
 }
 
-.modal input:focus,
-.modal select:focus{
-  border-color: rgba(59,130,246,0.7);
-  box-shadow: 0 0 0 4px rgba(59,130,246,0.12);
+.form input:focus, .form select:focus{
+  border-color: rgba(59,130,246,0.55);
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.15);
 }
 
-.modal .actions{
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 12px;
+.note{
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-sub);
 }
 
-.modal .actions .btn{
-  width: auto;
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(148,163,184,0.55);
-  background: rgba(255,255,255,0.95);
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.modal .actions .btn.primary{
-  background: #0B3559;
-  border-color: #0B3559;
-  color: #fff;
-}
-
-.modal .actions .btn.danger{
-  background: rgba(239,68,68,0.12);
-  border-color: rgba(239,68,68,0.35);
-  color: #b91c1c;
-}
-
-.modal #statusMsg{
-  display: none;
-  margin-top: 10px;
-  font-size: .9rem;
-  color: #0f172a;
-  background: rgba(59,130,246,0.10);
-  border: 1px solid rgba(59,130,246,0.18);
+.status{
+  margin: 10px 14px 14px;
   padding: 10px 12px;
   border-radius: 12px;
+  background: rgba(59,130,246,0.10);
+  color: rgba(15,23,42,0.85);
+  border: 1px solid rgba(59,130,246,0.20);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: .18s ease;
+}
+.status.show{
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ======================
+   Meetup Rooms（待合室）
+   ====================== */
+.meetups{
+  margin: 30px auto 0;
+  width: min(var(--wrap-max), calc(100vw - 32px));
+  padding: 24px;
+  border-radius: var(--r-xl);
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow-md);
+}
+
+.meetups__head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.meetups__title{
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+
+.meetups .head-create{
+  border-radius: 999px;
+  padding: 10px 16px;
+  box-shadow: var(--shadow-md);
+  background: #0B3559;
+  color: #fff;
+  border-color: #0B3559;
+}
+
+.grid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 1100px){
+  .grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px){
+  .grid{ grid-template-columns: 1fr; }
+}
+
+.card{
+  position: relative; /* ★編集ボタンをカード右上に置く */
+  border-radius: var(--r-lg);
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,0.10);
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+}
+
+.card h3{
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.card .title{
+  font-weight: 900;
+  font-size: 18px;  
+}
+
+.card .meta{
+  font-size: 13px;
+  opacity: .75;
+  margin: 0 0 10px;
+}
+
+/* row */
+.card .row{
+  display: flex;
+  width: 100%;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.card .btn{
+  width: 100%;
+}
+
+.card .btn.primary{
+  width: 100%;
+  background: #0B3559;
+  color: #fff;
+  border-color: #0B3559;
+}
+
+/* 編集ボタン（カード右上・正方形） */
+.card .edit-btn{
+  position: absolute;
+  top: 12px;
+  right: 12px;
+
+  width: 44px;
+  height: 44px;
+  padding: 0;
+
+  border-radius: 12px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(0,0,0,0.12);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  z-index: 2;
+}
+
+.card .edit-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(0,0,0,0.12);
+}
+
+.card .edit-btn:active{
+  transform: translateY(0);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.10);
+}
+
+/* 編集ボタンが入室ボタンの下に落ちないように（多言語でも） */
+@media (max-width: 900px){
+  .card{ padding-top: 56px; }
 }
 
 /* =========================
-   small screens
+   Create/Edit modal 内部レイアウト補助
    ========================= */
-@media (max-width: 480px){
-  #grid{ padding: 0 12px; }
-  .card{ padding: 14px; }
-  .brand-logo-text{ max-width: calc(100% - 120px); }
+.row{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
 }
+
+.start-grid{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 520px){
+  .start-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.radio-row{
+  display:flex;
+  gap: 16px;
+  align-items:center;
+  flex-wrap: wrap;
+}
+
+.radio{
+  display:flex;
+  gap: 8px;
+  align-items:center;
+}
+
+.spacer{ flex: 1; }
