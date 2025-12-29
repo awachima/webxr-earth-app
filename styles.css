@@ -583,6 +583,91 @@ header *{
 }
 /* ===== 追記ここまで ===== */
 
+/* ===== 追加：Create/Edit（#backdrop）モーダルはスマホ/タブレット幅でも必ずヘッダー下から表示 ===== */
+@media (max-width: 900px){
+  /* 「待合室を作成」(Create/Edit) モーダルだけを対象にする */
+  #backdrop.backdrop{
+    align-items: flex-start;
+    justify-content: center;
+
+    /* ヘッダーの下へ（×が押せない問題の根本対策） */
+    padding-top: calc(var(--header-offset) + 12px + env(safe-area-inset-top));
+
+    /* 画面下の Safe Area も確保 */
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  #backdrop .modal{
+    width: calc(100vw - 32px);
+    max-height: calc(
+      100vh
+      - (var(--header-offset) + 12px + env(safe-area-inset-top))
+      - (16px + env(safe-area-inset-bottom))
+    );
+
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ×（ヘッダー）を常に見える/押せるように固定 */
+  #backdrop .modal > header{
+    flex: 0 0 auto;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: rgba(255,255,255,0.98);
+  }
+
+  /* 下部ボタンも見失わないように固定 */
+  #backdrop .modal > .actions{
+    flex: 0 0 auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: rgba(255,255,255,0.98);
+  }
+
+  /* 本文だけスクロール */
+  #backdrop .modal > .body{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* 横向き等で高さが小さい場合も同様にヘッダー下へ */
+@media (max-height: 700px){
+  #backdrop.backdrop{
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: calc(var(--header-offset) + 12px + env(safe-area-inset-top));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  #backdrop .modal{
+    max-height: calc(
+      100vh
+      - (var(--header-offset) + 12px + env(safe-area-inset-top))
+      - (16px + env(safe-area-inset-bottom))
+    );
+    display: flex;
+    flex-direction: column;
+  }
+
+  #backdrop .modal > .body{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 /* タイポ */
 .heading-large{
   margin: 0 0 10px;
@@ -735,249 +820,89 @@ header *{
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 12px;
-  position: static; /* ★相対にしない（カード基準にする） */
+  margin-top: 6px;
 }
 
-/* ★入室する：rowの最初の要素を必ず「待合室を作成」と同じ色に */
-.card .row > :first-child{
+.card .btn{
   width: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+}
 
+.card .btn.primary{
+  width: 100%;
   background: #0B3559;
   color: #fff;
-  border: 1px solid #0B3559;
-
-  border-radius: 12px;
-  padding: 10px 14px;
-
-  cursor: pointer;
-  text-decoration: none;
-  box-shadow: var(--shadow-sm);
-}
-.card .row > :first-child:hover{
-  background: #0B3559;
   border-color: #0B3559;
 }
 
-/* ★編集：2個目以降の要素をカード右上の正方形にする */
-.card .row > :not(:first-child){
+/* 編集ボタン（カード右上・正方形） */
+.card .edit-btn{
   position: absolute;
   top: 12px;
   right: 12px;
 
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
 
   border-radius: 12px;
-  background: rgba(255,255,255,0.98);
-  color: var(--text-main);
-  border: 1px solid rgba(15,23,42,0.14);
-
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  box-shadow: 0 10px 20px rgba(15,23,42,0.08);
-  cursor: pointer;
-
-  /* テキストは隠してアイコン化 */
-  font-size: 0;
-  line-height: 0;
-}
-
-/* ★row外に編集ボタンが生成されるケースにも対応（main.js側のマークアップ差異吸収） */
-.card .edit,
-.card .edit-btn,
-.card .btn.edit,
-.card button.edit,
-.card button.edit-btn,
-.card a.edit,
-.card a.edit-btn,
-.card [data-action="edit"],
-.card [data-role="edit"],
-.card [aria-label="Edit"],
-.card [title="Edit"],
-.card [aria-label="編集"],
-.card [title="編集"]{
-  position: absolute;
-  top: 12px;
-  right: 12px;
-
-  width: 40px;
-  height: 40px;
-  padding: 0;
-
-  border-radius: 12px;
-  background: rgba(255,255,255,0.98);
-  color: var(--text-main);
-  border: 1px solid rgba(15,23,42,0.14);
-
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  box-shadow: 0 10px 20px rgba(15,23,42,0.08);
-  cursor: pointer;
-
-  /* テキストは隠してアイコン化 */
-  font-size: 0;
-  line-height: 0;
-}
-
-.card .edit::before,
-.card .edit-btn::before,
-.card .btn.edit::before,
-.card button.edit::before,
-.card button.edit-btn::before,
-.card a.edit::before,
-.card a.edit-btn::before,
-.card [data-action="edit"]::before,
-.card [data-role="edit"]::before,
-.card [aria-label="Edit"]::before,
-.card [title="Edit"]::before,
-.card [aria-label="編集"]::before,
-.card [title="編集"]::before{
-  content: "✎";
-  font-size: 16px;
-  line-height: 1;
-}
-
-.card .edit:hover,
-.card .edit-btn:hover,
-.card .btn.edit:hover,
-.card button.edit:hover,
-.card button.edit-btn:hover,
-.card a.edit:hover,
-.card a.edit-btn:hover,
-.card [data-action="edit"]:hover,
-.card [data-role="edit"]:hover,
-.card [aria-label="Edit"]:hover,
-.card [title="Edit"]:hover,
-.card [aria-label="編集"]:hover,
-.card [title="編集"]:hover{
-  transform: translateY(-1px);
-  box-shadow: 0 14px 26px rgba(15,23,42,0.12);
-  border-color: rgba(59,130,246,0.55);
-}
-
-/* 鉛筆アイコン */
-.card .row > :not(:first-child)::before{
-  content: "✎";
-  font-size: 16px;
-  line-height: 1;
-}
-
-/* hover */
-.card .row > :not(:first-child):hover{
-  transform: translateY(-1px);
-  box-shadow: 0 14px 26px rgba(15,23,42,0.12);
-  border-color: rgba(59,130,246,0.55);
-}
-
-/* 待合室エリア：スマホ */
-@media (max-width: 900px){
-  .meetups{
-    width: min(var(--wrap-max), calc(100vw - 24px));
-    padding: 18px;
-  }
-  .meetups__title{
-    font-size: 26px;
-  }
-}
-
-/* =========================================================
-   Meetup Rooms（待合室）デザイン復元（全体のサイズ・枠の形）
-   ※編集ボタンの右上固定は維持
-   ========================================================= */
-
-/* セクション（白い大枠） */
-.meetups{
-  width: min(1200px, calc(100vw - 64px));
-  padding: 28px 28px 26px;
-  border-radius: 26px;
   background: rgba(255,255,255,0.92);
-  border: 1px solid rgba(15,23,42,0.10);
-  box-shadow: 0 18px 36px rgba(15,23,42,0.10);
-  margin: 30px auto 0;
-}
+  border: 1px solid rgba(0,0,0,0.12);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.08);
 
-/* 見出し行：左にタイトル、右に作成ボタン */
-.meetups__head{
-  width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.meetups__title{
-  margin: 0;
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: .01em;
-  text-align: left;
-}
-
-.meetups .head-create{
-  margin-left: auto;
-}
-
-/* カード一覧：元の広がり方に近いレイアウト */
-.grid{
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(260px, 1fr));
-  gap: 16px;
-  justify-items: stretch;
-  align-items: stretch;
-}
-
-@media (max-width: 1100px){
-  .grid{ grid-template-columns: repeat(2, minmax(260px, 1fr)); }
-}
-@media (max-width: 700px){
-  .grid{ grid-template-columns: 1fr; }
-}
-
-/* 各待合室カード：角丸・影・余白を元の印象に戻す */
-.card{
-  background: rgba(255,255,255,0.95);
-  border: 1px solid rgba(0,0,0,0.10);
-  border-radius: 18px;
-  box-shadow: 0 12px 26px rgba(15,23,42,0.10);
-  padding: 18px;
-  position: relative; /* 右上編集ボタンの基準 */
-}
-
-/* スマホ時の見た目 */
-@media (max-width: 900px){
-  .meetups{
-    width: min(1200px, calc(100vw - 32px));
-    padding: 20px;
-    border-radius: 22px;
-  }
-  .meetups__title{
-    font-size: 28px;
-  }
-}
-
-/* =========================================================
-   入室するボタン（<a class="btn" data-enter>入室する</a>）
-   ※変更は「背景 #0B3559 / 文字 #fff / 幅を右端まで」のみ
-   ※DOM上で .row が無いケースに対応（.card直下のdiv内でも効く）
-   ========================================================= */
-.meetups .grid .card a.btn[data-enter]{
-  background: #0B3559 !important;
-  color: #fff !important;
-  border-color: #0B3559 !important;
-
-  width: 100%;
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
+
+  cursor: pointer;
+  z-index: 2;
 }
+
+.card .edit-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(0,0,0,0.12);
+}
+
+.card .edit-btn:active{
+  transform: translateY(0);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.10);
+}
+
+/* 編集ボタンが入室ボタンの下に落ちないように（多言語でも） */
+@media (max-width: 900px){
+  .card{ padding-top: 56px; }
+}
+
+/* =========================
+   Create/Edit modal 内部レイアウト補助
+   ========================= */
+.row{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.start-grid{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 520px){
+  .start-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.radio-row{
+  display:flex;
+  gap: 16px;
+  align-items:center;
+  flex-wrap: wrap;
+}
+
+.radio{
+  display:flex;
+  gap: 8px;
+  align-items:center;
+}
+
+.spacer{ flex: 1; }
