@@ -374,6 +374,21 @@
       <div class="modal tag-filter-modal" role="dialog" aria-modal="true" aria-labelledby="tagFilterTitle">
         <header>
           <div id="tagFilterTitle">絞り込み</div>
+
+          <!-- ★復元：クリア / 適用（tagfilter.js がこのIDを見て自動で配線する） -->
+          <div class="tag-filter-actions">
+            <button
+              type="button"
+              id="tagFilterClear"
+              aria-hidden="true"
+              tabindex="-1"
+              style="display:none;"
+            >
+              クリア
+            </button>
+            <button type="button" id="tagFilterApply" class="primary">適用</button>
+          </div>
+
           <button type="button" class="close" id="tagFilterClose" aria-label="Close">✕</button>
         </header>
         <div class="body">
