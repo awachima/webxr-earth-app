@@ -341,8 +341,9 @@
     cols.push(col2);
 
     const l2 = path[1] || null;
-    const col3 = createColumn(l2 ? label.get(l2) || " " : " ");
-    renderList(col3, l2, 3, checked, indeterminate);
+    const showL2 = l2 && nodeHasChildren(l2); // ★ 2カラム目が終端(子なし)なら3カラム目のタイトルに出さない
+    const col3 = createColumn(showL2 ? label.get(l2) || " " : " ");
+    renderList(col3, showL2 ? l2 : null, 3, checked, indeterminate);
     cols.push(col3);
 
     cols.forEach((c) => colWrap.appendChild(c));
