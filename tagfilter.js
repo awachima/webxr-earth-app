@@ -341,8 +341,9 @@
     cols.push(col2);
 
     const l2 = path[1] || null;
-    const col3 = createColumn(l2 ? label.get(l2) || " " : " ");
-    renderList(col3, l2, 3, checked, indeterminate);
+    const showL2 = l2 && nodeHasChildren(l2); // ★ 2階層目が終端(子なし)なら3列目のタイトルに出さない
+    const col3 = createColumn(showL2 ? label.get(l2) || " " : " ");
+    renderList(col3, showL2 ? l2 : null, 3, checked, indeterminate);
     cols.push(col3);
 
     cols.forEach((c) => colWrap.appendChild(c));
@@ -410,64 +411,46 @@
 
     document.body.style.overflow = "hidden";
 
-    // position modal so its top-left matches the button position
-    modal.style.visibility = "hidden";
-    modal.style.left = "0px";
-    modal.style.top = "0px";
-
-    requestAnimationFrame(() => {
-      try {
-        const b = btn.getBoundingClientRect();
-        const m = modal.getBoundingClientRect();
-
-        let left = Math.round(b.left);
-        let top = Math.round(b.top);
-
-        const margin = 8;
-        if (left + m.width > window.innerWidth - margin) {
-          left = Math.max(margin, Math.round(window.innerWidth - margin - m.width));
-        }
-        if (top + m.height > window.innerHeight - margin) {
-          top = Math.max(margin, Math.round(window.innerHeight - margin - m.height));
-        }
-
-        modal.style.left = left + "px";
-        modal.style.top = top + "px";
-      } catch (e) {
-        // fallback
-      } finally {
-        modal.style.visibility = "visible";
-      }
-    });
+    // 中央に固定（CSSが position:fixed 前提）
+    // ただし、スマホはヘッダー下に寄せたいので、CSS側で調整する
+    try {
+      modal.style.left = "50%";
+      modal.style.top = "50%";
+      modal.style.transform = "translate(-50%, -50%)";
+    } catch (e) {}
 
     renderColumns();
   }
 
   function closeModal() {
+    backdrop.style.display = "none";
     backdrop.setAttribute("aria-hidden", "true");
     btn.setAttribute("aria-expanded", "false");
-
-    // class も display も両方閉じる（どちらの方式でも確実に閉じる）
     backdrop.classList.remove("open");
-    backdrop.style.display = "none";
-
     document.body.style.overflow = "";
-
-    modal.style.visibility = "";
   }
 
-  // ----------------------------
-  //  Events
-  // ----------------------------
-  btn.addEventListener("click", openModal);
-  closeBtn.addEventListener("click", closeModal);
-
-  // click backdrop closes only when clicking outside modal
+  // backdrop click to close
   backdrop.addEventListener("click", (e) => {
     if (e.target === backdrop) closeModal();
   });
 
-  // ★ apply/clear がある構成だけイベントを生やす
+  closeBtn.addEventListener("click", () => closeModal());
+
+  // ESC to close
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      // style.display で開いている場合も考慮
+      const open = backdrop.classList.contains("open") || backdrop.style.display === "flex";
+      if (open) closeModal();
+    }
+  });
+
+  btn.addEventListener("click", () => openModal());
+
+  // ----------------------------
+  //  Apply / Clear
+  // ----------------------------
   if (applyBtn) {
     applyBtn.addEventListener("click", () => {
       saveSelection();
@@ -476,30 +459,35 @@
       closeModal();
     });
   }
+
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
       selected = new Set();
       saveSelection();
       setBadge();
       renderColumns();
+
+      // ★ applyBtn が無い構成なら「自動適用」
       schedulePostSelected();
     });
   }
 
-  // esc closes
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && backdrop.classList.contains("open")) {
-      closeModal();
+  // ----------------------------
+  //  Fetch tree.csv (Google Sheets)
+  // ----------------------------
+  async function fetchTreeCsv() {
+    // まず primary を試し、ダメなら fallback
+    const urls = [TREE_URL_PRIMARY, TREE_URL_FALLBACK];
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) continue;
+        const csv = await res.text();
+        if (!csv || !csv.trim()) continue;
+        return csv;
+      } catch (e) {}
     }
-  });
-
-  // ----------------------------
-  //  Load tree (CSV)
-  // ----------------------------
-  async function fetchCsv(url) {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error("fetch failed: " + res.status);
-    return await res.text();
+    return null;
   }
 
   function buildTreeFromCsv(csvText) {
@@ -510,75 +498,89 @@
     depthById.clear();
     pathById.clear();
 
+    // add ROOT
     nodesById.set(ROOT_ID, {
       id: ROOT_ID,
-      label: "ROOT",
+      label: "",
       depth: 0,
       parentId: null,
       children: new Set(),
     });
-    label.set(ROOT_ID, "ROOT");
+    childrenByParent.set(ROOT_ID, new Set());
+    label.set(ROOT_ID, "");
     parent.set(ROOT_ID, null);
     depthById.set(ROOT_ID, 0);
+    pathById.set(ROOT_ID, []);
 
-    const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    if (lines.length <= 1) return;
+    const lines = (csvText || "").split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length === 0) return;
 
-    const header = csvParseLine(lines[0]).map((s) => normalize(s).toLowerCase());
-    const idx1 = header.indexOf("level1");
-    const idx2 = header.indexOf("level2");
-    const idx3 = header.indexOf("level3");
-    if (idx1 < 0) return;
+    // header? (assume first line is header if it contains 'L1' or 'level')
+    const first = csvParseLine(lines[0]).map((c) => normalize(c));
+    const looksHeader = first.some((c) => /^(l1|level1|lvl1|category)$/i.test(c));
+    const startIdx = looksHeader ? 1 : 0;
 
-    // Each row creates nodes for each level; nodeId is built from path
-    for (let i = 1; i < lines.length; i++) {
-      const cols = csvParseLine(lines[i]);
-      const l1 = normalize(cols[idx1]);
-      const l2 = idx2 >= 0 ? normalize(cols[idx2]) : "";
-      const l3 = idx3 >= 0 ? normalize(cols[idx3]) : "";
-      if (!l1) continue;
+    for (let i = startIdx; i < lines.length; i++) {
+      const cols = csvParseLine(lines[i]).map((c) => normalize(c));
+      if (cols.length === 0) continue;
 
-      const id1 = "L1|" + safeIdFromLabel(l1);
-      addNode(id1, l1, 1, ROOT_ID);
+      // 想定: 3列（L1, L2, L3）だが、余分があっても先頭3つだけ使う
+      const l1 = cols[0] || "";
+      const l2 = cols[1] || "";
+      const l3 = cols[2] || "";
 
-      if (l2) {
-        const id2 = id1 + "|L2|" + safeIdFromLabel(l2);
-        addNode(id2, l2, 2, id1);
+      const p1 = normalize(l1);
+      const p2 = normalize(l2);
+      const p3 = normalize(l3);
 
-        if (l3) {
-          const id3 = id2 + "|L3|" + safeIdFromLabel(l3);
-          addNode(id3, l3, 3, id2);
-        }
+      // skip empty row
+      if (!p1 && !p2 && !p3) continue;
+
+      // build ids with hierarchy
+      // id = depth + "||" + path
+      let id1 = null;
+      let id2 = null;
+      let id3 = null;
+
+      if (p1) {
+        id1 = `1||${safeIdFromLabel(p1)}`;
+        addNode(id1, p1, 1, ROOT_ID);
+      }
+
+      if (p2) {
+        const parentId = id1 || ROOT_ID;
+        id2 = `2||${safeIdFromLabel(p1)}||${safeIdFromLabel(p2)}`;
+        addNode(id2, p2, 2, parentId);
+      }
+
+      if (p3) {
+        const parentId = id2 || id1 || ROOT_ID;
+        id3 = `3||${safeIdFromLabel(p1)}||${safeIdFromLabel(p2)}||${safeIdFromLabel(p3)}`;
+        addNode(id3, p3, 3, parentId);
       }
     }
   }
 
-  async function loadTree() {
-    treeReady = false;
-    try {
-      const csv = await fetchCsv(TREE_URL_PRIMARY);
-      buildTreeFromCsv(csv);
-      treeReady = true;
-      renderColumns();
-      tryAutoApply();
-      return;
-    } catch (e) {}
+  async function init() {
+    loadSelection();
+    setBadge();
 
-    try {
-      const csv = await fetchCsv(TREE_URL_FALLBACK);
-      buildTreeFromCsv(csv);
+    const csv = await fetchTreeCsv();
+    if (!csv) {
+      // fail silently (keep UI)
       treeReady = true;
       renderColumns();
-      tryAutoApply();
-    } catch (e2) {
-      treeReady = false;
+      return;
     }
+
+    buildTreeFromCsv(csv);
+    treeReady = true;
+    renderColumns();
+
+    // 既に earth が ready なら auto apply
+    tryAutoApply();
   }
 
-  // ----------------------------
-  //  Init
-  // ----------------------------
-  loadSelection();
-  setBadge();
-  loadTree();
+  // Earth の ready を待たず、UI を先に作る
+  init();
 })();
