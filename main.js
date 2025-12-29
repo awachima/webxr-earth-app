@@ -748,11 +748,18 @@ function startApp(){
   // ツアー提案（Lucy）パネル：tourist-information ボタンで開閉
   setupRecommendPanelToggle();
 
-  document.getElementById('close').onclick=closeModal;
-  document.getElementById('close2').onclick=closeModal;
-  document.getElementById('submit').onclick=onSubmit;
-  document.getElementById('duplicate').onclick=onDuplicate;
-  document.getElementById('delete').onclick=onDelete;
+  // ★ここが今回の本丸：存在しない要素で例外停止しないようにガード
+  const closeBtn  = document.getElementById('close');
+  if (closeBtn) closeBtn.onclick = closeModal;
+  const closeBtn2 = document.getElementById('close2');
+  if (closeBtn2) closeBtn2.onclick = closeModal;
+
+  const submitBtn = document.getElementById('submit');
+  if (submitBtn) submitBtn.onclick = onSubmit;
+  const duplicateBtn = document.getElementById('duplicate');
+  if (duplicateBtn) duplicateBtn.onclick = onDuplicate;
+  const deleteBtn = document.getElementById('delete');
+  if (deleteBtn) deleteBtn.onclick = onDelete;
 
   loadShared();
   setInterval(loadShared, 30000);
@@ -1036,134 +1043,87 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
 
     // 作成/編集モーダル（ボタン類）
     if (t.modal){
-      const deleteBtn   = document.getElementById('delete');
-      const duplicateBtn= document.getElementById('duplicate');
-      const close2      = document.getElementById('close2');
-      const submit      = document.getElementById('submit');
-      const modalTitle  = document.getElementById('modalTitle');
-
-      if (deleteBtn && t.modal.deleteButton) deleteBtn.textContent = t.modal.deleteButton;
-      if (duplicateBtn && t.modal.duplicateButton) duplicateBtn.textContent = t.modal.duplicateButton;
-      if (close2 && t.modal.closeButton) close2.textContent = t.modal.closeButton;
-
-      if (submit){
+      // モードに応じて submit 文言を切り替え
+      const submitBtn = document.getElementById('submit');
+      if (submitBtn){
         if (window.mode === 'edit'){
-          submit.textContent = t.modal.submitUpdate || submit.textContent;
-        }else{
-          submit.textContent = t.modal.submitCreate || submit.textContent;
+          if (t.modal.submitUpdate) submitBtn.textContent = t.modal.submitUpdate;
+        } else {
+          if (t.modal.submitCreate) submitBtn.textContent = t.modal.submitCreate;
         }
       }
-      if (modalTitle){
-        if (window.mode === 'edit'){
-          modalTitle.textContent = t.modal.editTitle || modalTitle.textContent;
-        }else{
-          modalTitle.textContent = t.modal.createTitle || modalTitle.textContent;
-        }
-      }
+      const dupBtn = document.getElementById('duplicate');
+      const delBtn = document.getElementById('delete');
+      if (dupBtn && t.modal.duplicate) dupBtn.textContent = t.modal.duplicate;
+      if (delBtn && t.modal.delete) delBtn.textContent = t.modal.delete;
     }
 
-    // URL アラート
-    if (t.alert){
-      const alertTitle = document.getElementById('alertTitle');
-      const alertBody  = document.getElementById('alertBody');
-      const alertOk    = document.getElementById('alertOk');
-      if (alertTitle && t.alert.title) alertTitle.textContent = t.alert.title;
-      if (alertBody && t.alert.body)   alertBody.textContent  = t.alert.body;
-      if (alertOk && t.alert.ok)       alertOk.textContent    = t.alert.ok;
+    // 言語メニュー
+    const toggle = document.getElementById('langToggle');
+    if (toggle){
+      toggle.textContent = LANGUAGE_LABELS[current] || current;
     }
-
-    // aria-label 系
-    if (t.aria){
-      if (window.mLimit && t.aria.selectMaxParticipants){
-        window.mLimit.setAttribute('aria-label', t.aria.selectMaxParticipants);
-      }
-      if (window.mMonth && t.aria.month)   window.mMonth.setAttribute('aria-label', t.aria.month);
-      if (window.mDay && t.aria.day)       window.mDay.setAttribute('aria-label', t.aria.day);
-      if (window.mHour && t.aria.hour)     window.mHour.setAttribute('aria-label', t.aria.hour);
-      if (window.mMinute && t.aria.minute) window.mMinute.setAttribute('aria-label', t.aria.minute);
-
-      document.querySelectorAll('.modal .close').forEach(el=>{
-        if (t.aria.close){
-          el.setAttribute('aria-label', t.aria.close);
-        }
+    const menu = document.getElementById('langMenu');
+    if (menu){
+      menu.querySelectorAll('button[data-lang]').forEach(b=>{
+        const l = b.getAttribute('data-lang');
+        b.textContent = LANGUAGE_LABELS[l] || l;
       });
     }
 
-    // 言語トグルボタンとメニューの表示更新
-    const langToggle = document.getElementById('langToggle');
-    if (langToggle){
-      langToggle.textContent = LANGUAGE_LABELS[current] || 'Language';
+    // 言語適用後に startApp を一度だけ起動
+    if (!appStarted){
+      appStarted = true;
+      startApp();
     }
-    const menuButtons = document.querySelectorAll('.lang-switch__menu button[data-lang]');
-    menuButtons.forEach(btn=>{
-      const code = btn.getAttribute('data-lang');
-      if (LANGUAGE_LABELS[code]) btn.textContent = LANGUAGE_LABELS[code];
-      btn.classList.toggle('is-active', code === current);
-    });
   }
 
-  // グローバル参照用にフォーム要素を window にもぶら下げておく
-  window.mLimit  = mLimit;
-  window.mMonth  = mMonth;
-  window.mDay    = mDay;
-  window.mHour   = mHour;
-  window.mMinute = mMinute;
-  window.mPrice  = mPrice;
-
-  // ドロップダウンの開閉制御
-  function setupLangDropdown(){
+  function setupLangMenu(){
     const toggle = document.getElementById('langToggle');
-    const menu   = document.getElementById('langMenu');
+    const menu = document.getElementById('langMenu');
     if (!toggle || !menu) return;
 
-    toggle.addEventListener('click', function(ev){
+    function open(){
+      menu.style.display = 'block';
+      toggle.setAttribute('aria-expanded','true');
+    }
+    function close(){
+      menu.style.display = 'none';
+      toggle.setAttribute('aria-expanded','false');
+    }
+
+    toggle.addEventListener('click', (ev)=>{
+      ev.preventDefault();
       ev.stopPropagation();
-      menu.hidden = !menu.hidden;
+      const openNow = (menu.style.display === 'block');
+      if (openNow) close(); else open();
     });
 
-    menu.addEventListener('click', function(ev){
+    document.addEventListener('click', ()=>{
+      close();
+    });
+
+    menu.addEventListener('click', (ev)=>{
       ev.stopPropagation();
-      const btn = ev.target.closest('button[data-lang]');
-      if (!btn) return;
-      const lang = btn.getAttribute('data-lang');
-      window.switchLang(lang);
     });
 
-    document.addEventListener('click', function(){
-      if (!menu.hidden){
-        menu.hidden = true;
-      }
+    menu.querySelectorAll('button[data-lang]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const lang = btn.getAttribute('data-lang') || 'en';
+        close();
+        loadLanguage(lang);
+      });
     });
 
-    document.addEventListener('keydown', function(ev){
-      if (ev.key === 'Escape' && !menu.hidden){
-        menu.hidden = true;
-      }
-    });
+    close();
   }
 
-  // グローバル関数として公開（メニューから呼ばれる）
-  window.switchLang = function(lang){
-    const menu = document.getElementById('langMenu');
-    if (menu) menu.hidden = true;
-    loadLanguage(lang);
-  };
-
-  // 初期言語のロード後に startApp() を起動
-  document.addEventListener('DOMContentLoaded', function(){
-    setupLangDropdown();
-
-    let stored = null;
-    try{
-      stored = localStorage.getItem('lang');
-    }catch(e){}
-    const initial = stored || 'en';
-    updateHtmlLangAndDir(initial);
-    loadLanguage(initial).finally(function(){
-      if (!appStarted && typeof window.startApp === 'function'){
-        appStarted = true;
-        window.startApp();
-      }
-    });
-  });
+  // 初期化：メニューをセットし、保存言語を読み込み
+  setupLangMenu();
+  let initialLang = 'en';
+  try{
+    const stored = localStorage.getItem('lang');
+    if (stored) initialLang = stored;
+  }catch(e){}
+  loadLanguage(initialLang);
 })();
