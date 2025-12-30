@@ -44,6 +44,7 @@
 
   // root pseudo id
   const ROOT_ID = "__root__";
+  const EMPTY_ID = "__empty__";
 
   // selection state
   let selected = new Set(); // Set<nodeId>
@@ -55,72 +56,6 @@
   let treeReady = false;
   let earthReady = false;
   let autoApplied = false;
-
-  // ★ earth 側がまだ message listener を用意する前に postMessage すると取りこぼすことがあります。
-  //   （結果として「初回はマーカーが出ない → リロードで出る」になり得る）
-  //   earth.html は受信後に { type:'FILTER_TAGS_APPLIED' } を返しているので、
-  //   それを ACK として扱い、受信できるまで少しだけ再送します。
-  let awaitingAppliedAck = false;
-  let lastPostedSig = "";
-  let retryCount = 0;
-  let retryTimer2 = null;
-
-  function clearRetry() {
-    if (retryTimer2) {
-      clearTimeout(retryTimer2);
-      retryTimer2 = null;
-    }
-    retryCount = 0;
-    awaitingAppliedAck = false;
-  }
-
-  function makeSig(tags) {
-    try { return (tags || []).join("\u0001"); } catch (e) { return ""; }
-  }
-
-  function getSelectedTags() {
-    return Array.from(selected)
-      .map((id) => label.get(id) || id)
-      .map((s) => String(s).trim())
-      .filter(Boolean);
-  }
-
-  function postSelectedReliable() {
-    const tags = getSelectedTags();
-    lastPostedSig = makeSig(tags);
-    awaitingAppliedAck = true;
-
-    // まずは即送信
-    try {
-      iframe.contentWindow.postMessage({ type: "dd-tags-apply", tags }, "*");
-    } catch (e) {
-      console.warn(e);
-    }
-
-    // 再送（最大5回・軽いバックオフ）
-    if (retryTimer2) clearTimeout(retryTimer2);
-    retryCount = 0;
-
-    const retryOnce = () => {
-      if (!awaitingAppliedAck) return;
-
-      retryCount++;
-      if (retryCount > 5) {
-        // 無限ループにしない
-        awaitingAppliedAck = false;
-        return;
-      }
-
-      try {
-        iframe.contentWindow.postMessage({ type: "dd-tags-apply", tags }, "*");
-      } catch (e) {}
-
-      const nextDelay = [200, 400, 700, 1100, 1600][retryCount - 1] || 1600;
-      retryTimer2 = setTimeout(retryOnce, nextDelay);
-    };
-
-    retryTimer2 = setTimeout(retryOnce, 200);
-  }
 
 
   // iframe の load が tagfilter.js 読み込みより先に発火していると、
@@ -152,7 +87,7 @@
     if (applyBtn) return; // applyBtn がある構成なら「適用」押下まで送らない
     if (postTimer) clearTimeout(postTimer);
     postTimer = setTimeout(() => {
-      postSelectedReliable();
+      postSelected();
     }, delayMs);
   }
 
@@ -218,7 +153,7 @@
 
   function saveSelection() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(selected)));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(selected).filter((id)=>id && id !== ROOT_ID && id !== EMPTY_ID)));
     } catch (e) {}
   }
 
@@ -228,205 +163,207 @@
       if (!raw) return;
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)) {
-        selected = new Set(arr.map((x) => String(x)));
+        selected = new Set(
+          arr
+            .map((x) => String(x))
+            .filter((id) => id && id !== ROOT_ID && id !== EMPTY_ID)
+        );
         hadSavedSelection = selected.size > 0;
       }
     } catch (e) {}
   }
 
-  function nodeHasChildren(id) {
-    const set = childrenByParent.get(id);
-    return set && set.size > 0;
+  // ----------------------------
+  //  Tree build / selection helpers
+  // ----------------------------
+  function addNode(nodeId, nodeLabel, depth, parentId) {
+    if (!nodesById.has(nodeId)) {
+      nodesById.set(nodeId, {
+        id: nodeId,
+        label: nodeLabel,
+        depth,
+        parentId,
+        children: new Set(),
+      });
+    }
+    label.set(nodeId, nodeLabel);
+    parent.set(nodeId, parentId);
+    depthById.set(nodeId, depth);
+
+    const kids = ensureSet(childrenByParent, parentId);
+    kids.add(nodeId);
+
+    const pNode = nodesById.get(parentId);
+    if (pNode) pNode.children.add(nodeId);
+
+    // build path
+    const ancestors = [];
+    let cur = nodeId;
+    while (cur && cur !== ROOT_ID) {
+      const p = parent.get(cur);
+      if (!p || p === ROOT_ID) break;
+      ancestors.unshift(p);
+      cur = p;
+    }
+    pathById.set(nodeId, ancestors);
   }
 
-  function buildPaths() {
-    // build ancestor path array for each node
-    nodesById.forEach((node, id) => {
-      const ancestors = [];
-      let cur = id;
-      while (cur && cur !== ROOT_ID) {
-        const p = parent.get(cur);
-        if (!p) break;
-        if (p === ROOT_ID) break;
-        ancestors.unshift(p);
-        cur = p;
+  function getChildren(parentId) {
+    const s = childrenByParent.get(parentId || ROOT_ID);
+    return s ? Array.from(s) : [];
+  }
+
+  function nodeHasChildren(nodeId) {
+    const s = childrenByParent.get(nodeId);
+    return s && s.size > 0;
+  }
+
+  function setNodeAndDescendants(nodeId, on) {
+    if (!nodeId || nodeId === ROOT_ID || nodeId === EMPTY_ID) return;
+    // set node
+    if (on) selected.add(nodeId);
+    else selected.delete(nodeId);
+
+    // set descendants
+    const kids = childrenByParent.get(nodeId);
+    if (!kids) return;
+    kids.forEach((k) => setNodeAndDescendants(k, on));
+  }
+
+  function computeIndeterminateStates() {
+    // For each node, compute if it should be indeterminate based on descendants selection.
+    const checked = new Set();
+    const indeterminate = new Set();
+
+    function walk(nodeId) {
+      const kids = childrenByParent.get(nodeId);
+      if (!kids || kids.size === 0) {
+        const isChecked = selected.has(nodeId);
+        if (isChecked) checked.add(nodeId);
+        return { any: isChecked, all: isChecked };
       }
-      pathById.set(id, ancestors);
-    });
-  }
 
-  function setPathTo(id) {
-    const ancestors = pathById.get(id) || [];
-    // path is opened nodes per depth (1..MAX_DEPTH-1)
-    path = ancestors.slice(0, MAX_DEPTH - 1);
-    // also include this id if it's not leaf and within depth-1?
-    const d = depthById.get(id) || 1;
-    if (d <= MAX_DEPTH - 1 && nodeHasChildren(id)) {
-      path[d - 1] = id;
-    }
-  }
+      let any = false;
+      let all = true;
+      kids.forEach((k) => {
+        const r = walk(k);
+        any = any || r.any;
+        all = all && r.all;
+      });
 
-  // When selecting parent, we may want to select/deselect all descendants.
-  function collectDescendants(id) {
-    const out = [];
-    const stack = [id];
-    while (stack.length) {
-      const cur = stack.pop();
-      out.push(cur);
-      const kids = childrenByParent.get(cur);
-      if (kids) {
-        kids.forEach((k) => stack.push(k));
+      const selfChecked = selected.has(nodeId);
+      if (selfChecked) {
+        any = true;
+      } else {
+        all = false; // if self isn't checked, cannot be "all" in this simple model
       }
-    }
-    return out;
-  }
 
-  function updateSelectionForNode(id, checked) {
-    // select/deselect node + all descendants
-    const ids = collectDescendants(id);
-    if (checked) {
-      ids.forEach((x) => selected.add(x));
-    } else {
-      ids.forEach((x) => selected.delete(x));
+      if (selfChecked) checked.add(nodeId);
+      if (any && !all) indeterminate.add(nodeId);
+      return { any, all };
     }
-  }
 
-  function computeCheckedState(id) {
-    // returns { checked:boolean, indeterminate:boolean }
-    const kids = childrenByParent.get(id);
-    if (!kids || kids.size === 0) {
-      const c = selected.has(id);
-      return { checked: c, indeterminate: false };
-    }
-    // for parent: checked if all descendants selected, indeterminate if some selected
-    const all = collectDescendants(id);
-    let selCount = 0;
-    for (let i = 0; i < all.length; i++) {
-      if (selected.has(all[i])) selCount++;
-    }
-    if (selCount === 0) return { checked: false, indeterminate: false };
-    if (selCount === all.length) return { checked: true, indeterminate: false };
-    return { checked: false, indeterminate: true };
+    // walk from ROOT's children
+    getChildren(ROOT_ID).forEach((id) => walk(id));
+    return { checked, indeterminate };
   }
 
   // ----------------------------
-  //  Render (3 columns)
+  //  UI build
   // ----------------------------
+  function clearColumns() {
+    while (colWrap.firstChild) colWrap.removeChild(colWrap.firstChild);
+  }
+
   function createColumn(title) {
     const col = document.createElement("div");
-    col.className = "tag-filter-col";
-
-    const h = document.createElement("div");
-    h.className = "tag-filter-col-title";
-    h.textContent = title || " ";
+    col.className = "column";
+    const h = document.createElement("h3");
+    h.textContent = title || "";
     col.appendChild(h);
-
-    const list = document.createElement("div");
-    list.className = "tag-filter-list";
-    col.appendChild(list);
-
-    col._list = list;
     return col;
   }
 
-  function renderList(col, parentId, depth, checkedMap, indMap) {
-    const list = col._list;
-    list.innerHTML = "";
+  function renderList(colEl, parentId, depth, checked, indeterminate) {
+    if (!parentId) return;
 
-    const kids = childrenByParent.get(parentId || ROOT_ID);
-    if (!kids || kids.size === 0) {
-      const empty = document.createElement("div");
-      empty.style.opacity = "0.55";
-      empty.style.fontSize = "12px";
-      empty.style.padding = "8px";
-      empty.textContent = " ";
-      list.appendChild(empty);
-      return;
-    }
+    const kids = getChildren(parentId)
+      .map((id) => nodesById.get(id))
+      .filter(Boolean);
 
-    const arr = Array.from(kids);
-    // sort by label
-    arr.sort((a, b) => {
-      const la = (label.get(a) || a).toString();
-      const lb = (label.get(b) || b).toString();
-      return la.localeCompare(lb, "ja");
-    });
+    // stable sort by label
+    kids.sort((a, b) => (a.label || "").localeCompare(b.label || "", "ja"));
 
-    arr.forEach((id) => {
-      const item = document.createElement("div");
-      item.className = "tag-item";
-
-      const { checked, indeterminate } = computeCheckedState(id);
-      checkedMap.set(id, checked);
-      indMap.set(id, indeterminate);
+    kids.forEach((node) => {
+      const row = document.createElement("div");
+      row.className = "node";
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
-      cb.checked = !!checked;
-      cb.indeterminate = !!indeterminate;
+      cb.checked = selected.has(node.id);
+      cb.indeterminate = indeterminate.has(node.id);
 
-      // clicking checkbox toggles selection
+      const lab = document.createElement("div");
+      lab.className = "label";
+      lab.textContent = node.label || "";
+
+      const hasKids = nodeHasChildren(node.id);
+      const chev = document.createElement("div");
+      chev.className = "chev";
+      chev.textContent = hasKids ? "›" : "";
+
+      row.appendChild(cb);
+      row.appendChild(lab);
+      row.appendChild(chev);
+
+      // checkbox click: toggle with descendants
       cb.addEventListener("click", (e) => {
         e.stopPropagation();
-        updateSelectionForNode(id, cb.checked);
-        setBadge();
+        const on = cb.checked;
+        setNodeAndDescendants(node.id, on);
         saveSelection();
+        setBadge();
         renderColumns();
+
+        // ★ applyBtn が無い構成なら「自動適用」
         schedulePostSelected();
       });
 
-      const lab = document.createElement("label");
-      lab.textContent = label.get(id) || id;
+      // row click: open next column (path)
+      row.addEventListener("click", () => {
+        const depthIdx = node.depth - 1;
+        path = path.slice(0, depthIdx);
+        path[depthIdx] = node.id;
 
-      // item click toggles checkbox
-      item.addEventListener("click", () => {
-        const next = !cb.checked || cb.indeterminate;
-        cb.checked = next;
-        cb.indeterminate = false;
-        updateSelectionForNode(id, next);
-        setBadge();
-        saveSelection();
-        // open path if has children
-        if (nodeHasChildren(id) && depth < MAX_DEPTH) {
-          setPathTo(id);
-        } else if (depth <= MAX_DEPTH - 1) {
-          // if it's leaf at this depth, adjust path so next column title doesn't show leaf label
-          // handled in renderColumns()
+        if (!hasKids) {
+          path = path.slice(0, depthIdx + 1);
         }
         renderColumns();
-        schedulePostSelected();
       });
 
-      // mark active (opened in path)
-      if (path[depth - 1] === id) {
-        item.classList.add("active");
-      }
-
-      item.appendChild(cb);
-      item.appendChild(lab);
-
-      if (nodeHasChildren(id) && depth < MAX_DEPTH) {
-        const chev = document.createElement("span");
-        chev.className = "chev";
-        chev.textContent = "›";
-        item.appendChild(chev);
-      }
-
-      list.appendChild(item);
+      colEl.appendChild(row);
     });
   }
 
   function renderColumns() {
-    colWrap.innerHTML = "";
+    clearColumns();
 
-    const checked = new Map();
-    const indeterminate = new Map();
+    if (!treeReady) {
+      const msg = document.createElement("div");
+      msg.style.padding = "10px";
+      msg.style.opacity = "0.8";
+      msg.textContent = "読み込み中…";
+      colWrap.appendChild(msg);
+      return;
+    }
 
-    // column1: root children
-    const col1 = createColumn(" ");
-    renderList(col1, null, 1, checked, indeterminate);
+    const { checked, indeterminate } = computeIndeterminateStates();
 
-    const cols = [col1];
+    const cols = [];
+
+    const col1 = createColumn("カテゴリ");
+    renderList(col1, ROOT_ID, 1, checked, indeterminate);
+    cols.push(col1);
 
     const l1 = path[0] || null;
     const col2 = createColumn(l1 ? label.get(l1) || " " : " ");
@@ -458,7 +395,17 @@
   //  Earth messaging
   // ----------------------------
   function postSelected() {
-    postSelectedReliable();
+    // earth側は「タグ名」を期待しているので label を送る
+    const tags = Array.from(selected)
+      .map((id) => label.get(id) || id)
+      .map((s) => String(s).trim())
+      .filter(Boolean);
+
+    try {
+      iframe.contentWindow.postMessage({ type: "dd-tags-apply", tags }, "*");
+    } catch (e) {
+      console.warn(e);
+    }
   }
 
   function tryAutoApply() {
@@ -468,7 +415,7 @@
     if (!hadSavedSelection) return;
 
     autoApplied = true;
-    postSelectedReliable();
+    postSelected();
   }
 
   window.addEventListener("message", (ev) => {
@@ -477,28 +424,6 @@
     if (data.type === "dd-earth-ready") {
       earthReady = true;
       tryAutoApply();
-    }
-    if (data.type === "FILTER_TAGS_APPLIED") {
-      // earth 側でフィルタが反映された合図
-      try {
-        const sel =
-          data.payload && Array.isArray(data.payload.selectedTags)
-            ? data.payload.selectedTags
-            : null;
-
-        if (!sel) {
-          clearRetry();
-        } else {
-          const sig = makeSig(
-            sel.map((s) => String(s).trim()).filter(Boolean)
-          );
-          if (!lastPostedSig || sig === lastPostedSig) {
-            clearRetry();
-          }
-        }
-      } catch (e) {
-        clearRetry();
-      }
     }
   });
 
@@ -578,7 +503,7 @@
     applyBtn.addEventListener("click", () => {
       saveSelection();
       setBadge();
-      postSelectedReliable();
+      postSelected();
       closeModal();
     });
   }
@@ -600,122 +525,91 @@
   });
 
   // ----------------------------
-  //  Load CSV tree
+  //  Load tree (CSV)
   // ----------------------------
-  async function fetchTreeCsv(url) {
+  async function fetchCsv(url) {
     const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error("Failed to fetch tree CSV");
-    const text = await res.text();
-    return text;
+    if (!res.ok) throw new Error("fetch failed: " + res.status);
+    return await res.text();
   }
 
-  function ingestRows(rows) {
-    // rows: array of arrays with 3 columns (L1,L2,L3) / may contain empties
-    // build nodes using stable ids per path
-    function ensureNode(id, lab, d, parentId) {
-      if (!nodesById.has(id)) {
-        nodesById.set(id, { id, label: lab, depth: d, parentId, children: new Set() });
-        label.set(id, lab);
-        depthById.set(id, d);
-        parent.set(id, parentId);
-        ensureSet(childrenByParent, parentId || ROOT_ID).add(id);
-      }
-      return nodesById.get(id);
-    }
+  function buildTreeFromCsv(csvText) {
+    nodesById.clear();
+    childrenByParent.clear();
+    label.clear();
+    parent.clear();
+    depthById.clear();
+    pathById.clear();
 
-    // root
-    if (!childrenByParent.has(ROOT_ID)) childrenByParent.set(ROOT_ID, new Set());
+    nodesById.set(ROOT_ID, {
+      id: ROOT_ID,
+      label: "ROOT",
+      depth: 0,
+      parentId: null,
+      children: new Set(),
+    });
+    label.set(ROOT_ID, "ROOT");
+    parent.set(ROOT_ID, null);
+    depthById.set(ROOT_ID, 0);
 
-    rows.forEach((cols) => {
-      const l1 = normalize(cols[0]);
-      const l2 = normalize(cols[1]);
-      const l3 = normalize(cols[2]);
+    const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length <= 1) return;
 
-      let id1 = null;
-      let id2 = null;
+    const header = csvParseLine(lines[0]).map((s) => normalize(s).toLowerCase());
+    const idx1 = header.indexOf("level1");
+    const idx2 = header.indexOf("level2");
+    const idx3 = header.indexOf("level3");
+    if (idx1 < 0) return;
 
-      if (l1) {
-        id1 = "1/" + safeIdFromLabel(l1);
-        ensureNode(id1, l1, 1, ROOT_ID);
-      }
+    // Each row creates nodes for each level; nodeId is built from path
+    for (let i = 1; i < lines.length; i++) {
+      const cols = csvParseLine(lines[i]);
+      const l1 = normalize(cols[idx1]);
+      const l2 = idx2 >= 0 ? normalize(cols[idx2]) : "";
+      const l3 = idx3 >= 0 ? normalize(cols[idx3]) : "";
+      if (!l1) continue;
+
+      const id1 = "L1|" + safeIdFromLabel(l1);
+      addNode(id1, l1, 1, ROOT_ID);
+
       if (l2) {
-        id2 = "2/" + safeIdFromLabel((l1 ? l1 + "/" : "") + l2);
-        ensureNode(id2, l2, 2, id1 || ROOT_ID);
+        const id2 = id1 + "|L2|" + safeIdFromLabel(l2);
+        addNode(id2, l2, 2, id1);
+
+        if (l3) {
+          const id3 = id2 + "|L3|" + safeIdFromLabel(l3);
+          addNode(id3, l3, 3, id2);
+        }
       }
-      if (l3) {
-        const id3 = "3/" + safeIdFromLabel((l1 ? l1 + "/" : "") + (l2 ? l2 + "/" : "") + l3);
-        ensureNode(id3, l3, 3, id2 || id1 || ROOT_ID);
-      }
-    });
-
-    // fill children sets
-    nodesById.forEach((node) => {
-      const kids = childrenByParent.get(node.id);
-      if (kids) node.children = kids;
-    });
-
-    buildPaths();
-
-    // If we have saved selection, open path to first selected node
-    if (selected.size > 0) {
-      const first = selected.values().next().value;
-      if (first) setPathTo(first);
     }
   }
 
-  async function initTree() {
+  async function loadTree() {
+    treeReady = false;
     try {
-      let csvText = null;
-      try {
-        csvText = await fetchTreeCsv(TREE_URL_PRIMARY);
-      } catch (e) {
-        // fallback
-        csvText = await fetchTreeCsv(TREE_URL_FALLBACK);
-      }
-
-      // parse CSV
-      const lines = csvText.split(/\r?\n/).filter((l) => l.trim() !== "");
-      const rows = [];
-      for (let i = 0; i < lines.length; i++) {
-        const cols = csvParseLine(lines[i]).map((x) => (x || "").trim());
-
-        // allow header
-        if (i === 0) {
-          const a = normalize(cols[0]);
-          const b = normalize(cols[1]);
-          const c = normalize(cols[2]);
-          // if header looks like "L1,L2,L3" etc, skip it
-          const head =
-            /l1|level1|カテゴリ|category/i.test(a) ||
-            /l2|level2|カテゴリ|category/i.test(b) ||
-            /l3|level3|カテゴリ|category/i.test(c);
-          if (head) continue;
-        }
-
-        // accept only first 3 columns
-        rows.push([cols[0] || "", cols[1] || "", cols[2] || ""]);
-      }
-
-      ingestRows(rows);
+      const csv = await fetchCsv(TREE_URL_PRIMARY);
+      buildTreeFromCsv(csv);
       treeReady = true;
-
-      setBadge();
       renderColumns();
       tryAutoApply();
-    } catch (e) {
-      console.warn("tag tree load failed", e);
-      // still render empty columns to keep UI stable
+      return;
+    } catch (e) {}
+
+    try {
+      const csv = await fetchCsv(TREE_URL_FALLBACK);
+      buildTreeFromCsv(csv);
       treeReady = true;
-      setBadge();
       renderColumns();
       tryAutoApply();
+    } catch (e2) {
+      treeReady = false;
     }
   }
 
   // ----------------------------
-  //  Bootstrap
+  //  Init
   // ----------------------------
   loadSelection();
   setBadge();
-  initTree();
+  loadTree();
 })();

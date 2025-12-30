@@ -599,6 +599,7 @@ AFRAME.registerComponent('marker-placer',{
 
         // 受信したら即再計算（フィルタ後にクラスタ再作成）
         this.updateClusters();
+    try{ window.parent.postMessage({ type: 'dd-earth-ready' }, '*'); }catch(_){ }
 
         // 任意: 反映通知（index.html が必要なら使える）
         try{
@@ -610,8 +611,6 @@ AFRAME.registerComponent('marker-placer',{
       }
     };
     window.addEventListener('message', this._onFilterMessage);
-	window.parent.postMessage({ type: 'dd-earth-ready' }, '*');
-
     var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv";
     console.log('[marker-placer] fetching CSV:', sheetUrl);
     try{
