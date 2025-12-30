@@ -4,6 +4,16 @@
   // ----------------------------
   const STORAGE_KEY = "dd_selected_tags_v1";
 
+  // 見逃し注意（location.csv G/H）
+  const STORAGE_KEY_MISS = "dd_miss_notice_v1";
+  // どちらが適用中か（排他）
+  const STORAGE_KEY_APPLIED_MODE = "dd_filter_applied_mode_v1"; // 'tree' | 'miss' | 'none'
+
+  // 見逃し注意用のCSV（公開URLは環境に合わせて差し替え）
+  const LOCATION_URL_PRIMARY =
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv";
+  const LOCATION_URL_FALLBACK = "./location.csv";
+
   // ★ Google Sheets「ウェブに公開」(CSV) を読む
   // 重要: pubhtml ではなく output=csv を使う
   const TREE_URL_PRIMARY =
@@ -24,6 +34,14 @@
   const clearBtn = document.getElementById("tagFilterClear");
 
   const colWrap = document.getElementById("tagFilterColumns");
+
+  // 統合モーダルUI（新規）
+  const tabTreeBtn = document.getElementById("ddFilterTabTree");
+  const tabMissBtn = document.getElementById("ddFilterTabMiss");
+  const paneTree = document.getElementById("ddPaneTree");
+  const paneMiss = document.getElementById("ddPaneMiss");
+  const missColWrap = document.getElementById("missFilterColumns");
+
   const iframe = document.getElementById("webxr-iframe");
 
   // ★ 必須要素だけチェック（apply/clear は無くても動かす）
@@ -32,35 +50,46 @@
   }
 
   // ----------------------------
-  //  Data structures
+  //  Mode (排他)
   // ----------------------------
-  // node: { id, label, depth, parentId, children:Set<id> }
-  const nodesById = new Map();
-  const childrenByParent = new Map(); // parentId -> Set(childId)
-  const label = new Map(); // id -> label
-  const parent = new Map(); // id -> parentId
-  const depthById = new Map(); // id -> depth (1..)
-  const pathById = new Map(); // id -> ancestors array (ids)
+  const MODE_TREE = "tree";
+  const MODE_MISS = "miss";
 
-  // root pseudo id
-  const ROOT_ID = "__root__";
-  const EMPTY_ID = "__empty__";
+  // 初期状態：必ず「絞り込み（A）」を編集対象にする
+  let activeMode = MODE_TREE;
 
-  // selection state
-  let selected = new Set(); // Set<nodeId>
-  let path = []; // currently opened path (ids per depth)
-  const MAX_DEPTH = 3;
+  function setActiveMode(mode) {
+    activeMode = mode === MODE_MISS ? MODE_MISS : MODE_TREE;
 
+    // CSS用（data-active-mode）
+    backdrop.dataset.activeMode = activeMode;
+
+    // タブの見た目/aria
+    if (tabTreeBtn) {
+      tabTreeBtn.classList.toggle("is-active", activeMode === MODE_TREE);
+      tabTreeBtn.setAttribute("aria-selected", activeMode === MODE_TREE ? "true" : "false");
+    }
+    if (tabMissBtn) {
+      tabMissBtn.classList.toggle("is-active", activeMode === MODE_MISS);
+      tabMissBtn.setAttribute("aria-selected", activeMode === MODE_MISS ? "true" : "false");
+    }
+
+    // PC左右2ペイン：非アクティブ側は「操作不可に見せる」
+    if (paneTree) paneTree.classList.toggle("is-inactive", activeMode !== MODE_TREE);
+    if (paneMiss) paneMiss.classList.toggle("is-inactive", activeMode !== MODE_MISS);
+  }
+
+  // タブ切替（スマホ/PC共通）
+  if (tabTreeBtn) tabTreeBtn.addEventListener("click", () => setActiveMode(MODE_TREE));
+  if (tabMissBtn) tabMissBtn.addEventListener("click", () => setActiveMode(MODE_MISS));
+
+  // ----------------------------
+  //  Earth ready / auto apply
+  // ----------------------------
+  let earthReady = false;
   // 自動適用（リロード時に earth 側へ再送）
   let hadSavedSelection = false;
-  let treeReady = false;
-  let earthReady = false;
-  let autoApplied = false;
 
-
-  // iframe の load が tagfilter.js 読み込みより先に発火していると、
-  // earth.html 側の dd-earth-ready が受け取れず、自動再適用が走らないことがある。
-  // そのため「iframeが読み込まれている」こと自体でも earthReady を立てる。
   function markEarthReadyFromIframe() {
     if (earthReady) return;
     earthReady = true;
@@ -68,14 +97,14 @@
   }
 
   // 通常: iframe load で確実に検知
-  iframe.addEventListener('load', () => {
+  iframe.addEventListener("load", () => {
     markEarthReadyFromIframe();
   });
 
   // 既に読み込み済み（load が先に終わっている）ケースも拾う
   setTimeout(() => {
     try {
-      if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+      if (iframe.contentDocument && iframe.contentDocument.readyState === "complete") {
         markEarthReadyFromIframe();
       }
     } catch (e) {}
@@ -92,30 +121,29 @@
   }
 
   // ----------------------------
-  //  Helpers
+  //  CSV helpers
   // ----------------------------
   function normalize(s) {
-    return (s || "").toString().trim();
+    return String(s || "").trim();
   }
 
-  function safeIdFromLabel(s) {
-    // stable-ish id: depth/label path
-    return String(s || "")
-      .trim()
-      .replace(/\s+/g, " ")
-      .replace(/[|]/g, "/");
+  function safeIdFromLabel(parts) {
+    // 既存互換：ラベルをID化（区切りは " › "）
+    return parts.map((p) => normalize(p)).filter(Boolean).join(" › ");
   }
 
+  // CSV 1行パース（引用符対応）
   function csvParseLine(line) {
-    // minimal CSV parser (handles quotes)
     const out = [];
     let cur = "";
     let inQ = false;
+
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
+
       if (inQ) {
         if (ch === '"') {
-          if (line[i + 1] === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
             cur += '"';
             i++;
           } else {
@@ -144,8 +172,13 @@
   }
 
   function setBadge() {
-    // (0) も含めて常に表示（既存UI仕様に合わせる）
+    // 数字表示は不要だが、既存互換のため処理は残す（CSS側で非表示）
     try {
+      if (selected.size <= 0) {
+        badge.textContent = "";
+        badge.style.display = "none";
+        return;
+      }
       badge.textContent = `(${selected.size})`;
       badge.style.display = "inline";
     } catch (e) {}
@@ -153,7 +186,10 @@
 
   function saveSelection() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(selected).filter((id)=>id && id !== ROOT_ID && id !== EMPTY_ID)));
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(Array.from(selected).filter((id) => id && id !== ROOT_ID && id !== EMPTY_ID))
+      );
     } catch (e) {}
   }
 
@@ -164,185 +200,252 @@
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)) {
         selected = new Set(
-          arr
-            .map((x) => String(x))
-            .filter((id) => id && id !== ROOT_ID && id !== EMPTY_ID)
+          arr.map((x) => String(x)).filter((id) => id && id !== ROOT_ID && id !== EMPTY_ID)
         );
         hadSavedSelection = selected.size > 0;
       }
     } catch (e) {}
   }
 
+  function saveMissSelection() {
+    try {
+      localStorage.setItem(STORAGE_KEY_MISS, JSON.stringify(Array.from(missSelected)));
+    } catch (e) {}
+  }
+
+  function loadMissSelection() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_MISS);
+      if (!raw) return;
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        missSelected = new Set(arr.map((x) => String(x)).filter(Boolean));
+      }
+    } catch (e) {}
+  }
+
+  function setAppliedMode(mode) {
+    try {
+      const m = mode === MODE_MISS ? MODE_MISS : mode === MODE_TREE ? MODE_TREE : "none";
+      localStorage.setItem(STORAGE_KEY_APPLIED_MODE, m);
+    } catch (e) {}
+  }
+
   // ----------------------------
-  //  Tree build / selection helpers
+  //  Tree structure
   // ----------------------------
-  function addNode(nodeId, nodeLabel, depth, parentId) {
-    if (!nodesById.has(nodeId)) {
-      nodesById.set(nodeId, {
-        id: nodeId,
-        label: nodeLabel,
-        depth,
-        parentId,
-        children: new Set(),
-      });
+  const label = new Map(); // id -> label
+  const parent = new Map(); // id -> parentId
+  const children = new Map(); // parentId -> Set(childId)
+  const depthById = new Map(); // id -> depth (1..)
+  const pathById = new Map(); // id -> ancestors array (ids)
+
+  // root pseudo id
+  const ROOT_ID = "__root__";
+  const EMPTY_ID = "__empty__";
+
+  // selection state
+  let selected = new Set(); // Set<nodeId>
+
+  // ----------------------------
+  //  見逃し注意（G/H）状態
+  // ----------------------------
+  let missReady = false;
+  let missParents = []; // 第1カテゴリ（G）
+  let missChildrenMap = new Map(); // G -> [H...]
+  let missActiveParent = ""; // 現在開いている親
+  let missSelected = new Set(); // token: `${G}\u0001${H}`（H空は親のみ）
+
+  function missTok(g, h) {
+    const G = (g || "").toString().trim();
+    const H = (h || "").toString().trim();
+    return `${G}\u0001${H}`;
+  }
+
+  function uniqKeepOrder(arr) {
+    const out = [];
+    const seen = new Set();
+    for (const v0 of arr) {
+      const v = (v0 || "").toString().trim();
+      if (!v) continue;
+      if (seen.has(v)) continue;
+      seen.add(v);
+      out.push(v);
     }
-    label.set(nodeId, nodeLabel);
-    parent.set(nodeId, parentId);
-    depthById.set(nodeId, depth);
+    return out;
+  }
 
-    const kids = ensureSet(childrenByParent, parentId);
-    kids.add(nodeId);
+  // 現在開いている経路（列の状態）
+  let path = []; // ids per depth
 
-    const pNode = nodesById.get(parentId);
-    if (pNode) pNode.children.add(nodeId);
+  // 最大深さ（treeは3階層）
+  const MAX_DEPTH = 3;
 
-    // build path
-    const ancestors = [];
-    let cur = nodeId;
-    while (cur && cur !== ROOT_ID) {
-      const p = parent.get(cur);
-      if (!p || p === ROOT_ID) break;
-      ancestors.unshift(p);
-      cur = p;
+  // tree load state
+  let treeReady = false;
+
+  // ----------------------------
+  //  Build tree from CSV
+  // ----------------------------
+  function addNode(parts, depth) {
+    const id = safeIdFromLabel(parts);
+    if (!id) return null;
+
+    if (!label.has(id)) {
+      label.set(id, normalize(parts[parts.length - 1]));
+      depthById.set(id, depth);
+      const p = depth === 1 ? ROOT_ID : safeIdFromLabel(parts.slice(0, -1));
+      parent.set(id, p);
+
+      ensureSet(children, p).add(id);
+
+      // ancestors
+      const ancestors = [];
+      for (let d = 1; d < depth; d++) {
+        ancestors.push(safeIdFromLabel(parts.slice(0, d)));
+      }
+      pathById.set(id, ancestors);
     }
-    pathById.set(nodeId, ancestors);
+    return id;
   }
 
-  function getChildren(parentId) {
-    const s = childrenByParent.get(parentId || ROOT_ID);
-    return s ? Array.from(s) : [];
+  function getChildren(pid) {
+    const set = children.get(pid);
+    if (!set) return [];
+    return Array.from(set);
   }
 
-  function nodeHasChildren(nodeId) {
-    const s = childrenByParent.get(nodeId);
-    return s && s.size > 0;
+  function nodeHasChildren(id) {
+    const set = children.get(id);
+    return !!(set && set.size);
   }
 
-  function setNodeAndDescendants(nodeId, on) {
-    if (!nodeId || nodeId === ROOT_ID || nodeId === EMPTY_ID) return;
-    // set node
-    if (on) selected.add(nodeId);
-    else selected.delete(nodeId);
+  function setNodeAndDescendants(id, on) {
+    // チェック状態の一括（子孫含む）
+    const stack = [id];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (!cur) continue;
 
-    // set descendants
-    const kids = childrenByParent.get(nodeId);
-    if (!kids) return;
-    kids.forEach((k) => setNodeAndDescendants(k, on));
+      if (on) selected.add(cur);
+      else selected.delete(cur);
+
+      const kids = getChildren(cur);
+      for (const k of kids) stack.push(k);
+    }
   }
 
   function computeIndeterminateStates() {
-    // For each node, compute if it should be indeterminate based on descendants selection.
-    const checked = new Set();
+    // indeterminate 判定（親が一部だけON）
     const indeterminate = new Set();
 
     function walk(nodeId) {
-      const kids = childrenByParent.get(nodeId);
-      if (!kids || kids.size === 0) {
-        const isChecked = selected.has(nodeId);
-        if (isChecked) checked.add(nodeId);
-        return { any: isChecked, all: isChecked };
-      }
+      const kids = getChildren(nodeId);
+      if (!kids.length) return selected.has(nodeId) ? 1 : 0;
 
-      let any = false;
-      let all = true;
-      kids.forEach((k) => {
+      let totalOn = 0;
+      let totalOff = 0;
+
+      for (const k of kids) {
         const r = walk(k);
-        any = any || r.any;
-        all = all && r.all;
-      });
-
-      const selfChecked = selected.has(nodeId);
-      if (selfChecked) {
-        any = true;
-      } else {
-        all = false; // if self isn't checked, cannot be "all" in this simple model
+        if (r === 1) totalOn++;
+        else if (r === 0) totalOff++;
+        else {
+          // mixed
+          indeterminate.add(nodeId);
+          return -1;
+        }
       }
 
-      if (selfChecked) checked.add(nodeId);
-      if (any && !all) indeterminate.add(nodeId);
-      return { any, all };
+      if (totalOn === kids.length) {
+        // 全部ONなら親もON扱い（見た目）
+        return 1;
+      }
+      if (totalOff === kids.length) {
+        // 全部OFFなら親もOFF
+        return 0;
+      }
+
+      // 一部ON
+      indeterminate.add(nodeId);
+      return -1;
     }
 
-    // walk from ROOT's children
-    getChildren(ROOT_ID).forEach((id) => walk(id));
-    return { checked, indeterminate };
+    walk(ROOT_ID);
+    return indeterminate;
   }
 
   // ----------------------------
-  //  UI build
+  //  Render columns (tree)
   // ----------------------------
   function clearColumns() {
-    while (colWrap.firstChild) colWrap.removeChild(colWrap.firstChild);
+    colWrap.innerHTML = "";
   }
 
   function createColumn(title) {
     const col = document.createElement("div");
-    col.className = "column";
-    const h = document.createElement("h3");
-    h.textContent = title || "";
+    col.className = "tag-filter-col";
+
+    const h = document.createElement("div");
+    h.className = "tag-filter-col-title";
+    h.textContent = title;
+
+    const list = document.createElement("div");
+    list.className = "tag-filter-list";
+
     col.appendChild(h);
-    return col;
+    col.appendChild(list);
+    return { col, list };
   }
 
-  function renderList(colEl, parentId, depth, checked, indeterminate) {
-    if (!parentId) return;
+  function renderList(listEl, ids, depth, indeterminate) {
+    listEl.innerHTML = "";
 
-    const kids = getChildren(parentId)
-      .map((id) => nodesById.get(id))
-      .filter(Boolean);
+    for (const id of ids) {
+      const item = document.createElement("div");
+      item.className = "tag-item";
+      item.dataset.id = id;
 
-    // stable sort by label
-    kids.sort((a, b) => (a.label || "").localeCompare(b.label || "", "ja"));
-
-    kids.forEach((node) => {
-      const row = document.createElement("div");
-      row.className = "node";
+      const lbl = document.createElement("label");
+      lbl.textContent = label.get(id) || "";
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
-      cb.checked = selected.has(node.id);
-      cb.indeterminate = indeterminate.has(node.id);
+      cb.checked = selected.has(id);
+      cb.indeterminate = indeterminate.has(id);
 
-      const lab = document.createElement("div");
-      lab.className = "label";
-      lab.textContent = node.label || "";
-
-      const hasKids = nodeHasChildren(node.id);
-      const chev = document.createElement("div");
-      chev.className = "chev";
-      chev.textContent = hasKids ? "›" : "";
-
-      row.appendChild(cb);
-      row.appendChild(lab);
-      row.appendChild(chev);
-
-      // checkbox click: toggle with descendants
-      cb.addEventListener("click", (e) => {
-        e.stopPropagation();
+      cb.addEventListener("change", (e) => {
         const on = cb.checked;
-        setNodeAndDescendants(node.id, on);
+
+        // 子孫もまとめて
+        setNodeAndDescendants(id, on);
+
+        // 保存
         saveSelection();
         setBadge();
+
+        // 次の列更新
         renderColumns();
 
-        // ★ applyBtn が無い構成なら「自動適用」
+        // 即時送信（apply が無い構成のための保険）
         schedulePostSelected();
       });
 
-      // row click: open next column (path)
-      row.addEventListener("click", () => {
-        const depthIdx = node.depth - 1;
-        path = path.slice(0, depthIdx);
-        path[depthIdx] = node.id;
+      // 行クリックで「その列で選択（開く）」：次列を表示
+      item.addEventListener("click", (e) => {
+        if (e.target === cb) return;
 
-        if (!hasKids) {
-          path = path.slice(0, depthIdx + 1);
-        }
+        // depthの位置に入れる
+        path = path.slice(0, depth - 1);
+        path[depth - 1] = id;
+
         renderColumns();
       });
 
-      colEl.appendChild(row);
-    });
+      item.appendChild(lbl);
+      item.appendChild(cb);
+      listEl.appendChild(item);
+    }
   }
 
   function renderColumns() {
@@ -350,82 +453,233 @@
 
     if (!treeReady) {
       const msg = document.createElement("div");
+      msg.textContent = "カテゴリを読み込み中です…";
       msg.style.padding = "10px";
       msg.style.opacity = "0.8";
-      msg.textContent = "読み込み中…";
       colWrap.appendChild(msg);
       return;
     }
 
-    const { checked, indeterminate } = computeIndeterminateStates();
+    const indeterminate = computeIndeterminateStates();
 
-    const cols = [];
+    // depth 1
+    const c1 = createColumn("カテゴリ");
+    renderList(c1.list, getChildren(ROOT_ID), 1, indeterminate);
 
-    const col1 = createColumn("カテゴリ");
-    renderList(col1, ROOT_ID, 1, checked, indeterminate);
-    cols.push(col1);
+    // depth 2
+    const pid2 = path[0];
+    const c2 = createColumn("サブカテゴリ");
+    if (pid2) renderList(c2.list, getChildren(pid2), 2, indeterminate);
 
-    const l1 = path[0] || null;
-    const col2 = createColumn(l1 ? label.get(l1) || " " : " ");
-    renderList(col2, l1, 2, checked, indeterminate);
-    cols.push(col2);
+    // depth 3
+    const pid3 = path[1];
+    const c3 = createColumn("詳細");
+    if (pid3) renderList(c3.list, getChildren(pid3), 3, indeterminate);
 
-    const l2 = path[1] || null;
-    const showL2 = l2 && nodeHasChildren(l2); // ★ 2カラム目が終端(子なし)なら3カラム目のタイトルに出さない
-    const col3 = createColumn(showL2 ? label.get(l2) || " " : " ");
-    renderList(col3, showL2 ? l2 : null, 3, checked, indeterminate);
-    cols.push(col3);
+    colWrap.appendChild(c1.col);
+    colWrap.appendChild(c2.col);
+    colWrap.appendChild(c3.col);
+  }
 
-    cols.forEach((c) => colWrap.appendChild(c));
+  // ----------------------------
+  //  見逃し注意（location.csv G/H）
+  // ----------------------------
+  function buildMissFromCsv(csvText) {
+    missParents = [];
+    missChildrenMap = new Map();
+    missActiveParent = "";
+    missReady = false;
 
-    // ★ クリアボタンは常時表示（選択が無い時だけ無効化）
-    if (clearBtn) {
-      clearBtn.style.display = "";
-      clearBtn.removeAttribute("aria-hidden");
-      clearBtn.removeAttribute("tabindex");
+    const lines = String(csvText || "").replace(/\r/g, "").split("\n").filter((l) => l !== "");
+    if (!lines.length) return;
 
-      const hasSelection = selected.size > 0;
-      clearBtn.disabled = !hasSelection;
-      clearBtn.style.opacity = hasSelection ? "1" : "0.55";
-      clearBtn.style.pointerEvents = hasSelection ? "auto" : "none";
+    // ヘッダー判定（ありがちなカラム名が含まれる場合のみスキップ）
+    let startIdx = 0;
+    try {
+      const hcols = csvParseLine(lines[0]).map((s) => String(s || "").trim().toLowerCase());
+      if (hcols.some((x) => x.includes("title") || x.includes("lat") || x.includes("lng") || x.includes("url"))) {
+        startIdx = 1;
+      }
+    } catch (e) {}
+
+    const parentOrder = [];
+    const parentSeen = new Set();
+
+    for (let i = startIdx; i < lines.length; i++) {
+      let cols = [];
+      try {
+        cols = csvParseLine(lines[i]);
+      } catch (e) {
+        continue;
+      }
+
+      // G/H（0-based 6,7）
+      const g = String((cols[6] ?? "")).trim();
+      const h = String((cols[7] ?? "")).trim();
+
+      if (!g) continue;
+
+      if (!parentSeen.has(g)) {
+        parentSeen.add(g);
+        parentOrder.push(g);
+      }
+
+      if (!missChildrenMap.has(g)) missChildrenMap.set(g, []);
+      if (h) missChildrenMap.get(g).push(h);
+    }
+
+    // 子は重複除去（出現順維持）
+    parentOrder.forEach((g) => {
+      const list = missChildrenMap.get(g) || [];
+      missChildrenMap.set(g, uniqKeepOrder(list));
+    });
+
+    missParents = parentOrder;
+    missActiveParent = missParents[0] || "";
+    missReady = true;
+  }
+
+  function renderMissColumns() {
+    if (!missColWrap) return;
+
+    missColWrap.innerHTML = "";
+
+    if (!missReady) {
+      const msg = document.createElement("div");
+      msg.textContent = "見逃し注意のデータを読み込み中です…";
+      msg.style.padding = "10px";
+      msg.style.opacity = "0.8";
+      missColWrap.appendChild(msg);
+      return;
+    }
+
+    // 左：第1カテゴリ（G）
+    const colP = document.createElement("div");
+    colP.className = "miss-filter-col";
+
+    const pTitle = document.createElement("div");
+    pTitle.className = "tag-filter-col-title";
+    pTitle.textContent = "見逃し注意（第1カテゴリ）";
+    colP.appendChild(pTitle);
+
+    const pList = document.createElement("div");
+    pList.className = "tag-filter-list";
+
+    missParents.forEach((g) => {
+      const item = document.createElement("div");
+      item.className = "tag-item";
+      if (g === missActiveParent) item.classList.add("is-active-parent");
+
+      const lbl = document.createElement("label");
+      lbl.textContent = g;
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = missSelected.has(missTok(g, ""));
+
+      cb.addEventListener("change", () => {
+        const tok = missTok(g, "");
+        if (missSelected.has(tok)) missSelected.delete(tok);
+        else missSelected.add(tok);
+        saveMissSelection();
+        setBadge();
+      });
+
+      item.addEventListener("click", (e) => {
+        if (e.target === cb) return;
+        missActiveParent = g;
+        renderMissColumns();
+      });
+
+      item.appendChild(lbl);
+      item.appendChild(cb);
+      pList.appendChild(item);
+    });
+
+    colP.appendChild(pList);
+
+    // 右：第2カテゴリ（H）
+    const colC = document.createElement("div");
+    colC.className = "miss-filter-col";
+
+    const cTitle = document.createElement("div");
+    cTitle.className = "tag-filter-col-title";
+    cTitle.textContent = "見逃し注意（第2カテゴリ）";
+    colC.appendChild(cTitle);
+
+    const cList = document.createElement("div");
+    cList.className = "tag-filter-list";
+
+    const children2 = missChildrenMap.get(missActiveParent) || [];
+    children2.forEach((h) => {
+      const item = document.createElement("div");
+      item.className = "tag-item";
+
+      const lbl = document.createElement("label");
+      lbl.textContent = h;
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = missSelected.has(missTok(missActiveParent, h));
+
+      cb.addEventListener("change", () => {
+        const tok = missTok(missActiveParent, h);
+        if (missSelected.has(tok)) missSelected.delete(tok);
+        else missSelected.add(tok);
+        saveMissSelection();
+        setBadge();
+      });
+
+      item.appendChild(lbl);
+      item.appendChild(cb);
+      cList.appendChild(item);
+    });
+
+    colC.appendChild(cList);
+
+    missColWrap.appendChild(colP);
+    missColWrap.appendChild(colC);
+  }
+
+  async function loadLocation() {
+    if (!missColWrap) return;
+    try {
+      const csv1 = await fetchCsv(LOCATION_URL_PRIMARY);
+      buildMissFromCsv(csv1);
+      renderMissColumns();
+    } catch (e) {
+      try {
+        const csv2 = await fetchCsv(LOCATION_URL_FALLBACK);
+        buildMissFromCsv(csv2);
+        renderMissColumns();
+      } catch (e2) {
+        missReady = false;
+        renderMissColumns();
+      }
     }
   }
 
   // ----------------------------
-  //  Earth messaging
+  //  Post selected (tree -> earth)
   // ----------------------------
   function postSelected() {
-    // earth側は「タグ名」を期待しているので label を送る
-    const tags = Array.from(selected)
-      .map((id) => label.get(id) || id)
-      .map((s) => String(s).trim())
-      .filter(Boolean);
+    // earth 側は「タグ文字列配列」を受け取る想定なので、labelに変換して送る
+    const tags = [];
+    for (const id of selected) {
+      const t = label.get(id);
+      if (t) tags.push(t);
+    }
 
     try {
       iframe.contentWindow.postMessage({ type: "dd-tags-apply", tags }, "*");
-    } catch (e) {
-      console.warn(e);
-    }
+    } catch (e) {}
   }
 
   function tryAutoApply() {
-    if (autoApplied) return;
     if (!earthReady) return;
-    if (!treeReady) return;
     if (!hadSavedSelection) return;
-
-    autoApplied = true;
     postSelected();
   }
-
-  window.addEventListener("message", (ev) => {
-    const data = ev && ev.data;
-    if (!data || typeof data !== "object") return;
-    if (data.type === "dd-earth-ready") {
-      earthReady = true;
-      tryAutoApply();
-    }
-  });
 
   // ----------------------------
   //  Modal open/close
@@ -471,7 +725,10 @@
       }
     });
 
+    setActiveMode(MODE_TREE);
+
     renderColumns();
+    renderMissColumns();
   }
 
   function closeModal() {
@@ -483,37 +740,55 @@
     backdrop.style.display = "none";
 
     document.body.style.overflow = "";
-
-    modal.style.visibility = "";
   }
 
-  // ----------------------------
-  //  Events
-  // ----------------------------
-  btn.addEventListener("click", openModal);
-  closeBtn.addEventListener("click", closeModal);
+  // open button
+  btn.addEventListener("click", () => {
+    openModal();
+  });
 
-  // click backdrop closes only when clicking outside modal
-  backdrop.addEventListener("click", (e) => {
+  // close
+  closeBtn.addEventListener("click", () => {
+    closeModal();
+  });
+
+  // click outside closes
+  backdrop.addEventListener("mousedown", (e) => {
     if (e.target === backdrop) closeModal();
   });
 
   // ★ apply/clear がある構成だけイベントを生やす
   if (applyBtn) {
     applyBtn.addEventListener("click", () => {
-      saveSelection();
-      setBadge();
-      postSelected();
+      // 排他：どちらか一方だけを「適用中」にする
+      if (activeMode === MODE_TREE) {
+        saveSelection();
+        setAppliedMode(MODE_TREE);
+        setBadge();
+        postSelected();
+      } else {
+        saveMissSelection();
+        setAppliedMode(MODE_MISS);
+        setBadge();
+        // Phase 1：見逃し注意は earth へは送らない（次フェーズで連携）
+      }
       closeModal();
     });
   }
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
-      selected = new Set();
-      saveSelection();
+      if (activeMode === MODE_TREE) {
+        selected = new Set();
+        path = [];
+        saveSelection();
+        renderColumns();
+      } else {
+        missSelected = new Set();
+        saveMissSelection();
+        renderMissColumns();
+      }
+      setAppliedMode("none");
       setBadge();
-      renderColumns();
-      schedulePostSelected();
     });
   }
 
@@ -529,67 +804,62 @@
   // ----------------------------
   async function fetchCsv(url) {
     const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error("fetch failed: " + res.status);
+    if (!res.ok) throw new Error("fetch failed");
     return await res.text();
   }
 
   function buildTreeFromCsv(csvText) {
-    nodesById.clear();
-    childrenByParent.clear();
     label.clear();
     parent.clear();
+    children.clear();
     depthById.clear();
     pathById.clear();
 
-    nodesById.set(ROOT_ID, {
-      id: ROOT_ID,
-      label: "ROOT",
-      depth: 0,
-      parentId: null,
-      children: new Set(),
-    });
-    label.set(ROOT_ID, "ROOT");
-    parent.set(ROOT_ID, null);
+    // root
+    label.set(ROOT_ID, "");
     depthById.set(ROOT_ID, 0);
+    parent.set(ROOT_ID, null);
 
-    const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    if (lines.length <= 1) return;
+    const lines = String(csvText || "").replace(/\r/g, "").split("\n").filter((l) => l !== "");
 
-    const header = csvParseLine(lines[0]).map((s) => normalize(s).toLowerCase());
-    const idx1 = header.indexOf("level1");
-    const idx2 = header.indexOf("level2");
-    const idx3 = header.indexOf("level3");
-    if (idx1 < 0) return;
+    for (const line of lines) {
+      const cols = csvParseLine(line).map((c) => normalize(c));
 
-    // Each row creates nodes for each level; nodeId is built from path
-    for (let i = 1; i < lines.length; i++) {
-      const cols = csvParseLine(lines[i]);
-      const l1 = normalize(cols[idx1]);
-      const l2 = idx2 >= 0 ? normalize(cols[idx2]) : "";
-      const l3 = idx3 >= 0 ? normalize(cols[idx3]) : "";
-      if (!l1) continue;
+      // 3列想定（最大）
+      const a = cols[0] || "";
+      const b = cols[1] || "";
+      const c = cols[2] || "";
 
-      const id1 = "L1|" + safeIdFromLabel(l1);
-      addNode(id1, l1, 1, ROOT_ID);
+      // 全空行は無視
+      if (!a && !b && !c) continue;
 
-      if (l2) {
-        const id2 = id1 + "|L2|" + safeIdFromLabel(l2);
-        addNode(id2, l2, 2, id1);
+      const parts = [];
+      if (a) {
+        parts.push(a);
+        addNode(parts, 1);
+      } else {
+        // 第1階層が空は壊れやすいのでスキップ
+        continue;
+      }
 
-        if (l3) {
-          const id3 = id2 + "|L3|" + safeIdFromLabel(l3);
-          addNode(id3, l3, 3, id2);
-        }
+      if (b) {
+        parts.push(b);
+        addNode(parts, 2);
+      }
+
+      if (c) {
+        parts.push(c);
+        addNode(parts, 3);
       }
     }
+
+    treeReady = true;
   }
 
   async function loadTree() {
-    treeReady = false;
     try {
       const csv = await fetchCsv(TREE_URL_PRIMARY);
       buildTreeFromCsv(csv);
-      treeReady = true;
       renderColumns();
       tryAutoApply();
       return;
@@ -598,7 +868,6 @@
     try {
       const csv = await fetchCsv(TREE_URL_FALLBACK);
       buildTreeFromCsv(csv);
-      treeReady = true;
       renderColumns();
       tryAutoApply();
     } catch (e2) {
@@ -610,6 +879,8 @@
   //  Init
   // ----------------------------
   loadSelection();
+  loadMissSelection();
   setBadge();
   loadTree();
+  loadLocation();
 })();

@@ -565,36 +565,217 @@
 
           <!-- Free / Paid -->
           <div class="row">
-            <label id="labelEventType">Event type</label>
-            <div class="radio-row">
-              <label class="radio">
-                <input type="radio" name="mEventType" value="free" checked>
-                <span id="eventTypeFree">Free</span>
-              </label>
-              <label class="radio">
-                <input type="radio" name="mEventType" value="paid">
-                <span id="eventTypePaid">Paid</span>
-              </label>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dokodemo Doors Fan Site</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="./styles.css" />
+
+  <style>
+    /* =======（中略：既存のstyle定義はそのまま保持）======= */
+
+    /* make backdrop/modal appear above iframe reliably */
+    #tagFilterBackdrop{ z-index: 10000; }
+
+    /* ===== Tag Filter Modal (multi-column) ===== */
+    .tag-filter-modal{
+      width: min(920px, calc(100vw - 24px));
+      max-height: min(560px, calc(100vh - 140px));
+      overflow: hidden;
+      display:flex;
+      flex-direction: column;
+      border-radius: 18px;
+    }
+    .tag-filter-modal header{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap:12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .tag-filter-title{
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .tag-filter-actions{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .tag-filter-actions button{
+      border: 1px solid rgba(0,0,0,0.15);
+      background: #fff;
+      border-radius: 12px;
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tag-filter-actions button.primary{
+      background: rgba(50,112,166,0.12);
+      border-color: rgba(50,112,166,0.35);
+    }
+    .tag-filter-modal .body{
+      padding: 12px 14px 14px;
+      overflow: auto;
+    }
+    .tag-filter-columns{
+      display:flex;
+      gap: 10px;
+      min-width: 680px; /* keep 3 columns visible on PC */
+    }
+    .tag-filter-col{
+      flex:1;
+      min-width: 0;
+      border-right: 1px solid rgba(0,0,0,0.06);
+      padding-right: 10px;
+    }
+    .tag-filter-col:last-child{
+      border-right: none;
+      padding-right: 0;
+    }
+    .tag-filter-col-title{
+      font-size: 12px;
+      opacity: 0.75;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .tag-filter-list{
+      display:flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .tag-item{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(255,255,255,0.7);
+    }
+    .tag-item:hover{ background: rgba(50,112,166,0.12); }
+    .tag-item label{
+      flex: 1;
+      cursor: pointer;
+    }
+    .tag-item input[type="checkbox"]{
+      width: 18px;
+      height: 18px;
+      accent-color: #3270A6;
+      cursor: pointer;
+    }
+
+    /* =======（中略：既存のstyle定義はそのまま保持）======= */
+  </style>
+</head>
+
+<body>
+  <!-- =======（中略：既存のUI/モーダル群はそのまま保持）======= -->
+
+  <!-- ===== Tag filter modal ===== -->
+  <div id="tagFilterBackdrop" class="backdrop" aria-hidden="true">
+    <div class="modal tag-filter-modal" role="dialog" aria-modal="true" aria-labelledby="tagFilterTitle">
+      <header>
+        <div id="tagFilterTitle">表示条件</div>
+
+        <!-- ★復元：クリア / 適用（tagfilter.js がこのIDを見て自動で配線する） -->
+        <div class="tag-filter-actions">
+          <button
+            type="button"
+            id="tagFilterClear"
+            aria-hidden="true"
+            tabindex="-1"
+            style="display:none;"
+          >
+            クリア
+          </button>
+          <button type="button" id="tagFilterApply" class="primary">適用</button>
+        </div>
+
+        <button type="button" class="close" id="tagFilterClose" aria-label="Close">✕</button>
+      </header>
+
+      <div class="body">
+        <div class="dd-filter-tabs" role="tablist" aria-label="表示条件の編集切替">
+          <button type="button" id="ddFilterTabTree" class="dd-filter-tab is-active" role="tab" aria-selected="true">
+            絞り込み
+          </button>
+          <button type="button" id="ddFilterTabMiss" class="dd-filter-tab" role="tab" aria-selected="false">
+            見逃し注意
+          </button>
+        </div>
+
+        <div class="dd-filter-panes" aria-label="表示条件ペイン">
+          <!-- 絞り込み（tree） -->
+          <section class="dd-filter-pane dd-filter-pane--tree" id="ddPaneTree" aria-label="絞り込み">
+            <div class="dd-filter-pane-head">絞り込み（tree）</div>
+            <div id="tagFilterColumns" class="tag-filter-columns" aria-label="Tag tree"></div>
+
+            <!-- PCで非アクティブ時にだけ出る説明（CSSで制御） -->
+            <div class="dd-filter-pane-overlay" aria-hidden="true">
+              <div class="dd-filter-pane-overlay__inner">
+                <div class="dd-filter-pane-overlay__title">いまは「見逃し注意」を編集中です</div>
+                <div class="dd-filter-pane-overlay__desc">こちらを編集するには上のタブで切り替えてください。</div>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div class="row" id="priceWrapper" style="display:none;">
-            <label id="labelPrice" for="mPrice">Price</label>
-            <input id="mPrice" type="text" placeholder="e.g. 500" />
-          </div>
+          <!-- 見逃し注意（location G/H） -->
+          <section class="dd-filter-pane dd-filter-pane--miss is-inactive" id="ddPaneMiss" aria-label="見逃し注意">
+            <div class="dd-filter-pane-head">見逃し注意（G/H）</div>
+            <div id="missFilterColumns" class="miss-filter-columns" aria-label="Miss notice tree"></div>
 
-          <p id="statusMsg" class="status" style="display:none;"></p>
-
-          <div class="actions">
-            <button class="btn" id="duplicate" type="button">Duplicate</button>
-            <div class="spacer"></div>
-            <button class="btn danger" id="delete" type="button">Delete</button>
-            <button class="btn primary" id="submit" type="button">Create meetup</button>
-          </div>
+            <!-- PCで非アクティブ時にだけ出る説明（CSSで制御） -->
+            <div class="dd-filter-pane-overlay" aria-hidden="true">
+              <div class="dd-filter-pane-overlay__inner">
+                <div class="dd-filter-pane-overlay__title">いまは「絞り込み」を編集中です</div>
+                <div class="dd-filter-pane-overlay__desc">こちらを編集するには上のタブで切り替えてください。</div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </div>
+  </div>
 
+  <div class="stage">
+    <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+
+    <!-- 白線の下に表示するボタン群 -->
+    <div class="intro-bar">
+      <button type="button" id="aboutBtn" class="intro-bar__button">
+        What is Dokodemo Doors?
+      </button>
+      <button type="button" id="guideBtn" class="intro-bar__button">
+        What is this fan site?
+      </button>
+    </div>
+
+    <div class="earth-frame-wrap" id="earthFrameWrap">
+      <button type="button" id="tagFilterBtn" class="tag-filter-btn" aria-haspopup="dialog" aria-controls="tagFilterBackdrop">
+        絞り込み <span id="tagFilterCount" class="tag-filter-count"></span>
+      </button>
+
+      <!-- tourist-information.png ボタン等、既存の要素はそのまま -->
+
+      <iframe
+        id="webxr-iframe"
+        class="earth-frame"
+        src="./earth.html"
+        title="WebXR Earth"
+        allow="xr-spatial-tracking; fullscreen"
+      ></iframe>
+    </div>
+
+    <!-- =======（中略：既存の待合室/AI/その他エリアはそのまま保持）======= -->
   </div>
 
   <script src="./main.js"></script>
