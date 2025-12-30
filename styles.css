@@ -1081,3 +1081,116 @@ header *{
     opacity: 1;
   }
 }
+
+
+.dd-filter-tabs{
+  display:flex;
+  gap:10px;
+  padding: 0 2px 10px;
+}
+.dd-filter-tab{
+  flex:1;
+  border: 1px solid rgba(0,0,0,0.18);
+  background: rgba(255,255,255,0.92);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.dd-filter-tab.is-active{
+  border-color: rgba(50,112,166,0.65);
+  background: rgba(50,112,166,0.10);
+}
+
+/* ペイン（PCは左右、スマホはタブで片側だけ） */
+.dd-filter-panes{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:12px;
+}
+.dd-filter-pane{
+  position: relative;
+  min-width: 0;
+}
+.dd-filter-pane-head{
+  font-weight: 700;
+  font-size: 12px;
+  opacity: 0.75;
+  padding: 2px 2px 8px;
+}
+.dd-filter-pane.is-inactive{
+  opacity: 0.42;
+}
+.dd-filter-pane.is-inactive .tag-item,
+.dd-filter-pane.is-inactive input,
+.dd-filter-pane.is-inactive label{
+  pointer-events: none;
+}
+
+/* 非アクティブの説明 */
+.dd-filter-pane-overlay{
+  display:none;
+  position:absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.dd-filter-pane.is-inactive .dd-filter-pane-overlay{
+  display:flex;
+}
+.dd-filter-pane-overlay__inner{
+  width: 100%;
+  max-width: 360px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.85);
+  padding: 12px 14px;
+  text-align: center;
+}
+.dd-filter-pane-overlay__title{
+  font-weight: 800;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.dd-filter-pane-overlay__desc{
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+/* 見逃し注意（2カラム） */
+.miss-filter-columns{
+  display:flex;
+  gap: 10px;
+}
+.miss-filter-col{
+  flex:1;
+  min-width: 0;
+  border-right: 1px solid rgba(0,0,0,0.06);
+  padding-right: 10px;
+}
+.miss-filter-col:last-child{
+  border-right: none;
+  padding-right: 0;
+}
+.tag-item.is-active-parent{
+  outline: 2px solid rgba(50,112,166,0.35);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+
+/* スマホ：タブで片側表示 */
+@media (max-width: 820px){
+  .dd-filter-panes{
+    display:block;
+  }
+  #tagFilterBackdrop[data-active-mode="tree"] #ddPaneTree{ display:block; }
+  #tagFilterBackdrop[data-active-mode="tree"] #ddPaneMiss{ display:none; }
+
+  #tagFilterBackdrop[data-active-mode="miss"] #ddPaneTree{ display:none; }
+  #tagFilterBackdrop[data-active-mode="miss"] #ddPaneMiss{ display:block; }
+
+  .dd-filter-pane-overlay{ display:none !important; }
+  .dd-filter-pane.is-inactive{ opacity: 1; }
+}
