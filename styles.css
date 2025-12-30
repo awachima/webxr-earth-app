@@ -1285,3 +1285,55 @@ header *{
   border-color: rgba(50,112,166,0.65) !important;
   background: rgba(50,112,166,0.10) !important;
 }
+
+/* ===== dd-filter tabs: force top overlay above panes ===== */
+.tag-filter-modal .body{
+  position: relative !important;
+  overflow: hidden !important; /* 既存レイアウトの崩れ防止 */
+}
+
+/* タブを body の最上段に“重ねて”固定 */
+.dd-filter-tabs{
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+
+  padding: 10px 18px 12px 18px !important;
+  min-height: 44px !important;
+
+  background: rgba(255,255,255,0.98) !important;
+  border-bottom: 1px solid rgba(0,0,0,0.08) !important;
+
+  z-index: 9999 !important;
+}
+
+/* ペイン全体をタブの分だけ下げる（これで被りが消える） */
+.dd-filter-panes{
+  position: relative !important;
+  z-index: 1 !important;
+  padding-top: 56px !important; /* タブ高さ(44) + 余白 */
+}
+
+.dd-filter-tab{
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(0,0,0,0.18) !important;
+  background: rgba(255,255,255,0.92) !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+}
+
+.dd-filter-tab.is-active{
+  border-color: rgba(50,112,166,0.65) !important;
+  background: rgba(50,112,166,0.10) !important;
+}
