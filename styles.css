@@ -1311,6 +1311,9 @@ header *{
   border-bottom: 1px solid rgba(0,0,0,0.08) !important;
 
   z-index: 9999 !important;
+
+  width: max-content;
+  height: auto;
 }
 
 /* ペイン全体をタブの分だけ下げる（これで被りが消える） */
@@ -1354,3 +1357,4 @@ header *{
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+
