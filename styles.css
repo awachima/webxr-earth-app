@@ -1337,3 +1337,20 @@ header *{
   border-color: rgba(50,112,166,0.65) !important;
   background: rgba(50,112,166,0.10) !important;
 }
+
+/* dd-filter: pane switch */
+#ddPaneTree.is-inactive,
+#ddPaneMiss.is-inactive {
+  display: none !important;
+}
+#ddPaneTree:not(.is-inactive),
+#ddPaneMiss:not(.is-inactive) {
+  display: block;
+}
+
+/* miss columns: treeと同じ3カラム枠に自然に乗せる */
+#missFilterColumns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
