@@ -327,10 +327,7 @@
     hArea.innerHTML = "";
     hArea.style.marginTop = "10px";
 
-    // 「追加カテゴリ（第2）」の見出しは残す
-    const hR = document.createElement("h3");
-    hR.textContent = "追加カテゴリ（第2）";
-    hArea.appendChild(hR);
+    // ★要望: 追加カテゴリのタイトルは不要なので表示しない（ここでは見出しを作らない）
 
     if (!locOpenG) {
       const msg = document.createElement("div");
@@ -584,9 +581,11 @@
   function createColumn(title) {
     const col = document.createElement("div");
     col.className = "column";
-    const h = document.createElement("h3");
-    h.textContent = title || "";
-    col.appendChild(h);
+    if (title && String(title).trim().length > 0) {
+      const h = document.createElement("h3");
+      h.textContent = title || "";
+      col.appendChild(h);
+    }
     return col;
   }
 
@@ -633,7 +632,6 @@
 
       row.addEventListener("click", () => {
         // ★重要: 既存カテゴリ側をクリックしたら、追加カテゴリの表示モードを解除する
-        // （「既存→追加」で両方出る問題の逆も防げる）
         locOpenG = null;
 
         const depthIdx = node.depth - 1;
@@ -676,10 +674,8 @@
 
     const l1 = path[0] || null;
 
-    // ★ここが今回の本体：
-    // locOpenG がある時は「第2カラムは追加カテゴリ（第2）専用」にして、
-    // 既存カテゴリ(L1配下)の第2カラム描画をしない（両方出るのを防ぐ）
-    const col2Title = locOpenG ? "追加カテゴリ（第2）" : (l1 ? label.get(l1) || " " : " ");
+    // ★要望: 追加カテゴリを表示しているときは「タイトルを表示しない」
+    const col2Title = locOpenG ? "" : (l1 ? label.get(l1) || " " : " ");
     const col2 = createColumn(col2Title);
 
     if (!locOpenG) {
@@ -693,7 +689,7 @@
       col2.appendChild(hArea);
     }
 
-    // 第3カラムは「追加カテゴリ表示中」は空にする（前の第3が残るのを防ぐ）
+    // 第3カラムは「追加カテゴリ表示中」は空にする
     const l2 = (!locOpenG) ? (path[1] || null) : null;
     const showL2 = l2 && nodeHasChildren(l2);
     const col3 = createColumn(showL2 ? label.get(l2) || " " : " ");
