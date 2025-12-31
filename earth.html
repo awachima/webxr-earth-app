@@ -542,8 +542,6 @@ AFRAME.registerComponent('marker-placer',{
   init:async function(){
     this.allLocations=[]; this.currentMarkers=[];
     this.selectedTags = []; // index.html から受け取る絞り込みタグ（ORヒット）
-this.filterMode = 'none';
-this.selectedMiss = [];
     this._tagStartIndex = null; // CSVヘッダーから推定したタグ列の開始位置（0-based）
     this.cameraEl=document.querySelector('#camera');
     this.cameraPos=new THREE.Vector3(); this.markerPos=new THREE.Vector3(); this.earthPos=new THREE.Vector3();
@@ -555,133 +553,63 @@ this.selectedMiss = [];
     });
 
     // index.html → earth.html 絞り込み受信
-        // index.html → earth.html 絞り込み受信
-        this._onFilterMessage = (event) => {
-          try {
-            const data = event && event.data ? event.data : null;
-            if (!data) return;
+    this._onFilterMessage = (event) => {
+      try{
+        const data = event && event.data ? event.data : null;
+        if (!data) return;
 
-            const t = (data.type || data.kind || '').toString();
+        const t = (data.type || data.kind || '').toString();
 
-            // index.html（現行）:
-            //   絞り込み: { type:'dd-tags-apply', tags:[...], mode:'tree' }
-            //   見逃し注意: { type:'dd-miss-apply', miss:[{g,h},...], mode:'miss' }
-            //   クリア: { type:'dd-filter-clear' }
-            // 互換: { type:'FILTER_TAGS_APPLY', payload:{selectedTags:[...]} }
-            const acceptTags =
-              (t === 'dd-tags-apply') ||
-              (t === 'DD_TAGS_APPLY') ||
-              (t === 'FILTER_TAGS_APPLY') ||
-              (t === 'DD_FILTER_TAGS_APPLY') ||
-              (t === 'DD_TAG_FILTER_APPLY') ||
-              (t === 'TAG_FILTER_APPLY') ||
-              (t === 'APPLY_FILTERS');
+        // index.html（現行）: { type:'dd-tags-apply', tags:[...] }
+        // 互換: { type:'FILTER_TAGS_APPLY', payload:{selectedTags:[...]} }
+        const accept =
+          (t === 'dd-tags-apply') ||
+          (t === 'DD_TAGS_APPLY') ||
+          (t === 'FILTER_TAGS_APPLY') ||
+          (t === 'DD_FILTER_TAGS_APPLY') ||
+          (t === 'DD_TAG_FILTER_APPLY') ||
+          (t === 'TAG_FILTER_APPLY') ||
+          (t === 'APPLY_FILTERS');
 
-            const acceptMiss =
-              (t === 'dd-miss-apply') ||
-              (t === 'DD_MISS_APPLY') ||
-              (t === 'DD_FILTER_MISS_APPLY') ||
-              (t === 'MISS_FILTER_APPLY');
+        // typeが未知でも tags 配列があれば受け取る（将来拡張に強くする）
+        const hasTagsArray = Array.isArray(data.tags) ||
+          (data.payload && Array.isArray(data.payload.selectedTags)) ||
+          (data.payload && Array.isArray(data.payload.tags));
 
-            const acceptClear =
-              (t === 'dd-filter-clear') ||
-              (t === 'DD_FILTER_CLEAR') ||
-              (t === 'FILTER_CLEAR') ||
-              (t === 'CLEAR_FILTERS');
+        if (!accept && !hasTagsArray) return;
 
-            // typeが未知でも配列があれば受け取る（将来拡張に強くする）
-            const hasTagsArray = Array.isArray(data.tags) ||
-              (data.payload && Array.isArray(data.payload.selectedTags)) ||
-              (data.payload && Array.isArray(data.payload.tags));
+        let arr = [];
+        if (Array.isArray(data.tags)) arr = data.tags;
+        else if (data.payload && Array.isArray(data.payload.selectedTags)) arr = data.payload.selectedTags;
+        else if (data.payload && Array.isArray(data.payload.tags)) arr = data.payload.tags;
 
-            const hasMissArray = Array.isArray(data.miss) ||
-              (data.payload && Array.isArray(data.payload.miss));
+        // 正規化（trim / 空排除 / 重複排除）
+        const cleaned = [];
+        const seen = new Set();
+        for (let i=0;i<arr.length;i++){
+          const s = (typeof arr[i] === 'string') ? arr[i].trim() : '';
+          if (!s) continue;
+          if (seen.has(s)) continue;
+          seen.add(s);
+          cleaned.push(s);
+        }
 
-            if (!acceptTags && !acceptMiss && !acceptClear && !hasTagsArray && !hasMissArray) return;
+        this.selectedTags = cleaned;
+        console.log('[marker-placer] filter tags received:', this.selectedTags, 'type=', t || '(none)');
 
-            // クリアは最優先
-            if (acceptClear) {
-              this.filterMode = 'none';
-              this.selectedTags = [];
-              this.selectedMiss = [];
-              console.log('[marker-placer] filter cleared');
-              this.updateClusters();
-              return;
-            }
+        // 受信したら即再計算（フィルタ後にクラスタ再作成）
+        this.updateClusters();
+    try{ window.parent.postMessage({ type: 'dd-earth-ready' }, '*'); }catch(_){ }
 
-            // ---- 絞り込み（タグ） ----
-            if (acceptTags || hasTagsArray) {
-              let arr = [];
-              if (Array.isArray(data.tags)) arr = data.tags;
-              else if (data.payload && Array.isArray(data.payload.selectedTags)) arr = data.payload.selectedTags;
-              else if (data.payload && Array.isArray(data.payload.tags)) arr = data.payload.tags;
-
-              // 正規化（trim / 空排除 / 重複排除）
-              const cleaned = [];
-              const seen = new Set();
-              for (let i = 0; i < arr.length; i++) {
-                const s = (typeof arr[i] === 'string') ? arr[i].trim() : '';
-                if (!s) continue;
-                if (seen.has(s)) continue;
-                seen.add(s);
-                cleaned.push(s);
-              }
-
-              this.filterMode = 'tree';
-              this.selectedTags = cleaned;
-              this.selectedMiss = [];
-              console.log('[marker-placer] filter tags received:', this.selectedTags, 'type=', t || '(none)');
-
-              this.updateClusters();
-              try { window.parent.postMessage({ type: 'dd-earth-ready' }, '*'); } catch (_) { }
-
-              // 任意: 反映通知
-              try {
-                const targetWin = window.parent || window;
-                targetWin.postMessage({ type: 'FILTER_TAGS_APPLIED', payload: { selectedTags: this.selectedTags } }, '*');
-              } catch (_) { }
-              return;
-            }
-
-            // ---- 見逃し注意（G/H）----
-            if (acceptMiss || hasMissArray) {
-              let arr = [];
-              if (Array.isArray(data.miss)) arr = data.miss;
-              else if (data.payload && Array.isArray(data.payload.miss)) arr = data.payload.miss;
-
-              const cleaned = [];
-              const seen = new Set();
-              for (let i = 0; i < arr.length; i++) {
-                const it = arr[i];
-                const g = it && typeof it.g === 'string' ? it.g.trim() : '';
-                const h = it && typeof it.h === 'string' ? it.h.trim() : '';
-                if (!g) continue;
-                const k = g + '\u0001' + h;
-                if (seen.has(k)) continue;
-                seen.add(k);
-                cleaned.push({ g, h });
-              }
-
-              this.filterMode = 'miss';
-              this.selectedMiss = cleaned;
-              this.selectedTags = [];
-              console.log('[marker-placer] miss filter received:', this.selectedMiss, 'type=', t || '(none)');
-
-              this.updateClusters();
-
-              try {
-                const targetWin = window.parent || window;
-                targetWin.postMessage({ type: 'FILTER_MISS_APPLIED', payload: { miss: this.selectedMiss } }, '*');
-              } catch (_) { }
-              return;
-            }
-
-            // （旧ハンドラ処理は置き換え済み）
-          } catch (e) {
-            console.warn('[marker-placer] message handler error:', e);
-          }
-        };
-
+        // 任意: 反映通知（index.html が必要なら使える）
+        try{
+          const targetWin = window.parent || window;
+          targetWin.postMessage({ type:'FILTER_TAGS_APPLIED', payload:{ selectedTags: this.selectedTags } }, '*');
+        }catch(_){}
+      }catch(e){
+        console.warn('[marker-placer] message handler error:', e);
+      }
+    };
     window.addEventListener('message', this._onFilterMessage);
     var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv";
     console.log('[marker-placer] fetching CSV:', sheetUrl);
@@ -779,22 +707,27 @@ this.selectedMiss = [];
         const lat = cleanAndParseFloat(parts[1] || '');
         const lon = cleanAndParseFloat(parts[2] || '');
         const url = parts[3] || '';
-const missG = (parts[6] || '').toString().trim();
-const missH = (parts[7] || '').toString().trim();
 
         // タグ列（将来増えてもOK：開始位置〜末尾までを全部拾う。空欄は除外）
         const tags = [];
+
+        // G列=第一カテゴリ, H列=第二カテゴリ（Gの子）
+        // ※ヘッダー名が空でも動くように「列位置」で読む（0始まり: G=6, H=7）
+        const gCat = (parts[6] || '').trim();
+        const hCat = (parts[7] || '').trim();
+        if (gCat) tags.push(gCat);
+        if (hCat) tags.push(hCat);
+
         const tagStart = Math.max(0, Math.min(this._tagStartIndex || 4, parts.length));
         for (let c = tagStart; c < parts.length; c++){
           const t = (parts[c] || '').trim();
           if (!t) continue;
           tags.push(t);
         }
-
         if (isNaN(lat) || isNaN(lon)) {
-          locations.push({ title: title, lat: -90, lon: 0, url: url, tags: tags, missG: missG, missH: missH });
+          locations.push({ title: title, lat: -90, lon: 0, url: url, tags: tags });
         } else {
-          locations.push({ title: title, lat: lat, lon: lon, url: url, tags: tags, missG: missG, missH: missH });
+          locations.push({ title: title, lat: lat, lon: lon, url: url, tags: tags });
         }
       }
     }
@@ -820,31 +753,6 @@ const missH = (parts[7] || '').toString().trim();
     }
     return out;
   },
-
-      applyMissFilter: function (list) {
-        const base = list || [];
-        const sel = this.selectedMiss || [];
-        if (!sel.length) return base;
-
-        const out = [];
-        for (let i = 0; i < base.length; i++) {
-          const loc = base[i];
-          const g = (loc && typeof loc.missG === 'string') ? loc.missG.trim() : '';
-          const h = (loc && typeof loc.missH === 'string') ? loc.missH.trim() : '';
-
-          let hit = false;
-          for (let j = 0; j < sel.length; j++) {
-            const s = sel[j] || {};
-            const sg = (typeof s.g === 'string') ? s.g.trim() : '';
-            const sh = (typeof s.h === 'string') ? s.h.trim() : '';
-            if (!sg) continue;
-            if (g !== sg) continue;
-            if (!sh || h === sh) { hit = true; break; }
-          }
-          if (hit) out.push(loc);
-        }
-        return out;
-      },
 
   // ★★★ マーカー絞り込みの「前段階」: 視点側半球だけに絞る ★★★
   filterLocationsForCurrentView:function(){
@@ -905,11 +813,7 @@ const missH = (parts[7] || '').toString().trim();
     let sourceList = this.filterLocationsForCurrentView();
 
     // ★ ②タグで絞る（selectedTagsが空なら全通し）
-    if (this.filterMode === 'miss') {
-  sourceList = this.applyMissFilter(sourceList);
-} else {
-  sourceList = this.applyTagFilter(sourceList);
-}
+    sourceList = this.applyTagFilter(sourceList);
 
     var th=this.computeThreshold();
     var unclustered=sourceList.slice();
