@@ -327,7 +327,7 @@
     hArea.innerHTML = "";
     hArea.style.marginTop = "10px";
 
-    // 「追加カテゴリ（第2）」の見出しは残す（必要ならここも消せます）
+    // 「追加カテゴリ（第2）」の見出しは残す
     const hR = document.createElement("h3");
     hR.textContent = "追加カテゴリ（第2）";
     hArea.appendChild(hR);
@@ -383,8 +383,11 @@
     row.addEventListener("click", (e) => {
       // checkboxクリックは別で処理
       if (e.target === cb) return;
+
+      // ★追加カテゴリを開いたら「第2カラムは追加カテゴリ専用」にしたいので、
+      // ここでは tree の path は維持したまま locOpenG だけセットする（表示は renderColumns が制御）
       locOpenG = text;
-      renderColumns(); // 第2カラム側へ反映
+      renderColumns();
     });
 
     cb.addEventListener("click", (e) => {
@@ -629,13 +632,11 @@
       });
 
       row.addEventListener("click", () => {
-        const depthIdx = node.depth - 1;
+        // ★重要: 既存カテゴリ側をクリックしたら、追加カテゴリの表示モードを解除する
+        // （「既存→追加」で両方出る問題の逆も防げる）
+        locOpenG = null;
 
-        // ★修正: ツリー側の第1階層(L1)を切り替えた時は、location(G/H)の「開いているG」をリセットして
-        //       直前に選択した追加カテゴリ(第2)が残表示されないようにする。
-        if (node.depth === 1) {
-          locOpenG = null;
-        }
+        const depthIdx = node.depth - 1;
         path = path.slice(0, depthIdx);
         path[depthIdx] = node.id;
 
@@ -674,23 +675,26 @@
     }
 
     const l1 = path[0] || null;
-    const col2 = createColumn(l1 ? label.get(l1) || " " : " ");
-    renderList(col2, l1, checked, indeterminate);
 
-    // 第2カテゴリ（H）: 第2カラムに表示（第1カテゴリ(G)を「開いている」時だけ表示）
-    if (locAreaG) {
+    // ★ここが今回の本体：
+    // locOpenG がある時は「第2カラムは追加カテゴリ（第2）専用」にして、
+    // 既存カテゴリ(L1配下)の第2カラム描画をしない（両方出るのを防ぐ）
+    const col2Title = locOpenG ? "追加カテゴリ（第2）" : (l1 ? label.get(l1) || " " : " ");
+    const col2 = createColumn(col2Title);
+
+    if (!locOpenG) {
+      // 既存カテゴリの第2カラム
+      renderList(col2, l1, checked, indeterminate);
+    } else {
+      // 追加カテゴリの第2カラム（専用表示）
       const hArea = ensureLocAreaHExists();
-      // いったんDOMから外す（前の状態が残らないように）
       if (hArea.parentNode) hArea.parentNode.removeChild(hArea);
       hArea.classList.add("loc-area-in-col2");
-
-      // ★重要: 第1カテゴリ(G)が未選択なら、第2カラムには出さない（ツリー側の第2カラムを汚染しない）
-      if (locOpenG) {
-        col2.appendChild(hArea);
-      }
+      col2.appendChild(hArea);
     }
 
-    const l2 = path[1] || null;
+    // 第3カラムは「追加カテゴリ表示中」は空にする（前の第3が残るのを防ぐ）
+    const l2 = (!locOpenG) ? (path[1] || null) : null;
     const showL2 = l2 && nodeHasChildren(l2);
     const col3 = createColumn(showL2 ? label.get(l2) || " " : " ");
     renderList(col3, showL2 ? l2 : null, checked, indeterminate);
@@ -873,7 +877,6 @@
     const idx2 = header.indexOf("level2");
     const idx3 = header.indexOf("level3");
     if (idx1 < 0) return;
-
 
     for (let i = 1; i < lines.length; i++) {
       const cols = csvParseLine(lines[i]);
