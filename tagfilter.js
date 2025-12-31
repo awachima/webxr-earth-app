@@ -151,7 +151,10 @@
   // ----------------------------
   //  location.csv(G/H) -> extra category UI
   // ----------------------------
-  // 既定は G/H (0始まりで 6/7)
+  // ★重要: 追加タグ開始列は「絶対にG/H」固定
+  //   - Excel/Sheets の列記号: G/H
+  //   - JS の配列index(0始まり): 6/7
+  //   ※ 7/8 に見えるのは「人間の数え方(1始まり)」のズレです
   let LOC_G_INDEX = 6;
   let LOC_H_INDEX = 7;
 
@@ -237,13 +240,16 @@
       return;
     }
 
-    // 先頭行をヘッダー候補として解析し、列名からG/H推定を試す
+    // ★重要: G/H固定（推定で上書きしない）
+    // 先頭行のヘッダー解析は行うが、列推定結果で LOC_G_INDEX / LOC_H_INDEX を変更しない
+    // （マスター要件: 追加タグ開始列は絶対にG/H）
     try {
       const headCells = csvParseLine(lines[0]);
       const guessed = guessLocationGHIndexFromHeader(headCells);
-      if (guessed) {
-        LOC_G_INDEX = guessed.gi;
-        LOC_H_INDEX = guessed.hi;
+      if (guessed && (guessed.gi !== LOC_G_INDEX || guessed.hi !== LOC_H_INDEX)) {
+        // “推定はズレている” ことだけを表示（動作はG/H固定）
+        locDebugMessage =
+          `補助判定: 先頭行からは列(${guessed.gi + 1}/${guessed.hi + 1})が候補に見えますが、仕様によりG/H固定で読み取ります`;
       }
     } catch (_) {}
 
@@ -263,7 +269,7 @@
     // ※ 行によって列数が違うCSVもあり得るので、まずは先頭の列数で雑に判断し、最終的には各行で防御する
     try {
       const firstData = csvParseLine(lines[Math.min(start, lines.length - 1)]);
-      if ((firstData || []).length <= LOC_G_INDEX) {
+      if ((firstData || []).length <= LOC_H_INDEX) {
         locDebugMessage =
           "location.csv の列数が想定より少ないため、G/H を読み取れません（公開CSVにG/Hが含まれているか確認してください）";
       }
