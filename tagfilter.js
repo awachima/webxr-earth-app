@@ -13,7 +13,7 @@
   const TREE_URL_FALLBACK = "./tree.csv";
 
   // ★追加: location.csv（G/Hを追加カテゴリに使う）
-  // ★重要: ここを「マスターが貼った公開CSV」に合わせる
+  // ※G/H開始列は固定（G=6, H=7 / 0始まり）
   const LOCATION_URL_PRIMARY =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv";
   const LOCATION_URL_FALLBACK = "./location.csv";
@@ -30,10 +30,15 @@
   const clearBtn = document.getElementById("tagFilterClear");
 
   const colWrap = document.getElementById("tagFilterColumns");
-  const locArea = document.getElementById("tagFilterLocArea");
+
+  // 既存: 追加カテゴリ表示用コンテナ（1つだけ置いてある想定）
+  // 今回: 第1カテゴリ(G)はこの要素に表示、 第2カテゴリ(H)はJS側で別要素を生成して第2カラムへ移動
+  const locAreaG = document.getElementById("tagFilterLocArea");
+  let locAreaH = document.getElementById("tagFilterLocArea2");
+
   const iframe = document.getElementById("webxr-iframe");
 
-  // ★ 必須要素だけチェック（apply/clear は無くても動かす）
+  // ★ 必須要素だけチェック（apply/clear/locArea は無くても動かす）
   if (!btn || !badge || !backdrop || !modal || !closeBtn || !colWrap || !iframe) {
     return;
   }
@@ -56,7 +61,6 @@
   // selection state
   let selected = new Set(); // Set<nodeId>
   let path = []; // currently opened path (ids per depth)
-  const MAX_DEPTH = 3;
 
   // 自動適用（リロード時に earth 側へ再送）
   let hadSavedSelection = false;
@@ -152,65 +156,36 @@
   // ----------------------------
   //  location.csv(G/H) -> extra category UI
   // ----------------------------
-  // ★重要: 追加タグ開始列は「絶対にG/H」固定（0始まりで 6/7）
-  let LOC_G_INDEX = 6;
-  let LOC_H_INDEX = 7;
+  // ★ 追加タグ開始列は「絶対にG/H」固定（0始まりで 6/7）
+  const LOC_G_INDEX = 6;
+  const LOC_H_INDEX = 7;
 
   let locReady = false;
-  let locGList = []; // ["街", "自然", ...]
+  let locGList = []; // ["有名な場所", "有名な物", ...]
   let locChildren = new Map(); // G -> Set(H)
-  let locOpenG = null; // 右ペインに出す対象G
+  let locOpenG = null; // 第1カテゴリで現在選択（開いている）G
   let locDebugMessage = ""; // 表示だけ（壊さない）
 
-  function guessLocationGHIndexFromHeader(headerCells) {
-    // ヘッダー名からG/Hに相当する列を推定する（見つからなければ null）
-    const h = (headerCells || []).map((x) => normalize(x).toLowerCase());
-
-    // よくありそうな候補（必要になったら追加）
-    const gCandidates = ["g", "tag_g", "tagg", "genre_g", "miss_g", "category_g", "extra_g", "levelg", "level_4"];
-    const hCandidates = ["h", "tag_h", "tagh", "genre_h", "miss_h", "category_h", "extra_h", "levelh", "level_5"];
-
-    let gi = -1;
-    let hi = -1;
-
-    for (const key of gCandidates) {
-      const idx = h.indexOf(key);
-      if (idx >= 0) {
-        gi = idx;
-        break;
-      }
-    }
-    for (const key of hCandidates) {
-      const idx = h.indexOf(key);
-      if (idx >= 0) {
-        hi = idx;
-        break;
-      }
-    }
-
-    if (gi >= 0 && hi >= 0) return { gi, hi };
-
-    // "miss" 系がありそうなら miss を含む列を探す（g/h相当を2本）
-    const missCols = [];
-    h.forEach((name, idx) => {
-      if (name.includes("miss")) missCols.push(idx);
-    });
-    if (missCols.length >= 2) {
-      return { gi: missCols[0], hi: missCols[1] };
-    }
-
-    return null;
+  function ensureLocAreaHExists() {
+    if (locAreaH) return locAreaH;
+    locAreaH = document.createElement("div");
+    locAreaH.id = "tagFilterLocArea2";
+    return locAreaH;
   }
 
   async function loadLocationCats() {
-    if (!locArea) return; // index.html側が未対応でも落とさない
+    if (!locAreaG) {
+      // index.html に locArea が無い構成でも落とさない
+      locReady = false;
+      return;
+    }
 
     let text = "";
     locDebugMessage = "";
 
     // Primary（Google Sheets CSV）
     // ★公開CSVが「使用範囲が狭い(A〜Eだけ等)」として出力される場合、G/H以降が落ちることがあります。
-    // その場合に備えて range パラメータ付きも順に試します（仕様はG/H固定のまま）。
+    // その場合に備えて range 付きも順に試します（仕様はG/H固定のまま）。
     const locPrimaryCandidates = [
       LOCATION_URL_PRIMARY,
       LOCATION_URL_PRIMARY + "&range=A:K",
@@ -238,10 +213,9 @@
     }
 
     if (!text) {
-      // 読めない場合でもUI箱は残す（空表示）
       locReady = false;
       locDebugMessage = "location.csv を読み込めませんでした（URL/gid を確認してください）";
-      renderLocArea();
+      renderLocAreas();
       return;
     }
 
@@ -249,20 +223,9 @@
     if (!lines.length) {
       locReady = false;
       locDebugMessage = "location.csv が空です";
-      renderLocArea();
+      renderLocAreas();
       return;
     }
-
-    // ★重要: G/H固定（推定で上書きしない）
-    // 先頭行のヘッダー解析は行うが、列推定結果で LOC_G_INDEX / LOC_H_INDEX を変更しない
-    try {
-      const headCells = csvParseLine(lines[0]);
-      const guessed = guessLocationGHIndexFromHeader(headCells);
-      if (guessed && (guessed.gi !== LOC_G_INDEX || guessed.hi !== LOC_H_INDEX)) {
-        locDebugMessage =
-          `補助判定: 先頭行からは列(${guessed.gi + 1}/${guessed.hi + 1})が候補に見えますが、仕様によりG/H固定で読み取ります`;
-      }
-    } catch (_) {}
 
     // ヘッダー判定（2列目/3列目が数値でないならヘッダー扱い）
     let start = 0;
@@ -306,38 +269,30 @@
 
     locGList = Array.from(gSet).sort((a, b) => a.localeCompare(b, "ja"));
     locChildren = childMap;
-    locOpenG = locOpenG && childMap.has(locOpenG) ? locOpenG : locGList[0] || null;
+    locOpenG = locOpenG && childMap.has(locOpenG) ? locOpenG : null;
 
     locReady = true;
-    renderLocArea();
+    renderLocAreas();
   }
 
-  function renderLocArea() {
-    if (!locArea) return;
+  // 第1カテゴリ（G）: 第1カラムに表示
+  // 第2カテゴリ（H）: 第1カテゴリ選択時に第2カラムに表示
+  function renderLocAreas() {
+    if (!locAreaG) return;
 
-    locArea.innerHTML = "";
+    // --- G（第1） ---
+    locAreaG.innerHTML = "";
+    locAreaG.style.marginTop = "10px";
 
-    const left = document.createElement("div");
-    left.className = "tag-filter-loccol";
-    const right = document.createElement("div");
-    right.className = "tag-filter-loccol";
-
-    const hL = document.createElement("h3");
-    hL.textContent = "追加カテゴリ（第1）";
-    left.appendChild(hL);
-
-    const hR = document.createElement("h3");
-    hR.textContent = "追加カテゴリ（第2）";
-    right.appendChild(hR);
-
-    // デバッグメッセージ（表示だけ。既存UIは壊さない）
+    // 「追加カテゴリ（第1）」は表示しない（要望）
+    // ただしデバッグ表示は壊さない範囲で残す
     if (locDebugMessage) {
       const msg0 = document.createElement("div");
       msg0.style.opacity = "0.65";
       msg0.style.padding = "6px 2px";
       msg0.style.fontSize = "12px";
       msg0.textContent = locDebugMessage;
-      left.appendChild(msg0);
+      locAreaG.appendChild(msg0);
     }
 
     if (!locReady) {
@@ -345,38 +300,67 @@
       msg.style.opacity = "0.7";
       msg.style.padding = "6px 2px";
       msg.textContent = "読み込み中…";
-      left.appendChild(msg);
-
-      locArea.appendChild(left);
-      locArea.appendChild(right);
+      locAreaG.appendChild(msg);
+      // H側も空にしておく
+      const hArea = ensureLocAreaHExists();
+      hArea.innerHTML = "";
       return;
     }
 
-    // 左: G一覧（クリックで右を切替、チェックで選択）
-    locGList.forEach((g) => {
-      const row = makeLocRow("loc::g::" + g, g, true);
-      row.addEventListener("click", () => {
-        locOpenG = g;
-        renderLocArea();
+    if (!locGList.length) {
+      const msg = document.createElement("div");
+      msg.style.opacity = "0.7";
+      msg.style.padding = "6px 2px";
+      msg.textContent = "追加カテゴリがありません";
+      locAreaG.appendChild(msg);
+    } else {
+      // G一覧（クリックで H を切替、チェックで選択）
+      locGList.forEach((g) => {
+        const id = "loc::g::" + g;
+        const row = makeLocGRow(id, g);
+        locAreaG.appendChild(row);
       });
-      left.appendChild(row);
+    }
+
+    // --- H（第2） ---
+    const hArea = ensureLocAreaHExists();
+    hArea.innerHTML = "";
+    hArea.style.marginTop = "10px";
+
+    // 「追加カテゴリ（第2）」の見出しは残す（必要ならここも消せます）
+    const hR = document.createElement("h3");
+    hR.textContent = "追加カテゴリ（第2）";
+    hArea.appendChild(hR);
+
+    if (!locOpenG) {
+      const msg = document.createElement("div");
+      msg.style.opacity = "0.7";
+      msg.style.padding = "6px 2px";
+      msg.textContent = "第1カテゴリを選択してください";
+      hArea.appendChild(msg);
+      return;
+    }
+
+    const setH = locChildren.get(locOpenG) || new Set();
+    const list = Array.from(setH).sort((a, b) => a.localeCompare(b, "ja"));
+
+    if (!list.length) {
+      const msg = document.createElement("div");
+      msg.style.opacity = "0.7";
+      msg.style.padding = "6px 2px";
+      msg.textContent = "第2カテゴリはありません";
+      hArea.appendChild(msg);
+      return;
+    }
+
+    list.forEach((h) => {
+      const id = "loc::h::" + locOpenG + "::" + h;
+      const row = makeLocHRow(id, h);
+      hArea.appendChild(row);
     });
-
-    // 右: 選択中Gの子（H一覧）
-    const setH = locOpenG ? locChildren.get(locOpenG) || new Set() : new Set();
-    Array.from(setH)
-      .sort((a, b) => a.localeCompare(b, "ja"))
-      .forEach((h) => {
-        const id = "loc::h::" + locOpenG + "::" + h;
-        const row = makeLocRow(id, h, false);
-        right.appendChild(row);
-      });
-
-    locArea.appendChild(left);
-    locArea.appendChild(right);
   }
 
-  function makeLocRow(id, text, isG) {
+  function makeLocGRow(id, text) {
     const row = document.createElement("div");
     row.className = "node";
 
@@ -390,7 +374,61 @@
 
     const chev = document.createElement("div");
     chev.className = "chev";
-    chev.textContent = isG ? "›" : "";
+    chev.textContent = "›";
+
+    row.appendChild(cb);
+    row.appendChild(lab);
+    row.appendChild(chev);
+
+    row.addEventListener("click", (e) => {
+      // checkboxクリックは別で処理
+      if (e.target === cb) return;
+      locOpenG = text;
+      renderColumns(); // 第2カラム側へ反映
+    });
+
+    cb.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const on = cb.checked;
+
+      // Gチェック: 配下HもまとめてON/OFF
+      if (on) selected.add(id);
+      else selected.delete(id);
+
+      const kids = locChildren.get(text) || new Set();
+      kids.forEach((h) => {
+        const hid = "loc::h::" + text + "::" + h;
+        if (on) selected.add(hid);
+        else selected.delete(hid);
+      });
+
+      // チェック操作したら、そのGを開いた扱いにする（UX）
+      locOpenG = text;
+
+      saveSelection();
+      setBadge();
+      renderColumns();
+      schedulePostSelected();
+    });
+
+    return row;
+  }
+
+  function makeLocHRow(id, text) {
+    const row = document.createElement("div");
+    row.className = "node";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = selected.has(id);
+
+    const lab = document.createElement("div");
+    lab.className = "label";
+    lab.textContent = text;
+
+    const chev = document.createElement("div");
+    chev.className = "chev";
+    chev.textContent = "";
 
     row.appendChild(cb);
     row.appendChild(lab);
@@ -399,30 +437,12 @@
     cb.addEventListener("click", (e) => {
       e.stopPropagation();
       const on = cb.checked;
-
-      if (id.startsWith("loc::g::")) {
-        const g = text;
-
-        if (on) selected.add(id);
-        else selected.delete(id);
-
-        const kids = locChildren.get(g) || new Set();
-        kids.forEach((h) => {
-          const hid = "loc::h::" + g + "::" + h;
-          if (on) selected.add(hid);
-          else selected.delete(hid);
-        });
-      } else {
-        if (on) selected.add(id);
-        else selected.delete(id);
-      }
+      if (on) selected.add(id);
+      else selected.delete(id);
 
       saveSelection();
       setBadge();
-
       renderColumns();
-      renderLocArea();
-
       schedulePostSelected();
     });
 
@@ -567,7 +587,7 @@
     return col;
   }
 
-  function renderList(colEl, parentId, depth, checked, indeterminate) {
+  function renderList(colEl, parentId, checked, indeterminate) {
     if (!parentId) return;
 
     const kids = getChildren(parentId)
@@ -637,31 +657,41 @@
 
     const { checked, indeterminate } = computeIndeterminateStates();
 
-    const cols = [];
-
     const col1 = createColumn("カテゴリ");
-    renderList(col1, ROOT_ID, 1, checked, indeterminate);
+    renderList(col1, ROOT_ID, checked, indeterminate);
 
-    if (locArea) {
-      if (locArea.parentNode) locArea.parentNode.removeChild(locArea);
-      locArea.classList.add("loc-area-in-col1");
-      col1.appendChild(locArea);
+    // 第1カテゴリ（G）: 第1カラムに表示（見出しは消す）
+    if (locAreaG) {
+      if (locAreaG.parentNode) locAreaG.parentNode.removeChild(locAreaG);
+      locAreaG.classList.add("loc-area-in-col1");
+      col1.appendChild(locAreaG);
     }
-
-    cols.push(col1);
 
     const l1 = path[0] || null;
     const col2 = createColumn(l1 ? label.get(l1) || " " : " ");
-    renderList(col2, l1, 2, checked, indeterminate);
-    cols.push(col2);
+    renderList(col2, l1, checked, indeterminate);
+
+    // 第2カテゴリ（H）: 第2カラムに表示（第1カテゴリ選択時に表示）
+    if (locAreaG) {
+      const hArea = ensureLocAreaHExists();
+      if (hArea.parentNode) hArea.parentNode.removeChild(hArea);
+      hArea.classList.add("loc-area-in-col2");
+      col2.appendChild(hArea);
+    }
 
     const l2 = path[1] || null;
     const showL2 = l2 && nodeHasChildren(l2);
     const col3 = createColumn(showL2 ? label.get(l2) || " " : " ");
-    renderList(col3, showL2 ? l2 : null, 3, checked, indeterminate);
-    cols.push(col3);
+    renderList(col3, showL2 ? l2 : null, checked, indeterminate);
 
-    cols.forEach((c) => colWrap.appendChild(c));
+    colWrap.appendChild(col1);
+    colWrap.appendChild(col2);
+    colWrap.appendChild(col3);
+
+    // 追加カテゴリのUIもここで再描画（配置先が変わるため）
+    if (locAreaG) {
+      renderLocAreas();
+    }
 
     if (clearBtn) {
       clearBtn.style.display = "";
