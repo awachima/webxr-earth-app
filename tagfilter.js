@@ -365,6 +365,31 @@
     cb.type = "checkbox";
     cb.checked = selected.has(id);
 
+    // ★既存カテゴリ（tree）と同様に「子が一部だけ選択されている」状態を
+    //  第1カテゴリ（G）側のチェックボックスに反映（いわゆる「ー」表示）
+    //  ※loc(G/H)は木構造(nodesById)とは別管理なので、ここで計算する
+    try {
+      const kids = locChildren.get(text) || new Set();
+      if (kids && kids.size > 0) {
+        let any = false;
+        let all = true;
+        kids.forEach((h) => {
+          const hid = "loc::h::" + text + "::" + h;
+          const on = selected.has(hid);
+          any = any || on;
+          all = all && on;
+        });
+
+        // 親(G)自体が未チェックでも子が選ばれていれば indeterminate にする
+        // 親がチェック済みでも子が全て揃っていなければ indeterminate
+        cb.indeterminate = (any && !all) || (any && !cb.checked);
+      } else {
+        cb.indeterminate = false;
+      }
+    } catch (_) {
+      cb.indeterminate = false;
+    }
+
     const lab = document.createElement("div");
     lab.className = "label";
     lab.textContent = text;
@@ -439,6 +464,11 @@
       const on = cb.checked;
       if (on) selected.add(id);
       else selected.delete(id);
+
+      // ★第2カテゴリ(H)のみを選んだ場合でも、
+      //  第1カテゴリ(G)側に「一部選択」マーク（indeterminate）が出るように更新
+      //  （renderColumns() 内で renderLocAreas() が呼ばれるため、
+      //   ここでは locOpenG を維持するだけでOK）
 
       saveSelection();
       setBadge();

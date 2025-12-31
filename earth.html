@@ -692,6 +692,14 @@ AFRAME.registerComponent('marker-placer',{
       if (tagStart === null){
         tagStart = (headers.length >= 10) ? 9 : 4; // 後方にタグがある想定（将来列が増えても最後側を拾うため致命傷になりにくい）
       }
+
+      // ★重要: 本プロジェクトでは location.csv の追加カテゴリが G/H（0始まり 6/7）にある。
+      // ここがタグ列として拾われないと「第2カラムだけ選択」が地球儀に反映されない。
+      // そのため、列数が十分ある場合は「タグ開始位置」を G(=6) 以前へ寄せて必ず拾う。
+      // （既存のJ列以降のタグも引き続き拾われる）
+      if (headers.length > 7) {
+        tagStart = Math.min(tagStart, 6);
+      }
       this._tagStartIndex = tagStart;
     } else {
       this._tagStartIndex = 4; // ヘッダーがない場合は最低限、4列目以降を「メタ+タグ候補」として扱う
