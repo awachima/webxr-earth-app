@@ -12,6 +12,12 @@
   // フォールバック（同梱tree.csvがある場合）
   const TREE_URL_FALLBACK = "./tree.csv";
 
+  // ★追加: location.csv（G/Hを追加カテゴリに使う）
+  // ※G/H開始列は固定（G=6, H=7 / 0始まり）
+  const LOCATION_URL_PRIMARY =
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv";
+  const LOCATION_URL_FALLBACK = "./location.csv";
+
   const btn = document.getElementById("tagFilterBtn");
   const badge = document.getElementById("tagFilterCount");
 
@@ -24,9 +30,15 @@
   const clearBtn = document.getElementById("tagFilterClear");
 
   const colWrap = document.getElementById("tagFilterColumns");
+
+  // 既存: 追加カテゴリ表示用コンテナ（1つだけ置いてある想定）
+  // 今回: 第1カテゴリ(G)はこの要素に表示、 第2カテゴリ(H)はJS側で別要素を生成して第2カラムへ移動
+  const locAreaG = document.getElementById("tagFilterLocArea");
+  let locAreaH = document.getElementById("tagFilterLocArea2");
+
   const iframe = document.getElementById("webxr-iframe");
 
-  // ★ 必須要素だけチェック（apply/clear は無くても動かす）
+  // ★ 必須要素だけチェック（apply/clear/locArea は無くても動かす）
   if (!btn || !badge || !backdrop || !modal || !closeBtn || !colWrap || !iframe) {
     return;
   }
@@ -49,14 +61,12 @@
   // selection state
   let selected = new Set(); // Set<nodeId>
   let path = []; // currently opened path (ids per depth)
-  const MAX_DEPTH = 3;
 
   // 自動適用（リロード時に earth 側へ再送）
   let hadSavedSelection = false;
   let treeReady = false;
   let earthReady = false;
   let autoApplied = false;
-
 
   // iframe の load が tagfilter.js 読み込みより先に発火していると、
   // earth.html 側の dd-earth-ready が受け取れず、自動再適用が走らないことがある。
@@ -68,14 +78,14 @@
   }
 
   // 通常: iframe load で確実に検知
-  iframe.addEventListener('load', () => {
+  iframe.addEventListener("load", () => {
     markEarthReadyFromIframe();
   });
 
   // 既に読み込み済み（load が先に終わっている）ケースも拾う
   setTimeout(() => {
     try {
-      if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+      if (iframe.contentDocument && iframe.contentDocument.readyState === "complete") {
         markEarthReadyFromIframe();
       }
     } catch (e) {}
@@ -143,8 +153,333 @@
     return map.get(key);
   }
 
+  // ----------------------------
+  //  location.csv(G/H) -> extra category UI
+  // ----------------------------
+  // ★ 追加タグ開始列は「絶対にG/H」固定（0始まりで 6/7）
+  const LOC_G_INDEX = 6;
+  const LOC_H_INDEX = 7;
+
+  let locReady = false;
+  let locGList = []; // ["有名な場所", "有名な物", ...]
+  let locChildren = new Map(); // G -> Set(H)
+  let locOpenG = null; // 第1カテゴリで現在選択（開いている）G
+  let locDebugMessage = ""; // 表示だけ（壊さない）
+
+  function ensureLocAreaHExists() {
+    if (locAreaH) return locAreaH;
+    locAreaH = document.createElement("div");
+    locAreaH.id = "tagFilterLocArea2";
+    return locAreaH;
+  }
+
+  async function loadLocationCats() {
+    if (!locAreaG) {
+      // index.html に locArea が無い構成でも落とさない
+      locReady = false;
+      return;
+    }
+
+    let text = "";
+    locDebugMessage = "";
+
+    // Primary（Google Sheets CSV）
+    // ★公開CSVが「使用範囲が狭い(A〜Eだけ等)」として出力される場合、G/H以降が落ちることがあります。
+    // その場合に備えて range 付きも順に試します（仕様はG/H固定のまま）。
+    const locPrimaryCandidates = [
+      LOCATION_URL_PRIMARY,
+      LOCATION_URL_PRIMARY + "&range=A:K",
+      LOCATION_URL_PRIMARY + "&range=A:Z",
+    ];
+
+    for (const u of locPrimaryCandidates) {
+      try {
+        const r = await fetch(u, { cache: "no-store" });
+        if (!r.ok) continue;
+        const t = await r.text();
+        if (t && t.trim().length > 0) {
+          text = t;
+          break;
+        }
+      } catch (_) {}
+    }
+
+    // Fallback（同階層の location.csv）
+    if (!text) {
+      try {
+        const r2 = await fetch(LOCATION_URL_FALLBACK, { cache: "no-store" });
+        if (r2.ok) text = await r2.text();
+      } catch (_) {}
+    }
+
+    if (!text) {
+      locReady = false;
+      locDebugMessage = "location.csv を読み込めませんでした（URL/gid を確認してください）";
+      renderLocAreas();
+      return;
+    }
+
+    const lines = text.trim().split(/\r?\n/);
+    if (!lines.length) {
+      locReady = false;
+      locDebugMessage = "location.csv が空です";
+      renderLocAreas();
+      return;
+    }
+
+    // ヘッダー判定（2列目/3列目が数値でないならヘッダー扱い）
+    let start = 0;
+    try {
+      const head = csvParseLine(lines[0]);
+      const lat = parseFloat((head[1] || "").replace(/[−–‐]/g, "-"));
+      const lng = parseFloat((head[2] || "").replace(/[−–‐]/g, "-"));
+      if (isNaN(lat) || isNaN(lng)) start = 1;
+    } catch (_) {}
+
+    const gSet = new Set();
+    const childMap = new Map();
+
+    // 列数不足チェック（最低でもHまで必要）
+    try {
+      const firstData = csvParseLine(lines[Math.min(start, lines.length - 1)]);
+      if ((firstData || []).length <= LOC_H_INDEX) {
+        locDebugMessage =
+          "location.csv の列数が想定より少ないため、G/H を読み取れません（公開CSVにG/Hが含まれているか確認してください）";
+      }
+    } catch (_) {}
+
+    for (let i = start; i < lines.length; i++) {
+      const parts = csvParseLine(lines[i]);
+
+      // 行ごとに列数が足りない場合はスキップ
+      if (!parts || parts.length <= LOC_G_INDEX) continue;
+
+      const g = normalize(parts[LOC_G_INDEX]);
+      const h = parts.length > LOC_H_INDEX ? normalize(parts[LOC_H_INDEX]) : "";
+
+      if (!g) continue;
+
+      gSet.add(g);
+      if (!childMap.has(g)) childMap.set(g, new Set());
+      if (h) childMap.get(g).add(h);
+
+      label.set("loc::g::" + g, g);
+      if (h) label.set("loc::h::" + g + "::" + h, h);
+    }
+
+    locGList = Array.from(gSet).sort((a, b) => a.localeCompare(b, "ja"));
+    locChildren = childMap;
+    locOpenG = locOpenG && childMap.has(locOpenG) ? locOpenG : null;
+
+    locReady = true;
+    renderLocAreas();
+  }
+
+  // 第1カテゴリ（G）: 第1カラムに表示
+  // 第2カテゴリ（H）: 第1カテゴリ選択時に第2カラムに表示
+  function renderLocAreas() {
+    if (!locAreaG) return;
+
+    // --- G（第1） ---
+    locAreaG.innerHTML = "";
+    locAreaG.style.marginTop = "10px";
+
+    // 「追加カテゴリ（第1）」は表示しない（要望）
+    // ただしデバッグ表示は壊さない範囲で残す
+    if (locDebugMessage) {
+      const msg0 = document.createElement("div");
+      msg0.style.opacity = "0.65";
+      msg0.style.padding = "6px 2px";
+      msg0.style.fontSize = "12px";
+      msg0.textContent = locDebugMessage;
+      locAreaG.appendChild(msg0);
+    }
+
+    if (!locReady) {
+      const msg = document.createElement("div");
+      msg.style.opacity = "0.7";
+      msg.style.padding = "6px 2px";
+      msg.textContent = "読み込み中…";
+      locAreaG.appendChild(msg);
+      // H側も空にしておく
+      const hArea = ensureLocAreaHExists();
+      hArea.innerHTML = "";
+      return;
+    }
+
+    if (!locGList.length) {
+      const msg = document.createElement("div");
+      msg.style.opacity = "0.7";
+      msg.style.padding = "6px 2px";
+      msg.textContent = "追加カテゴリがありません";
+      locAreaG.appendChild(msg);
+    } else {
+      // G一覧（クリックで H を切替、チェックで選択）
+      locGList.forEach((g) => {
+        const id = "loc::g::" + g;
+        const row = makeLocGRow(id, g);
+        locAreaG.appendChild(row);
+      });
+    }
+
+    // --- H（第2） ---
+    const hArea = ensureLocAreaHExists();
+    hArea.innerHTML = "";
+    hArea.style.marginTop = "10px";
+
+    // ★要望: 追加カテゴリのタイトルは不要なので表示しない（ここでは見出しを作らない）
+
+    if (!locOpenG) {
+      const msg = document.createElement("div");
+      msg.style.opacity = "0.7";
+      msg.style.padding = "6px 2px";
+      msg.textContent = "第1カテゴリを選択してください";
+      hArea.appendChild(msg);
+      return;
+    }
+
+    const setH = locChildren.get(locOpenG) || new Set();
+    const list = Array.from(setH).sort((a, b) => a.localeCompare(b, "ja"));
+
+    if (!list.length) {
+      const msg = document.createElement("div");
+      msg.style.opacity = "0.7";
+      msg.style.padding = "6px 2px";
+      msg.textContent = "第2カテゴリはありません";
+      hArea.appendChild(msg);
+      return;
+    }
+
+    list.forEach((h) => {
+      const id = "loc::h::" + locOpenG + "::" + h;
+      const row = makeLocHRow(id, h);
+      hArea.appendChild(row);
+    });
+  }
+
+  function makeLocGRow(id, text) {
+    const row = document.createElement("div");
+    row.className = "node";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = selected.has(id);
+
+    // ★既存カテゴリ（tree）と同様に「子が一部だけ選択されている」状態を
+    //  第1カテゴリ（G）側のチェックボックスに反映（いわゆる「ー」表示）
+    //  ※loc(G/H)は木構造(nodesById)とは別管理なので、ここで計算する
+    try {
+      const kids = locChildren.get(text) || new Set();
+      if (kids && kids.size > 0) {
+        let any = false;
+        let all = true;
+        kids.forEach((h) => {
+          const hid = "loc::h::" + text + "::" + h;
+          const on = selected.has(hid);
+          any = any || on;
+          all = all && on;
+        });
+
+        // 親(G)自体が未チェックでも子が選ばれていれば indeterminate にする
+        // 親がチェック済みでも子が全て揃っていなければ indeterminate
+        cb.indeterminate = (any && !all) || (any && !cb.checked);
+      } else {
+        cb.indeterminate = false;
+      }
+    } catch (_) {
+      cb.indeterminate = false;
+    }
+
+    const lab = document.createElement("div");
+    lab.className = "label";
+    lab.textContent = text;
+
+    const chev = document.createElement("div");
+    chev.className = "chev";
+    chev.textContent = "›";
+
+    row.appendChild(cb);
+    row.appendChild(lab);
+    row.appendChild(chev);
+
+    row.addEventListener("click", (e) => {
+      // checkboxクリックは別で処理
+      if (e.target === cb) return;
+
+      // ★追加カテゴリを開いたら「第2カラムは追加カテゴリ専用」にしたいので、
+      // ここでは tree の path は維持したまま locOpenG だけセットする（表示は renderColumns が制御）
+      locOpenG = text;
+      renderColumns();
+    });
+
+    cb.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const on = cb.checked;
+
+      // Gチェック: 配下HもまとめてON/OFF
+      if (on) selected.add(id);
+      else selected.delete(id);
+
+      const kids = locChildren.get(text) || new Set();
+      kids.forEach((h) => {
+        const hid = "loc::h::" + text + "::" + h;
+        if (on) selected.add(hid);
+        else selected.delete(hid);
+      });
+
+      // チェック操作したら、そのGを開いた扱いにする（UX）
+      locOpenG = text;
+
+      saveSelection();
+      setBadge();
+      renderColumns();
+      schedulePostSelected();
+    });
+
+    return row;
+  }
+
+  function makeLocHRow(id, text) {
+    const row = document.createElement("div");
+    row.className = "node";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = selected.has(id);
+
+    const lab = document.createElement("div");
+    lab.className = "label";
+    lab.textContent = text;
+
+    const chev = document.createElement("div");
+    chev.className = "chev";
+    chev.textContent = "";
+
+    row.appendChild(cb);
+    row.appendChild(lab);
+    row.appendChild(chev);
+
+    cb.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const on = cb.checked;
+      if (on) selected.add(id);
+      else selected.delete(id);
+
+      // ★第2カテゴリ(H)のみを選んだ場合でも、
+      //  第1カテゴリ(G)側に「一部選択」マーク（indeterminate）が出るように更新
+      //  （renderColumns() 内で renderLocAreas() が呼ばれるため、
+      //   ここでは locOpenG を維持するだけでOK）
+
+      saveSelection();
+      setBadge();
+      renderColumns();
+      schedulePostSelected();
+    });
+
+    return row;
+  }
+
   function setBadge() {
-    // (0) も含めて常に表示（既存UI仕様に合わせる）
     try {
       badge.textContent = `(${selected.size})`;
       badge.style.display = "inline";
@@ -153,7 +488,10 @@
 
   function saveSelection() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(selected).filter((id)=>id && id !== ROOT_ID && id !== EMPTY_ID)));
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(Array.from(selected).filter((id) => id && id !== ROOT_ID && id !== EMPTY_ID))
+      );
     } catch (e) {}
   }
 
@@ -196,7 +534,6 @@
     const pNode = nodesById.get(parentId);
     if (pNode) pNode.children.add(nodeId);
 
-    // build path
     const ancestors = [];
     let cur = nodeId;
     while (cur && cur !== ROOT_ID) {
@@ -220,18 +557,15 @@
 
   function setNodeAndDescendants(nodeId, on) {
     if (!nodeId || nodeId === ROOT_ID || nodeId === EMPTY_ID) return;
-    // set node
     if (on) selected.add(nodeId);
     else selected.delete(nodeId);
 
-    // set descendants
     const kids = childrenByParent.get(nodeId);
     if (!kids) return;
     kids.forEach((k) => setNodeAndDescendants(k, on));
   }
 
   function computeIndeterminateStates() {
-    // For each node, compute if it should be indeterminate based on descendants selection.
     const checked = new Set();
     const indeterminate = new Set();
 
@@ -255,7 +589,7 @@
       if (selfChecked) {
         any = true;
       } else {
-        all = false; // if self isn't checked, cannot be "all" in this simple model
+        all = false;
       }
 
       if (selfChecked) checked.add(nodeId);
@@ -263,7 +597,6 @@
       return { any, all };
     }
 
-    // walk from ROOT's children
     getChildren(ROOT_ID).forEach((id) => walk(id));
     return { checked, indeterminate };
   }
@@ -278,20 +611,21 @@
   function createColumn(title) {
     const col = document.createElement("div");
     col.className = "column";
-    const h = document.createElement("h3");
-    h.textContent = title || "";
-    col.appendChild(h);
+    if (title && String(title).trim().length > 0) {
+      const h = document.createElement("h3");
+      h.textContent = title || "";
+      col.appendChild(h);
+    }
     return col;
   }
 
-  function renderList(colEl, parentId, depth, checked, indeterminate) {
+  function renderList(colEl, parentId, checked, indeterminate) {
     if (!parentId) return;
 
     const kids = getChildren(parentId)
       .map((id) => nodesById.get(id))
       .filter(Boolean);
 
-    // stable sort by label
     kids.sort((a, b) => (a.label || "").localeCompare(b.label || "", "ja"));
 
     kids.forEach((node) => {
@@ -316,7 +650,6 @@
       row.appendChild(lab);
       row.appendChild(chev);
 
-      // checkbox click: toggle with descendants
       cb.addEventListener("click", (e) => {
         e.stopPropagation();
         const on = cb.checked;
@@ -324,13 +657,13 @@
         saveSelection();
         setBadge();
         renderColumns();
-
-        // ★ applyBtn が無い構成なら「自動適用」
         schedulePostSelected();
       });
 
-      // row click: open next column (path)
       row.addEventListener("click", () => {
+        // ★重要: 既存カテゴリ側をクリックしたら、追加カテゴリの表示モードを解除する
+        locOpenG = null;
+
         const depthIdx = node.depth - 1;
         path = path.slice(0, depthIdx);
         path[depthIdx] = node.id;
@@ -359,26 +692,48 @@
 
     const { checked, indeterminate } = computeIndeterminateStates();
 
-    const cols = [];
-
     const col1 = createColumn("カテゴリ");
-    renderList(col1, ROOT_ID, 1, checked, indeterminate);
-    cols.push(col1);
+    renderList(col1, ROOT_ID, checked, indeterminate);
+
+    // 第1カテゴリ（G）: 第1カラムに表示（見出しは消す）
+    if (locAreaG) {
+      if (locAreaG.parentNode) locAreaG.parentNode.removeChild(locAreaG);
+      locAreaG.classList.add("loc-area-in-col1");
+      col1.appendChild(locAreaG);
+    }
 
     const l1 = path[0] || null;
-    const col2 = createColumn(l1 ? label.get(l1) || " " : " ");
-    renderList(col2, l1, 2, checked, indeterminate);
-    cols.push(col2);
 
-    const l2 = path[1] || null;
-    const showL2 = l2 && nodeHasChildren(l2); // ★ 2カラム目が終端(子なし)なら3カラム目のタイトルに出さない
+    // ★要望: 追加カテゴリを表示しているときは「タイトルを表示しない」
+    const col2Title = locOpenG ? "" : (l1 ? label.get(l1) || " " : " ");
+    const col2 = createColumn(col2Title);
+
+    if (!locOpenG) {
+      // 既存カテゴリの第2カラム
+      renderList(col2, l1, checked, indeterminate);
+    } else {
+      // 追加カテゴリの第2カラム（専用表示）
+      const hArea = ensureLocAreaHExists();
+      if (hArea.parentNode) hArea.parentNode.removeChild(hArea);
+      hArea.classList.add("loc-area-in-col2");
+      col2.appendChild(hArea);
+    }
+
+    // 第3カラムは「追加カテゴリ表示中」は空にする
+    const l2 = (!locOpenG) ? (path[1] || null) : null;
+    const showL2 = l2 && nodeHasChildren(l2);
     const col3 = createColumn(showL2 ? label.get(l2) || " " : " ");
-    renderList(col3, showL2 ? l2 : null, 3, checked, indeterminate);
-    cols.push(col3);
+    renderList(col3, showL2 ? l2 : null, checked, indeterminate);
 
-    cols.forEach((c) => colWrap.appendChild(c));
+    colWrap.appendChild(col1);
+    colWrap.appendChild(col2);
+    colWrap.appendChild(col3);
 
-    // ★ クリアボタンは常時表示（選択が無い時だけ無効化）
+    // 追加カテゴリのUIもここで再描画（配置先が変わるため）
+    if (locAreaG) {
+      renderLocAreas();
+    }
+
     if (clearBtn) {
       clearBtn.style.display = "";
       clearBtn.removeAttribute("aria-hidden");
@@ -395,7 +750,6 @@
   //  Earth messaging
   // ----------------------------
   function postSelected() {
-    // earth側は「タグ名」を期待しているので label を送る
     const tags = Array.from(selected)
       .map((id) => label.get(id) || id)
       .map((s) => String(s).trim())
@@ -431,17 +785,13 @@
   //  Modal open/close
   // ----------------------------
   function openModal() {
-    // main.js が style.display で開閉している構成でも確実に開く
     backdrop.style.display = "flex";
     backdrop.setAttribute("aria-hidden", "false");
     btn.setAttribute("aria-expanded", "true");
-
-    // tagfilter.js 側の open 判定（ESC など）にも使う
     backdrop.classList.add("open");
 
     document.body.style.overflow = "hidden";
 
-    // position modal so its top-left matches the button position
     modal.style.visibility = "hidden";
     modal.style.left = "0px";
     modal.style.top = "0px";
@@ -465,7 +815,6 @@
         modal.style.left = left + "px";
         modal.style.top = top + "px";
       } catch (e) {
-        // fallback
       } finally {
         modal.style.visibility = "visible";
       }
@@ -477,13 +826,10 @@
   function closeModal() {
     backdrop.setAttribute("aria-hidden", "true");
     btn.setAttribute("aria-expanded", "false");
-
-    // class も display も両方閉じる（どちらの方式でも確実に閉じる）
     backdrop.classList.remove("open");
     backdrop.style.display = "none";
 
     document.body.style.overflow = "";
-
     modal.style.visibility = "";
   }
 
@@ -493,12 +839,10 @@
   btn.addEventListener("click", openModal);
   closeBtn.addEventListener("click", closeModal);
 
-  // click backdrop closes only when clicking outside modal
   backdrop.addEventListener("click", (e) => {
     if (e.target === backdrop) closeModal();
   });
 
-  // ★ apply/clear がある構成だけイベントを生やす
   if (applyBtn) {
     applyBtn.addEventListener("click", () => {
       saveSelection();
@@ -517,7 +861,6 @@
     });
   }
 
-  // esc closes
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && backdrop.classList.contains("open")) {
       closeModal();
@@ -561,13 +904,20 @@
     const idx3 = header.indexOf("level3");
     if (idx1 < 0) return;
 
-    // Each row creates nodes for each level; nodeId is built from path
     for (let i = 1; i < lines.length; i++) {
       const cols = csvParseLine(lines[i]);
       const l1 = normalize(cols[idx1]);
       const l2 = idx2 >= 0 ? normalize(cols[idx2]) : "";
       const l3 = idx3 >= 0 ? normalize(cols[idx3]) : "";
+
       if (!l1) continue;
+
+      const a = l1.toLowerCase();
+      const b = (l2 || "").toLowerCase();
+      const c = (l3 || "").toLowerCase();
+      if (a === "level1" && (b === "level2" || b === "") && (c === "level3" || c === "")) {
+        continue;
+      }
 
       const id1 = "L1|" + safeIdFromLabel(l1);
       addNode(id1, l1, 1, ROOT_ID);
@@ -590,6 +940,7 @@
       const csv = await fetchCsv(TREE_URL_PRIMARY);
       buildTreeFromCsv(csv);
       treeReady = true;
+      await loadLocationCats();
       renderColumns();
       tryAutoApply();
       return;
@@ -599,6 +950,7 @@
       const csv = await fetchCsv(TREE_URL_FALLBACK);
       buildTreeFromCsv(csv);
       treeReady = true;
+      await loadLocationCats();
       renderColumns();
       tryAutoApply();
     } catch (e2) {
