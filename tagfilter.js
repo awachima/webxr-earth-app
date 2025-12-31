@@ -561,6 +561,19 @@
 
     const col1 = createColumn("カテゴリ");
     renderList(col1, ROOT_ID, 1, checked, indeterminate);
+	  // ▼▼ 追加カテゴリ（location.csv G/H）を「カテゴリ枠(col1)の中」に入れる ▼▼
+if (locArea) {
+  // 以前どこかに入れていた場合は取り外してから入れ直す（重複表示防止）
+  if (locArea.parentNode) locArea.parentNode.removeChild(locArea);
+
+  // “カテゴリ枠の中で表示するモード”用のクラス（CSSで使うなら）
+  locArea.classList.add("loc-area-in-col1");
+
+  // 「カテゴリ」カラムの末尾＝□文化の下に続く位置
+  col1.appendChild(locArea);
+}
+// ▲▲ ここまで ▲▲
+
     cols.push(col1);
 
     const l1 = path[0] || null;

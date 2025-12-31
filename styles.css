@@ -515,55 +515,6 @@ header *{
 
 .modal .body{ padding: 14px 14px 16px; }
 
-/* =========================================================
-   ★ 追加：location.csv(G/H) 由来の追加カテゴリエリア
-   （絞り込みモーダル下部・赤枠位置）
-   ========================================================= */
-
-/* モーダル本文を基準に absolute 配置するため */
-.tag-filter-body{
-  position: relative;
-}
-
-/* 赤枠の位置に固定表示されるエリア */
-.tag-filter-locarea{
-  position: absolute;
-  left: 14px;
-  bottom: 14px;
-
-  /* 左2カラム分（既存UIと揃える） */
-  width: calc(260px * 2 + 14px);
-  height: 150px;
-
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 12px;
-  background: rgba(255,255,255,0.96);
-
-  padding: 10px;
-  display: flex;
-  gap: 14px;
-
-  overflow: hidden;
-}
-
-/* 左：第一カテゴリ（G列） / 右：第二カテゴリ（H列） */
-.tag-filter-loccol{
-  flex: 1;
-  min-width: 0;
-
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 10px;
-  background: rgba(255,255,255,0.85);
-
-  padding: 8px;
-  overflow: auto;
-}
-
-.tag-filter-loccol h3{
-  margin: 0 0 8px 0;
-  font-size: 13px;
-  font-weight: 700;
-}
 
 
 .modal .actions{
