@@ -1,54 +1,44 @@
 (function () {
   // ----------------------------
-  //  Tag Filter (Tree / Columns)
+  //  Tag Filter (tree.csv) + Additional Tags (location.csv G/H..)
+  //  - 3カラム（最大3階層）
+  //  - 「追加カテゴリ(第2)」は location.csv の G/H を利用（公開CSVに含まれる前提）
+  //  - apply(適用) で earth.html へ postMessage
   // ----------------------------
-  const STORAGE_KEY = "dd_selected_tags_v1";
 
-  // ★ Google Sheets「ウェブに公開」(CSV) を読む
-  // 重要: pubhtml ではなく output=csv を使う
-  const TREE_URL_PRIMARY =
+  const STORAGE_KEY_TREE = "dd_filter_tree_selected_v1";
+  const STORAGE_KEY_LOC = "dd_filter_loc_selected_v1";
+  const STORAGE_KEY_APPLIED_MODE = "dd_filter_applied_mode_v1"; // 'tree' | 'loc' | 'none'
+
+  const MODE_TREE = "tree";
+  const MODE_LOC = "loc";
+  const MODE_NONE = "none";
+
+  // tree CSV (公開URL) - sheet name "tree"
+  // 既存の実装に合わせて URL を固定（必要なら差し替えてください）
+  const TREE_CSV_URL =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxY1OEEnEqJi1gK6D156ql0Ybe5Hqsn-mrAmvC3p98oRYYdXFNTjUY3-SMNgusPHqowztL3aAF3COl/pub?gid=0&single=true&output=csv";
 
-  // フォールバック（同梱tree.csvがある場合）
-  const TREE_URL_FALLBACK = "./tree.csv";
+  // location CSV - user supplied
+  // ★ index.html から読み込む location.csv と同じものを参照したい場合は、ここを合わせてください
+  // 今回は既存ロジックに合わせ、earth 側と同じ fetch 経路を使えるよう相対パス想定のままにしています
+  const LOCATION_CSV_URL = "./location.csv";
 
-  // ★追加: location.csv（G/Hを追加カテゴリに使う）
-  // ※G/H開始列は固定（G=6, H=7 / 0始まり）
-  const LOCATION_URL_PRIMARY =
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv";
-  const LOCATION_URL_FALLBACK = "./location.csv";
-
-  const btn = document.getElementById("tagFilterBtn");
-  const badge = document.getElementById("tagFilterCount");
-
+  // UI elements
   const backdrop = document.getElementById("tagFilterBackdrop");
   const modal = backdrop ? backdrop.querySelector(".tag-filter-modal") : null;
   const closeBtn = document.getElementById("tagFilterClose");
-
-  // ★ index.html に無い可能性があるので「任意」にする
   const applyBtn = document.getElementById("tagFilterApply");
   const clearBtn = document.getElementById("tagFilterClear");
+  const openBtn = document.getElementById("tagFilterBtn");
+  const badgeEl = document.getElementById("tagFilterCount");
 
   const colWrap = document.getElementById("tagFilterColumns");
+  const locArea = document.getElementById("tagFilterLocArea");
 
-  // 既存: 追加カテゴリ表示用コンテナ（1つだけ置いてある想定）
-  // 今回: 第1カテゴリ(G)はこの要素に表示、 第2カテゴリ(H)はJS側で別要素を生成して第2カラムへ移動
-  const locAreaG = document.getElementById("tagFilterLocArea");
-  let locAreaH = document.getElementById("tagFilterLocArea2");
-
-  const iframe = document.getElementById("webxr-iframe");
-
-  // ★ 必須要素だけチェック（apply/clear/locArea は無くても動かす）
-  if (!btn || !badge || !backdrop || !modal || !closeBtn || !colWrap || !iframe) {
-    return;
-  }
-
-  // ----------------------------
-  //  Data structures
-  // ----------------------------
-  // node: { id, label, depth, parentId, children:Set<id> }
-  const nodesById = new Map();
-  const childrenByParent = new Map(); // parentId -> Set(childId)
+  // tree structures
+  const nodesById = new Map(); // id -> {id,label,depth}
+  const children = new Map(); // id -> Set<childId>
   const label = new Map(); // id -> label
   const parent = new Map(); // id -> parentId
   const depthById = new Map(); // id -> depth (1..)
@@ -61,6 +51,7 @@
   // selection state
   let selected = new Set(); // Set<nodeId>
   let path = []; // currently opened path (ids per depth)
+  const MAX_DEPTH = 3;
 
   // 自動適用（リロード時に earth 側へ再送）
   let hadSavedSelection = false;
@@ -71,61 +62,50 @@
   // iframe の load が tagfilter.js 読み込みより先に発火していると、
   // earth.html 側の dd-earth-ready が受け取れず、自動再適用が走らないことがある。
   // そのため「iframeが読み込まれている」こと自体でも earthReady を立てる。
-  function markEarthReadyFromIframe() {
-    if (earthReady) return;
-    earthReady = true;
-    tryAutoApply();
-  }
+  function tryMarkEarthReadyByIframeLoad() {
+    const iframe = document.getElementById("webxr-iframe");
+    if (!iframe) return;
 
-  // 通常: iframe load で確実に検知
-  iframe.addEventListener("load", () => {
-    markEarthReadyFromIframe();
-  });
+    // load event
+    iframe.addEventListener("load", () => {
+      earthReady = true;
+      scheduleAutoApplyIfNeeded();
+    });
 
-  // 既に読み込み済み（load が先に終わっている）ケースも拾う
-  setTimeout(() => {
+    // already loaded?
     try {
       if (iframe.contentDocument && iframe.contentDocument.readyState === "complete") {
-        markEarthReadyFromIframe();
+        earthReady = true;
+        scheduleAutoApplyIfNeeded();
       }
-    } catch (e) {}
-  }, 0);
-
-  // apply のスパムを避けるため軽くデバウンス
-  let postTimer = null;
-  function schedulePostSelected(delayMs = 120) {
-    if (applyBtn) return; // applyBtn がある構成なら「適用」押下まで送らない
-    if (postTimer) clearTimeout(postTimer);
-    postTimer = setTimeout(() => {
-      postSelected();
-    }, delayMs);
+    } catch (e) {
+      // cross-origin の可能性があるが、通常は同一オリジン
+    }
   }
 
   // ----------------------------
-  //  Helpers
+  //  CSV loader helpers
   // ----------------------------
-  function normalize(s) {
-    return (s || "").toString().trim();
+  async function fetchCSV(url) {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("Failed fetch: " + url + " (" + res.status + ")");
+    const text = await res.text();
+    return parseCSV(text);
   }
 
-  function safeIdFromLabel(s) {
-    // stable-ish id: depth/label path
-    return String(s || "")
-      .trim()
-      .replace(/\s+/g, " ")
-      .replace(/[|]/g, "/");
-  }
-
-  function csvParseLine(line) {
+  function parseCSV(text) {
     // minimal CSV parser (handles quotes)
-    const out = [];
+    const rows = [];
+    let row = [];
     let cur = "";
     let inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+
       if (inQ) {
         if (ch === '"') {
-          if (line[i + 1] === '"') {
+          if (text[i + 1] === '"') {
             cur += '"';
             i++;
           } else {
@@ -135,465 +115,232 @@
           cur += ch;
         }
       } else {
-        if (ch === '"') inQ = true;
-        else if (ch === ",") {
-          out.push(cur);
+        if (ch === '"') {
+          inQ = true;
+        } else if (ch === ",") {
+          row.push(cur);
           cur = "";
+        } else if (ch === "\n") {
+          row.push(cur);
+          rows.push(row);
+          row = [];
+          cur = "";
+        } else if (ch === "\r") {
+          // ignore
         } else {
           cur += ch;
         }
       }
     }
-    out.push(cur);
-    return out;
-  }
-
-  function ensureSet(map, key) {
-    if (!map.has(key)) map.set(key, new Set());
-    return map.get(key);
-  }
-
-  // ----------------------------
-  //  location.csv(G/H) -> extra category UI
-  // ----------------------------
-  // ★ 追加タグ開始列は「絶対にG/H」固定（0始まりで 6/7）
-  const LOC_G_INDEX = 6;
-  const LOC_H_INDEX = 7;
-
-  let locReady = false;
-  let locGList = []; // ["有名な場所", "有名な物", ...]
-  let locChildren = new Map(); // G -> Set(H)
-  let locOpenG = null; // 第1カテゴリで現在選択（開いている）G
-  let locDebugMessage = ""; // 表示だけ（壊さない）
-
-  function ensureLocAreaHExists() {
-    if (locAreaH) return locAreaH;
-    locAreaH = document.createElement("div");
-    locAreaH.id = "tagFilterLocArea2";
-    return locAreaH;
-  }
-
-  async function loadLocationCats() {
-    if (!locAreaG) {
-      // index.html に locArea が無い構成でも落とさない
-      locReady = false;
-      return;
+    // last
+    if (cur.length > 0 || row.length > 0) {
+      row.push(cur);
+      rows.push(row);
     }
+    return rows;
+  }
 
-    let text = "";
-    locDebugMessage = "";
+  // ----------------------------
+  //  Build tree from tree.csv
+  // ----------------------------
+  function ensureChild(parentId, childId) {
+    if (!children.has(parentId)) children.set(parentId, new Set());
+    children.get(parentId).add(childId);
+  }
 
-    // Primary（Google Sheets CSV）
-    // ★公開CSVが「使用範囲が狭い(A〜Eだけ等)」として出力される場合、G/H以降が落ちることがあります。
-    // その場合に備えて range 付きも順に試します（仕様はG/H固定のまま）。
-    const locPrimaryCandidates = [
-      LOCATION_URL_PRIMARY,
-      LOCATION_URL_PRIMARY + "&range=A:K",
-      LOCATION_URL_PRIMARY + "&range=A:Z",
-    ];
+  function makeNodeId(depth, text, parentId) {
+    // stable id by depth/parent/text
+    const base = String(text || "").trim();
+    if (!base) return null;
+    return depth + "::" + parentId + "::" + base;
+  }
 
-    for (const u of locPrimaryCandidates) {
-      try {
-        const r = await fetch(u, { cache: "no-store" });
-        if (!r.ok) continue;
-        const t = await r.text();
-        if (t && t.trim().length > 0) {
-          text = t;
-          break;
+  function buildTree(rows) {
+    // expect header: L1, L2, L3 (or similar)
+    // we treat columns 0..2 as depth 1..3
+    nodesById.clear();
+    children.clear();
+    label.clear();
+    parent.clear();
+    depthById.clear();
+    pathById.clear();
+
+    nodesById.set(ROOT_ID, { id: ROOT_ID, label: "ROOT", depth: 0 });
+    label.set(ROOT_ID, "ROOT");
+    depthById.set(ROOT_ID, 0);
+
+    for (let r = 1; r < rows.length; r++) {
+      const cols = rows[r] || [];
+      const l1 = (cols[0] || "").trim();
+      const l2 = (cols[1] || "").trim();
+      const l3 = (cols[2] || "").trim();
+
+      let p = ROOT_ID;
+
+      if (l1) {
+        const id1 = makeNodeId(1, l1, ROOT_ID);
+        if (!nodesById.has(id1)) {
+          nodesById.set(id1, { id: id1, label: l1, depth: 1 });
+          label.set(id1, l1);
+          parent.set(id1, ROOT_ID);
+          depthById.set(id1, 1);
+          ensureChild(ROOT_ID, id1);
         }
-      } catch (_) {}
-    }
-
-    // Fallback（同階層の location.csv）
-    if (!text) {
-      try {
-        const r2 = await fetch(LOCATION_URL_FALLBACK, { cache: "no-store" });
-        if (r2.ok) text = await r2.text();
-      } catch (_) {}
-    }
-
-    if (!text) {
-      locReady = false;
-      locDebugMessage = "location.csv を読み込めませんでした（URL/gid を確認してください）";
-      renderLocAreas();
-      return;
-    }
-
-    const lines = text.trim().split(/\r?\n/);
-    if (!lines.length) {
-      locReady = false;
-      locDebugMessage = "location.csv が空です";
-      renderLocAreas();
-      return;
-    }
-
-    // ヘッダー判定（2列目/3列目が数値でないならヘッダー扱い）
-    let start = 0;
-    try {
-      const head = csvParseLine(lines[0]);
-      const lat = parseFloat((head[1] || "").replace(/[−–‐]/g, "-"));
-      const lng = parseFloat((head[2] || "").replace(/[−–‐]/g, "-"));
-      if (isNaN(lat) || isNaN(lng)) start = 1;
-    } catch (_) {}
-
-    const gSet = new Set();
-    const childMap = new Map();
-
-    // 列数不足チェック（最低でもHまで必要）
-    try {
-      const firstData = csvParseLine(lines[Math.min(start, lines.length - 1)]);
-      if ((firstData || []).length <= LOC_H_INDEX) {
-        locDebugMessage =
-          "location.csv の列数が想定より少ないため、G/H を読み取れません（公開CSVにG/Hが含まれているか確認してください）";
+        p = id1;
       }
-    } catch (_) {}
 
-    for (let i = start; i < lines.length; i++) {
-      const parts = csvParseLine(lines[i]);
+      if (l2) {
+        const id2 = makeNodeId(2, l2, p);
+        if (!nodesById.has(id2)) {
+          nodesById.set(id2, { id: id2, label: l2, depth: 2 });
+          label.set(id2, l2);
+          parent.set(id2, p);
+          depthById.set(id2, 2);
+          ensureChild(p, id2);
+        }
+        p = id2;
+      }
 
-      // 行ごとに列数が足りない場合はスキップ
-      if (!parts || parts.length <= LOC_G_INDEX) continue;
-
-      const g = normalize(parts[LOC_G_INDEX]);
-      const h = parts.length > LOC_H_INDEX ? normalize(parts[LOC_H_INDEX]) : "";
-
-      if (!g) continue;
-
-      gSet.add(g);
-      if (!childMap.has(g)) childMap.set(g, new Set());
-      if (h) childMap.get(g).add(h);
-
-      label.set("loc::g::" + g, g);
-      if (h) label.set("loc::h::" + g + "::" + h, h);
+      if (l3) {
+        const id3 = makeNodeId(3, l3, p);
+        if (!nodesById.has(id3)) {
+          nodesById.set(id3, { id: id3, label: l3, depth: 3 });
+          label.set(id3, l3);
+          parent.set(id3, p);
+          depthById.set(id3, 3);
+          ensureChild(p, id3);
+        }
+        p = id3;
+      }
     }
 
-    locGList = Array.from(gSet).sort((a, b) => a.localeCompare(b, "ja"));
-    locChildren = childMap;
-    locOpenG = locOpenG && childMap.has(locOpenG) ? locOpenG : null;
-
-    locReady = true;
-    renderLocAreas();
-  }
-
-  // 第1カテゴリ（G）: 第1カラムに表示
-  // 第2カテゴリ（H）: 第1カテゴリ選択時に第2カラムに表示
-  function renderLocAreas() {
-    if (!locAreaG) return;
-
-    // --- G（第1） ---
-    locAreaG.innerHTML = "";
-    locAreaG.style.marginTop = "10px";
-
-    // 「追加カテゴリ（第1）」は表示しない（要望）
-    // ただしデバッグ表示は壊さない範囲で残す
-    if (locDebugMessage) {
-      const msg0 = document.createElement("div");
-      msg0.style.opacity = "0.65";
-      msg0.style.padding = "6px 2px";
-      msg0.style.fontSize = "12px";
-      msg0.textContent = locDebugMessage;
-      locAreaG.appendChild(msg0);
-    }
-
-    if (!locReady) {
-      const msg = document.createElement("div");
-      msg.style.opacity = "0.7";
-      msg.style.padding = "6px 2px";
-      msg.textContent = "読み込み中…";
-      locAreaG.appendChild(msg);
-      // H側も空にしておく
-      const hArea = ensureLocAreaHExists();
-      hArea.innerHTML = "";
-      return;
-    }
-
-    if (!locGList.length) {
-      const msg = document.createElement("div");
-      msg.style.opacity = "0.7";
-      msg.style.padding = "6px 2px";
-      msg.textContent = "追加カテゴリがありません";
-      locAreaG.appendChild(msg);
-    } else {
-      // G一覧（クリックで H を切替、チェックで選択）
-      locGList.forEach((g) => {
-        const id = "loc::g::" + g;
-        const row = makeLocGRow(id, g);
-        locAreaG.appendChild(row);
-      });
-    }
-
-    // --- H（第2） ---
-    const hArea = ensureLocAreaHExists();
-    hArea.innerHTML = "";
-    hArea.style.marginTop = "10px";
-
-    // 「追加カテゴリ（第2）」の見出しは残す（必要ならここも消せます）
-    const hR = document.createElement("h3");
-    hR.textContent = "追加カテゴリ（第2）";
-    hArea.appendChild(hR);
-
-    if (!locOpenG) {
-      const msg = document.createElement("div");
-      msg.style.opacity = "0.7";
-      msg.style.padding = "6px 2px";
-      msg.textContent = "第1カテゴリを選択してください";
-      hArea.appendChild(msg);
-      return;
-    }
-
-    const setH = locChildren.get(locOpenG) || new Set();
-    const list = Array.from(setH).sort((a, b) => a.localeCompare(b, "ja"));
-
-    if (!list.length) {
-      const msg = document.createElement("div");
-      msg.style.opacity = "0.7";
-      msg.style.padding = "6px 2px";
-      msg.textContent = "第2カテゴリはありません";
-      hArea.appendChild(msg);
-      return;
-    }
-
-    list.forEach((h) => {
-      const id = "loc::h::" + locOpenG + "::" + h;
-      const row = makeLocHRow(id, h);
-      hArea.appendChild(row);
+    // build pathById
+    nodesById.forEach((node) => {
+      if (!node || !node.id) return;
+      const arr = [];
+      let cur = node.id;
+      while (cur && cur !== ROOT_ID) {
+        const p = parent.get(cur);
+        if (!p) break;
+        arr.push(p);
+        cur = p;
+      }
+      // ancestors from root outward
+      arr.reverse();
+      pathById.set(node.id, arr);
     });
   }
 
-  function makeLocGRow(id, text) {
-    const row = document.createElement("div");
-    row.className = "node";
-
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = selected.has(id);
-
-    const lab = document.createElement("div");
-    lab.className = "label";
-    lab.textContent = text;
-
-    const chev = document.createElement("div");
-    chev.className = "chev";
-    chev.textContent = "›";
-
-    row.appendChild(cb);
-    row.appendChild(lab);
-    row.appendChild(chev);
-
-    row.addEventListener("click", (e) => {
-      // checkboxクリックは別で処理
-      if (e.target === cb) return;
-      locOpenG = text;
-      renderColumns(); // 第2カラム側へ反映
-    });
-
-    cb.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const on = cb.checked;
-
-      // Gチェック: 配下HもまとめてON/OFF
-      if (on) selected.add(id);
-      else selected.delete(id);
-
-      const kids = locChildren.get(text) || new Set();
-      kids.forEach((h) => {
-        const hid = "loc::h::" + text + "::" + h;
-        if (on) selected.add(hid);
-        else selected.delete(hid);
-      });
-
-      // チェック操作したら、そのGを開いた扱いにする（UX）
-      locOpenG = text;
-
-      saveSelection();
-      setBadge();
-      renderColumns();
-      schedulePostSelected();
-    });
-
-    return row;
+  function getChildren(id) {
+    return Array.from(children.get(id) || []);
   }
 
-  function makeLocHRow(id, text) {
-    const row = document.createElement("div");
-    row.className = "node";
-
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = selected.has(id);
-
-    const lab = document.createElement("div");
-    lab.className = "label";
-    lab.textContent = text;
-
-    const chev = document.createElement("div");
-    chev.className = "chev";
-    chev.textContent = "";
-
-    row.appendChild(cb);
-    row.appendChild(lab);
-    row.appendChild(chev);
-
-    cb.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const on = cb.checked;
-      if (on) selected.add(id);
-      else selected.delete(id);
-
-      saveSelection();
-      setBadge();
-      renderColumns();
-      schedulePostSelected();
-    });
-
-    return row;
+  function nodeHasChildren(id) {
+    const set = children.get(id);
+    return set && set.size > 0;
   }
 
-  function setBadge() {
+  // ----------------------------
+  //  Selection logic
+  // ----------------------------
+  function setNodeAndDescendants(id, on) {
+    if (!id || id === ROOT_ID) return;
+
+    if (on) selected.add(id);
+    else selected.delete(id);
+
+    const kids = getChildren(id);
+    kids.forEach((kid) => setNodeAndDescendants(kid, on));
+  }
+
+  function anySelected() {
+    return selected && selected.size > 0;
+  }
+
+  function loadSelection() {
     try {
-      badge.textContent = `(${selected.size})`;
-      badge.style.display = "inline";
+      const raw = localStorage.getItem(STORAGE_KEY_TREE);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          selected = new Set(arr);
+          hadSavedSelection = arr.length > 0;
+        }
+      }
     } catch (e) {}
   }
 
   function saveSelection() {
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(Array.from(selected).filter((id) => id && id !== ROOT_ID && id !== EMPTY_ID))
-      );
+      localStorage.setItem(STORAGE_KEY_TREE, JSON.stringify(Array.from(selected)));
+      localStorage.setItem(STORAGE_KEY_APPLIED_MODE, anySelected() ? MODE_TREE : MODE_NONE);
     } catch (e) {}
   }
 
-  function loadSelection() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) {
-        selected = new Set(
-          arr
-            .map((x) => String(x))
-            .filter((id) => id && id !== ROOT_ID && id !== EMPTY_ID)
-        );
-        hadSavedSelection = selected.size > 0;
-      }
-    } catch (e) {}
+  function setBadge() {
+
+    if (!badgeEl) return;
+    const n = selected.size;
+    badgeEl.textContent = "(" + n + ")";
   }
 
   // ----------------------------
-  //  Tree build / selection helpers
+  //  Indeterminate states
   // ----------------------------
-  function addNode(nodeId, nodeLabel, depth, parentId) {
-    if (!nodesById.has(nodeId)) {
-      nodesById.set(nodeId, {
-        id: nodeId,
-        label: nodeLabel,
-        depth,
-        parentId,
-        children: new Set(),
-      });
-    }
-    label.set(nodeId, nodeLabel);
-    parent.set(nodeId, parentId);
-    depthById.set(nodeId, depth);
-
-    const kids = ensureSet(childrenByParent, parentId);
-    kids.add(nodeId);
-
-    const pNode = nodesById.get(parentId);
-    if (pNode) pNode.children.add(nodeId);
-
-    const ancestors = [];
-    let cur = nodeId;
-    while (cur && cur !== ROOT_ID) {
-      const p = parent.get(cur);
-      if (!p || p === ROOT_ID) break;
-      ancestors.unshift(p);
-      cur = p;
-    }
-    pathById.set(nodeId, ancestors);
-  }
-
-  function getChildren(parentId) {
-    const s = childrenByParent.get(parentId || ROOT_ID);
-    return s ? Array.from(s) : [];
-  }
-
-  function nodeHasChildren(nodeId) {
-    const s = childrenByParent.get(nodeId);
-    return s && s.size > 0;
-  }
-
-  function setNodeAndDescendants(nodeId, on) {
-    if (!nodeId || nodeId === ROOT_ID || nodeId === EMPTY_ID) return;
-    if (on) selected.add(nodeId);
-    else selected.delete(nodeId);
-
-    const kids = childrenByParent.get(nodeId);
-    if (!kids) return;
-    kids.forEach((k) => setNodeAndDescendants(k, on));
-  }
-
   function computeIndeterminateStates() {
-    const checked = new Set();
+    const checked = new Set(selected);
     const indeterminate = new Set();
 
-    function walk(nodeId) {
-      const kids = childrenByParent.get(nodeId);
-      if (!kids || kids.size === 0) {
-        const isChecked = selected.has(nodeId);
-        if (isChecked) checked.add(nodeId);
-        return { any: isChecked, all: isChecked };
-      }
+    // post-order traversal: compute each node if partially selected
+    // We'll compute for all nodes by depth descending.
+    const nodes = Array.from(nodesById.values()).filter((n) => n.id !== ROOT_ID);
+    nodes.sort((a, b) => b.depth - a.depth);
 
-      let any = false;
-      let all = true;
-      kids.forEach((k) => {
-        const r = walk(k);
-        any = any || r.any;
-        all = all && r.all;
+    nodes.forEach((node) => {
+      const kids = getChildren(node.id);
+      if (!kids.length) return;
+
+      let anyOn = false;
+      let anyOff = false;
+
+      kids.forEach((kid) => {
+        if (checked.has(kid) || indeterminate.has(kid)) anyOn = true;
+        else anyOff = true;
       });
 
-      const selfChecked = selected.has(nodeId);
-      if (selfChecked) {
-        any = true;
-      } else {
-        all = false;
-      }
+      if (anyOn && anyOff) indeterminate.add(node.id);
+      // if all kids on, parent becomes checked too (visual)
+      if (anyOn && !anyOff) checked.add(node.id);
+    });
 
-      if (selfChecked) checked.add(nodeId);
-      if (any && !all) indeterminate.add(nodeId);
-      return { any, all };
-    }
-
-    getChildren(ROOT_ID).forEach((id) => walk(id));
     return { checked, indeterminate };
   }
 
   // ----------------------------
-  //  UI build
+  //  Render
   // ----------------------------
   function clearColumns() {
-    while (colWrap.firstChild) colWrap.removeChild(colWrap.firstChild);
+    if (colWrap) colWrap.innerHTML = "";
   }
 
-  function createColumn(title) {
+  function createColumn(titleText) {
     const col = document.createElement("div");
     col.className = "column";
+
     const h = document.createElement("h3");
-    h.textContent = title || "";
+    h.textContent = titleText || " ";
     col.appendChild(h);
     return col;
   }
 
-  function renderList(colEl, parentId, checked, indeterminate) {
+  function renderList(colEl, parentId, depth, checked, indeterminate) {
     if (!parentId) return;
 
     const kids = getChildren(parentId)
       .map((id) => nodesById.get(id))
       .filter(Boolean);
 
+    // stable sort by label
     kids.sort((a, b) => (a.label || "").localeCompare(b.label || "", "ja"));
 
     kids.forEach((node) => {
@@ -622,12 +369,27 @@
         e.stopPropagation();
         const on = cb.checked;
         setNodeAndDescendants(node.id, on);
+
+        // ★ チェック操作でも「開いているパス」を更新する
+        //   （例: 1カラム目で別カテゴリにチェックを入れたら、2カラム目もそのカテゴリに切り替える）
+        if (node.depth <= 2) {
+          const depthIdx = node.depth - 1;
+          path = path.slice(0, depthIdx);
+          path[depthIdx] = node.id;
+          if (!hasKids) {
+            path = path.slice(0, depthIdx + 1);
+          }
+        }
+
         saveSelection();
         setBadge();
         renderColumns();
+
+        // ★ applyBtn が無い構成なら「自動適用」
         schedulePostSelected();
       });
 
+      // row click: open next column (path)
       row.addEventListener("click", () => {
         const depthIdx = node.depth - 1;
         path = path.slice(0, depthIdx);
@@ -657,86 +419,304 @@
 
     const { checked, indeterminate } = computeIndeterminateStates();
 
-    const col1 = createColumn("カテゴリ");
-    renderList(col1, ROOT_ID, checked, indeterminate);
+    const cols = [];
 
-    // 第1カテゴリ（G）: 第1カラムに表示（見出しは消す）
-    if (locAreaG) {
-      if (locAreaG.parentNode) locAreaG.parentNode.removeChild(locAreaG);
-      locAreaG.classList.add("loc-area-in-col1");
-      col1.appendChild(locAreaG);
-    }
+    const col1 = createColumn("カテゴリ");
+    renderList(col1, ROOT_ID, 1, checked, indeterminate);
+    cols.push(col1);
 
     const l1 = path[0] || null;
-    const col2 = createColumn(l1 ? label.get(l1) || " " : " ");
-    renderList(col2, l1, checked, indeterminate);
-
-    // 第2カテゴリ（H）: 第2カラムに表示（第1カテゴリ選択時に表示）
-    if (locAreaG) {
-      const hArea = ensureLocAreaHExists();
-      if (hArea.parentNode) hArea.parentNode.removeChild(hArea);
-      hArea.classList.add("loc-area-in-col2");
-      col2.appendChild(hArea);
-    }
+    const showL1 = l1 && nodeHasChildren(l1); // ★ 1カラム目が終端(子なし)なら2カラム目のタイトルに出さない
+    const col2 = createColumn(showL1 ? label.get(l1) || " " : " ");
+    renderList(col2, showL1 ? l1 : null, 2, checked, indeterminate);
+    cols.push(col2);
 
     const l2 = path[1] || null;
-    const showL2 = l2 && nodeHasChildren(l2);
+    const showL2 = l2 && nodeHasChildren(l2); // ★ 2カラム目が終端(子なし)なら3カラム目のタイトルに出さない
     const col3 = createColumn(showL2 ? label.get(l2) || " " : " ");
-    renderList(col3, showL2 ? l2 : null, checked, indeterminate);
+    renderList(col3, showL2 ? l2 : null, 3, checked, indeterminate);
+    cols.push(col3);
 
-    colWrap.appendChild(col1);
-    colWrap.appendChild(col2);
-    colWrap.appendChild(col3);
+    cols.forEach((c) => colWrap.appendChild(c));
 
-    // 追加カテゴリのUIもここで再描画（配置先が変わるため）
-    if (locAreaG) {
-      renderLocAreas();
-    }
-
+    // ★ クリアボタンは常時表示（選択が無い時だけ無効化）
     if (clearBtn) {
       clearBtn.style.display = "";
-      clearBtn.removeAttribute("aria-hidden");
-      clearBtn.removeAttribute("tabindex");
-
-      const hasSelection = selected.size > 0;
-      clearBtn.disabled = !hasSelection;
-      clearBtn.style.opacity = hasSelection ? "1" : "0.55";
-      clearBtn.style.pointerEvents = hasSelection ? "auto" : "none";
+      clearBtn.disabled = !anySelected() && locSelected.size === 0;
+      clearBtn.setAttribute("aria-hidden", "false");
+      clearBtn.tabIndex = 0;
     }
   }
 
   // ----------------------------
-  //  Earth messaging
+  //  location.csv (G/H) 追加カテゴリ
   // ----------------------------
-  function postSelected() {
-    const tags = Array.from(selected)
-      .map((id) => label.get(id) || id)
-      .map((s) => String(s).trim())
+  // 第2カテゴリ：G=親 / H=子
+  // 選択状態は locSelected(Set<string>) で保持
+  let locReady = false;
+  let locSelected = new Set(); // ids: loc::g::... / loc::h::...
+  let locParents = new Set(); // Set<G>
+  let locChildren = new Map(); // G -> Set<H>
+  let locOpenG = null; // 現在開いている G
+
+  function loadLocSelection() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_LOC);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) locSelected = new Set(arr);
+      }
+    } catch (e) {}
+  }
+
+  function saveLocSelection() {
+    try {
+      localStorage.setItem(STORAGE_KEY_LOC, JSON.stringify(Array.from(locSelected)));
+      localStorage.setItem(
+        STORAGE_KEY_APPLIED_MODE,
+        anySelected() || locSelected.size ? MODE_TREE : MODE_NONE
+      );
+    } catch (e) {}
+  }
+
+  function parseLocationForGH(rows) {
+    // location.csv: header expects ... G/H as 7th/8th columns (index 6/7)
+    // A:titleJp B:lat C:lng D:url E:status F:(unused) G:TagG H:TagH I.. etc
+    locParents.clear();
+    locChildren.clear();
+
+    if (!rows || rows.length < 2) return;
+
+    for (let r = 1; r < rows.length; r++) {
+      const cols = rows[r] || [];
+      const g = (cols[6] || "").trim();
+      const h = (cols[7] || "").trim();
+
+      if (!g) continue;
+
+      locParents.add(g);
+
+      if (!locChildren.has(g)) locChildren.set(g, new Set());
+      if (h) locChildren.get(g).add(h);
+    }
+  }
+
+  function makeLocUI() {
+    if (!locArea) return;
+
+    locArea.innerHTML = "";
+
+    // "追加カテゴリ（第2）" のみ表示する（第1は表示しない）
+    const title = document.createElement("div");
+    title.style.fontWeight = "700";
+    title.style.fontSize = "14px";
+    title.style.margin = "10px 0 6px";
+    title.textContent = "追加カテゴリ（第2）";
+    locArea.appendChild(title);
+
+    if (!locReady) {
+      const msg = document.createElement("div");
+      msg.style.padding = "6px 0 12px";
+      msg.style.opacity = "0.75";
+      msg.textContent = "読み込み中…";
+      locArea.appendChild(msg);
+      return;
+    }
+
+    // 2カラムのリスト領域
+    const wrap = document.createElement("div");
+    wrap.style.display = "flex";
+    wrap.style.gap = "14px";
+    wrap.style.marginTop = "6px";
+    wrap.style.alignItems = "stretch";
+
+    // left = G list
+    const left = document.createElement("div");
+    left.style.flex = "0 0 260px";
+    left.style.width = "260px";
+    left.style.border = "1px solid rgba(0,0,0,0.08)";
+    left.style.borderRadius = "12px";
+    left.style.padding = "10px";
+    left.style.background = "rgba(255,255,255,0.96)";
+    left.style.overflow = "auto";
+
+    // right = H list
+    const right = document.createElement("div");
+    right.style.flex = "0 0 260px";
+    right.style.width = "260px";
+    right.style.border = "1px solid rgba(0,0,0,0.08)";
+    right.style.borderRadius = "12px";
+    right.style.padding = "10px";
+    right.style.background = "rgba(255,255,255,0.96)";
+    right.style.overflow = "auto";
+
+    wrap.appendChild(left);
+    wrap.appendChild(right);
+    locArea.appendChild(wrap);
+
+    // render left parents
+    const gs = Array.from(locParents);
+    gs.sort((a, b) => a.localeCompare(b, "ja"));
+
+    gs.forEach((g) => {
+      const id = "loc::g::" + g;
+      const row = makeLocRow(id, g, true);
+      // active highlight
+      if (locOpenG === g) row.style.background = "rgba(50,112,166,0.10)";
+
+      row.addEventListener("click", () => {
+        locOpenG = g;
+        makeLocUI();
+      });
+      left.appendChild(row);
+    });
+
+    // render right children for selected G
+    if (!locOpenG) locOpenG = gs[0] || null;
+
+    const hs = Array.from(locChildren.get(locOpenG) || []);
+    hs.sort((a, b) => a.localeCompare(b, "ja"));
+    hs.forEach((h) => {
+      const id = "loc::h::" + locOpenG + "::" + h;
+      const row = makeLocRow(id, h, false);
+      right.appendChild(row);
+    });
+
+    locArea.appendChild(left);
+    locArea.appendChild(right);
+  }
+
+  function makeLocRow(id, text, isG) {
+    // 既存の .node デザインに合わせる（renderColumns() と同系統）
+    const row = document.createElement("div");
+    row.className = "node";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = locSelected.has(id);
+
+    const lab = document.createElement("div");
+    lab.className = "label";
+    lab.textContent = text || "";
+
+    const chev = document.createElement("div");
+    chev.className = "chev";
+    chev.textContent = isG ? "›" : "";
+
+    row.appendChild(cb);
+    row.appendChild(lab);
+    row.appendChild(chev);
+
+    cb.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const on = cb.checked;
+
+      // GをON/OFFしたら、その配下のHもまとめてON/OFF（“Gの子”ルール）
+      if (id.startsWith("loc::g::")) {
+        const g = text;
+
+        if (on) locSelected.add(id);
+        else locSelected.delete(id);
+
+        const kids = locChildren.get(g) || new Set();
+        kids.forEach((h) => {
+          const hid = "loc::h::" + g + "::" + h;
+          if (on) locSelected.add(hid);
+          else locSelected.delete(hid);
+        });
+      } else {
+        // H の単独ON/OFF
+        if (on) locSelected.add(id);
+        else locSelected.delete(id);
+      }
+
+      saveLocSelection();
+      setBadge();
+      renderColumns(); // tree側の UI もインディターミネート状態が変わる可能性があるので再描画
+      makeLocUI();
+
+      // ★ applyBtn が無い構成なら「自動適用」
+      schedulePostSelected();
+    });
+
+    return row;
+  }
+
+  // ----------------------------
+  //  Posting selected tags to earth iframe
+  // ----------------------------
+  let postTimer = null;
+
+  function getSelectedPayload() {
+    // tree selected labels
+    const treeLabels = Array.from(selected)
+      .map((id) => label.get(id))
       .filter(Boolean);
 
-    try {
-      iframe.contentWindow.postMessage({ type: "dd-tags-apply", tags }, "*");
-    } catch (e) {
-      console.warn(e);
-    }
+    // loc selected labels: for h we store only H text; for g we store G text
+    const locLabels = Array.from(locSelected)
+      .map((id) => {
+        // loc::g::G
+        if (id.startsWith("loc::g::")) {
+          return id.replace("loc::g::", "");
+        }
+        // loc::h::G::H
+        if (id.startsWith("loc::h::")) {
+          const parts = id.split("::");
+          // ["loc", "h", "G", "H..."]
+          return parts.slice(3).join("::");
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    return {
+      mode: anySelected() || locSelected.size ? MODE_TREE : MODE_NONE,
+      tree: treeLabels,
+      loc: locLabels,
+    };
   }
 
-  function tryAutoApply() {
+  function postSelectedToEarth() {
+    const iframe = document.getElementById("webxr-iframe");
+    if (!iframe || !iframe.contentWindow) return;
+
+    const payload = getSelectedPayload();
+    iframe.contentWindow.postMessage({ type: "dd-tags-apply", tags: payload }, "*");
+  }
+
+  function schedulePostSelected() {
+    // applyBtn がある場合は、基本は手動適用
+    // ただし applyBtn が無い UI 構成では、操作の度に適用
+    if (applyBtn) return;
+
+    if (postTimer) clearTimeout(postTimer);
+    postTimer = setTimeout(() => {
+      postSelectedToEarth();
+    }, 150);
+  }
+
+  function scheduleAutoApplyIfNeeded() {
+    // 1) saved selection exists
+    // 2) earth ready
+    // 3) not already auto-applied
     if (autoApplied) return;
+    if (!hadSavedSelection && locSelected.size === 0) return;
     if (!earthReady) return;
-    if (!treeReady) return;
-    if (!hadSavedSelection) return;
 
     autoApplied = true;
-    postSelected();
+    // micro delay
+    setTimeout(() => {
+      postSelectedToEarth();
+    }, 250);
   }
 
+  // listen for earth ready
   window.addEventListener("message", (ev) => {
-    const data = ev && ev.data;
-    if (!data || typeof data !== "object") return;
-    if (data.type === "dd-earth-ready") {
+    if (!ev || !ev.data) return;
+    if (ev.data.type === "dd-earth-ready") {
       earthReady = true;
-      tryAutoApply();
+      scheduleAutoApplyIfNeeded();
     }
   });
 
@@ -744,183 +724,109 @@
   //  Modal open/close
   // ----------------------------
   function openModal() {
-    backdrop.style.display = "flex";
-    backdrop.setAttribute("aria-hidden", "false");
-    btn.setAttribute("aria-expanded", "true");
+    if (!backdrop) return;
     backdrop.classList.add("open");
-
-    document.body.style.overflow = "hidden";
-
-    modal.style.visibility = "hidden";
-    modal.style.left = "0px";
-    modal.style.top = "0px";
-
-    requestAnimationFrame(() => {
-      try {
-        const b = btn.getBoundingClientRect();
-        const m = modal.getBoundingClientRect();
-
-        let left = Math.round(b.left);
-        let top = Math.round(b.top);
-
-        const margin = 8;
-        if (left + m.width > window.innerWidth - margin) {
-          left = Math.max(margin, Math.round(window.innerWidth - margin - m.width));
-        }
-        if (top + m.height > window.innerHeight - margin) {
-          top = Math.max(margin, Math.round(window.innerHeight - margin - m.height));
-        }
-
-        modal.style.left = left + "px";
-        modal.style.top = top + "px";
-      } catch (e) {
-      } finally {
-        modal.style.visibility = "visible";
-      }
-    });
-
-    renderColumns();
+    backdrop.setAttribute("aria-hidden", "false");
   }
 
   function closeModal() {
-    backdrop.setAttribute("aria-hidden", "true");
-    btn.setAttribute("aria-expanded", "false");
+    if (!backdrop) return;
     backdrop.classList.remove("open");
-    backdrop.style.display = "none";
-
-    document.body.style.overflow = "";
-    modal.style.visibility = "";
+    backdrop.setAttribute("aria-hidden", "true");
   }
 
-  // ----------------------------
-  //  Events
-  // ----------------------------
-  btn.addEventListener("click", openModal);
-  closeBtn.addEventListener("click", closeModal);
+  if (openBtn) openBtn.addEventListener("click", openModal);
+  if (closeBtn) closeBtn.addEventListener("click", closeModal);
+  if (backdrop)
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) closeModal();
+    });
 
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) closeModal();
-  });
-
-  if (applyBtn) {
+  // apply / clear
+  if (applyBtn)
     applyBtn.addEventListener("click", () => {
-      saveSelection();
-      setBadge();
-      postSelected();
+      postSelectedToEarth();
       closeModal();
     });
-  }
-  if (clearBtn) {
+
+  if (clearBtn)
     clearBtn.addEventListener("click", () => {
+      // clear both
       selected = new Set();
+      locSelected = new Set();
+      path = [];
       saveSelection();
+      saveLocSelection();
       setBadge();
       renderColumns();
-      schedulePostSelected();
-    });
-  }
+      makeLocUI();
 
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && backdrop.classList.contains("open")) {
-      closeModal();
-    }
-  });
+      // auto apply when clear
+      postSelectedToEarth();
+    });
 
   // ----------------------------
-  //  Load tree (CSV)
+  //  Boot
   // ----------------------------
-  async function fetchCsv(url) {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error("fetch failed: " + res.status);
-    return await res.text();
-  }
+  async function boot() {
+    if (!colWrap) return;
 
-  function buildTreeFromCsv(csvText) {
-    nodesById.clear();
-    childrenByParent.clear();
-    label.clear();
-    parent.clear();
-    depthById.clear();
-    pathById.clear();
+    loadSelection();
+    loadLocSelection();
+    setBadge();
 
-    nodesById.set(ROOT_ID, {
-      id: ROOT_ID,
-      label: "ROOT",
-      depth: 0,
-      parentId: null,
-      children: new Set(),
-    });
-    label.set(ROOT_ID, "ROOT");
-    parent.set(ROOT_ID, null);
-    depthById.set(ROOT_ID, 0);
+    tryMarkEarthReadyByIframeLoad();
 
-    const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    if (lines.length <= 1) return;
-
-    const header = csvParseLine(lines[0]).map((s) => normalize(s).toLowerCase());
-    const idx1 = header.indexOf("level1");
-    const idx2 = header.indexOf("level2");
-    const idx3 = header.indexOf("level3");
-    if (idx1 < 0) return;
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols = csvParseLine(lines[i]);
-      const l1 = normalize(cols[idx1]);
-      const l2 = idx2 >= 0 ? normalize(cols[idx2]) : "";
-      const l3 = idx3 >= 0 ? normalize(cols[idx3]) : "";
-
-      if (!l1) continue;
-
-      const a = l1.toLowerCase();
-      const b = (l2 || "").toLowerCase();
-      const c = (l3 || "").toLowerCase();
-      if (a === "level1" && (b === "level2" || b === "") && (c === "level3" || c === "")) {
-        continue;
-      }
-
-      const id1 = "L1|" + safeIdFromLabel(l1);
-      addNode(id1, l1, 1, ROOT_ID);
-
-      if (l2) {
-        const id2 = id1 + "|L2|" + safeIdFromLabel(l2);
-        addNode(id2, l2, 2, id1);
-
-        if (l3) {
-          const id3 = id2 + "|L3|" + safeIdFromLabel(l3);
-          addNode(id3, l3, 3, id2);
-        }
-      }
-    }
-  }
-
-  async function loadTree() {
-    treeReady = false;
+    // load tree
     try {
-      const csv = await fetchCsv(TREE_URL_PRIMARY);
-      buildTreeFromCsv(csv);
+      const rows = await fetchCSV(TREE_CSV_URL);
+      buildTree(rows);
       treeReady = true;
-      await loadLocationCats();
       renderColumns();
-      tryAutoApply();
-      return;
-    } catch (e) {}
-
-    try {
-      const csv = await fetchCsv(TREE_URL_FALLBACK);
-      buildTreeFromCsv(csv);
-      treeReady = true;
-      await loadLocationCats();
-      renderColumns();
-      tryAutoApply();
-    } catch (e2) {
+    } catch (e) {
       treeReady = false;
+      clearColumns();
+      const msg = document.createElement("div");
+      msg.style.padding = "10px";
+      msg.style.color = "crimson";
+      msg.textContent = "tree.csv の読み込みに失敗しました: " + e.message;
+      colWrap.appendChild(msg);
     }
+
+    // load location
+    try {
+      const rows2 = await fetchCSV(LOCATION_CSV_URL);
+      parseLocationForGH(rows2);
+      locReady = true;
+      makeLocUI();
+    } catch (e) {
+      locReady = false;
+      if (locArea) {
+        locArea.innerHTML = "";
+        const title = document.createElement("div");
+        title.style.fontWeight = "700";
+        title.style.fontSize = "14px";
+        title.style.margin = "10px 0 6px";
+        title.textContent = "追加カテゴリ（第2）";
+        locArea.appendChild(title);
+
+        const msg = document.createElement("div");
+        msg.style.padding = "6px 0 12px";
+        msg.style.color = "crimson";
+        msg.textContent =
+          "location.csv の列数が想定より少ないため、G/H を読み取れません（公開CSVに G/H が含まれているか確認してください）";
+        locArea.appendChild(msg);
+      }
+    }
+
+    // auto apply if possible
+    scheduleAutoApplyIfNeeded();
   }
 
-  // ----------------------------
-  //  Init
-  // ----------------------------
-  loadSelection();
-  setBadge();
-  loadTree();
+  // ensure DOM ready
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
 })();
