@@ -1,744 +1,836 @@
 (function () {
-  // =========================================================
-  //  Tag Filter Modal (tree.csv) + Additional Categories (location.csv G/H)
-  //  - "絞り込み" は tree.csv の階層カテゴリ + location.csv の追加カテゴリ(G/H) を同時に扱う
-  //  - 既存UI/デザインを壊さずに、G/H を第2カラムで扱えるようにする
-  // =========================================================
+  // ----------------------------
+  //  Tag Filter Modal (tree.csv) + Miss Notice (location.csv G/H)
+  //  - "絞り込み" と "見逃し注意" は排他（どちらか一方だけ適用）
+  //  - 選択数バッジ表示は不要（CSSで非表示）
+  // ----------------------------
 
   const STORAGE_KEY_TREE = "dd_filter_tree_selected_v1";
-  const STORAGE_KEY_LOC = "dd_filter_loc_selected_v1";
-  const STORAGE_KEY_APPLIED_MODE = "dd_filter_applied_mode_v1";
+  const STORAGE_KEY_MISS = "dd_filter_miss_selected_v1";
+  const STORAGE_KEY_APPLIED_MODE = "dd_filter_applied_mode_v1"; // 'tree' | 'miss' | 'none'
+  const STORAGE_KEY_SELECTED_TAGS = "dd_selected_tags_v1";
+
+  // ★ Google Sheets「ウェブに公開」(CSV) を読む
+  // tree.csv … 絞り込み UI 用（階層）
+  // location.csv … 見逃し注意 UI 用（追加カテゴリ）
+  // ※ここはあなたの環境に合わせて既存値を維持してください
+  const TREE_CSV_URL = "tree.csv";
+  const LOCATION_CSV_URL = "location.csv";
 
   const MODE_TREE = "tree";
+  const MODE_MISS = "miss";
   const MODE_NONE = "none";
 
-  const TREE_CSV_URL = "tree.csv"; // index.html と同階層
-  const LOCATION_CSV_URL = "location.csv"; // index.html と同階層
+  // ----------------------------
+  // state
+  // ----------------------------
+  const selected = new Set(); // 例: "tree::0::1::2" / "loc::g::xxx" / "loc::h::g::h"
+  const label = new Map(); // id -> 表示文字列
+  let appliedMode = MODE_NONE;
 
-  const btn = document.getElementById("tagFilterBtn");
-  if (!btn) return;
+  // Location (追加カテゴリ) の親子状態管理
+  const locGCheckboxEl = new Map(); // Map<locGId, HTMLInputElement>
+  const locGChildSelectedCount = new Map(); // Map<locGId, number>
+  const locGChildTotalCount = new Map(); // Map<locGId, number>
+  const locGImplicitSelected = new Set(); // Set<locGId> (H選択により暗黙選択)
 
-  // ---- state ----
-  const selected = new Set(); // id set
-  const labels = new Map(); // id -> label
+  function locGIdOf(gName) {
+    return `loc::g::${gName}`;
+  }
 
-  // tree structures
-  // treeRoot: Map<L1, Map<L2, Set<L3>>>
-  const treeRoot = new Map();
+  function bumpLocGChildCount(locGId, delta) {
+    const cur = locGChildSelectedCount.get(locGId) || 0;
+    const next = Math.max(0, cur + delta);
+    locGChildSelectedCount.set(locGId, next);
+  }
 
-  // location additional categories (G/H)
-  // locGSet: Set<G>
-  // locChildren: Map<G, Set<H>>
-  const locGSet = new Set();
-  const locChildren = new Map();
+  function updateLocGVisualState(locGId) {
+    const cb = locGCheckboxEl.get(locGId);
+    if (!cb) return;
+    const childSelected = locGChildSelectedCount.get(locGId) || 0;
+    const total = locGChildTotalCount.get(locGId) || 0;
+    // 子が1つでも選択されていて、親が明示チェックされていない場合は indeterminate を立てる
+    cb.indeterminate = childSelected > 0 && !selected.has(locGId);
+    // 明示チェックがOFFで、子選択がある場合は地球儀反映のため親を暗黙選択に加える
+    if (!selected.has(locGId) && childSelected > 0) {
+      locGImplicitSelected.add(locGId);
+    } else {
+      locGImplicitSelected.delete(locGId);
+    }
+    // もし親が明示チェックされているなら indeterminate は不要
+    if (selected.has(locGId)) cb.indeterminate = false;
+  }
 
-  // UI state
-  let openL1 = null;
-  let openL2 = null;
-  let locOpenG = null;
-
-  // UI elements (created on modal open)
-  let modal = null;
-  let overlay = null;
-  let badge = null;
-
-  // columns
-  let col1 = null;
-  let col2 = null;
-  let col3 = null;
-
-  // header buttons inside modal
-  let applyBtn = null;
-  let clearBtn = null;
-  let closeBtn = null;
-
-  // debounce postMessage
-  let postTimer = null;
-
-  // ---------------------------------------------------------
+  // ----------------------------
   // helpers
-  // ---------------------------------------------------------
-  function safeText(s) {
-    return (s || "").toString().trim();
+  // ----------------------------
+  function qs(sel, root = document) {
+    return root.querySelector(sel);
+  }
+  function qsa(sel, root = document) {
+    return Array.from(root.querySelectorAll(sel));
+  }
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function loadState() {
+    try {
+      const mode = localStorage.getItem(STORAGE_KEY_APPLIED_MODE);
+      if (mode === MODE_TREE || mode === MODE_MISS || mode === MODE_NONE) {
+        appliedMode = mode;
+      } else {
+        appliedMode = MODE_NONE;
+      }
+    } catch (e) {
+      appliedMode = MODE_NONE;
+    }
+
+    // どちらのモードでも selected は同じ Set に入れて扱う（表示切替で塗り替え）
+    // 起動時は最後に保存された tags を復元
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_SELECTED_TAGS);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          arr.forEach((id) => selected.add(id));
+        }
+      }
+    } catch (e) {}
+  }
+
+  function saveSelected() {
+    try {
+      localStorage.setItem(STORAGE_KEY_SELECTED_TAGS, JSON.stringify(Array.from(selected)));
+    } catch (e) {}
   }
 
   function setAppliedMode(mode) {
+    appliedMode = mode;
     try {
-      localStorage.setItem(STORAGE_KEY_APPLIED_MODE, mode);
+      localStorage.setItem(STORAGE_KEY_APPLIED_MODE, appliedMode);
     } catch (e) {}
   }
 
-  function getAppliedMode() {
-    try {
-      return localStorage.getItem(STORAGE_KEY_APPLIED_MODE) || MODE_NONE;
-    } catch (e) {
-      return MODE_NONE;
-    }
-  }
-
-  function saveSelection() {
-    // selected は tree と loc が混在しているので、prefix で分けて保存
-    const treeIds = [];
-    const locIds = [];
-    selected.forEach((id) => {
-      if (id.startsWith("tree::")) treeIds.push(id);
-      else if (id.startsWith("loc::")) locIds.push(id);
-    });
-
-    try {
-      localStorage.setItem(STORAGE_KEY_TREE, JSON.stringify(treeIds));
-      localStorage.setItem(STORAGE_KEY_LOC, JSON.stringify(locIds));
-    } catch (e) {}
-  }
-
-  function loadSelection() {
-    try {
-      const treeIds = JSON.parse(localStorage.getItem(STORAGE_KEY_TREE) || "[]");
-      const locIds = JSON.parse(localStorage.getItem(STORAGE_KEY_LOC) || "[]");
-      treeIds.forEach((id) => selected.add(id));
-      locIds.forEach((id) => selected.add(id));
-    } catch (e) {}
-  }
-
+  // ----------------------------
+  // postMessage to earth iframe
+  // ----------------------------
+  let postTimer = null;
   function schedulePostSelected() {
-    // applyBtn がある運用なら、明示的に適用で送る（既存挙動）
-    if (applyBtn) return;
-
     if (postTimer) clearTimeout(postTimer);
     postTimer = setTimeout(() => {
-      postSelected();
       postTimer = null;
-    }, 50);
+      postSelected();
+    }, 30);
   }
 
   function postSelected() {
-    const tags = Array.from(selected)
-      .map((id) => idToLabel(id))
-      .filter((v) => typeof v === "string" && v.trim().length > 0);
+    // earth.html へ送る payload は "tags" 互換を維持
+    // 追加カテゴリ(第2)だけ選択されても反映されるよう、親(第1)を暗黙的に含める
+    const allIds = new Set([...selected, ...locGImplicitSelected]);
+    const tags = Array.from(allIds)
+      .map((id) => label.get(id) || id)
+      .map((s) => String(s).trim())
+      .filter(Boolean);
 
     try {
-      // iframe(earth.html) 側へ通知
-      const iframe = document.getElementById("earthFrame");
-      if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage({ type: "dd_filter_tags", tags }, "*");
-      }
-    } catch (e) {
-      // no-op
-    }
+      localStorage.setItem("dd_selected_tags", JSON.stringify(tags));
+    } catch (e) {}
+
+    // iframe 探索
+    const frame = qs("iframe#earthFrame") || qs("iframe");
+    if (!frame || !frame.contentWindow) return;
+
+    frame.contentWindow.postMessage(
+      {
+        type: "DD_FILTER_TAGS",
+        tags,
+      },
+      "*"
+    );
   }
 
-  function idToLabel(id) {
-    if (!id) return "";
-    if (labels.has(id)) return labels.get(id) || "";
-
-    // location.csv の追加カテゴリ (G/H) は、ラベルが未登録でも ID から復元できるようにする
-    if (id.startsWith("loc::h::")) {
-      const parts = id.split("::");
-      return parts[parts.length - 1] || "";
-    }
-    if (id.startsWith("loc::g::")) {
-      const parts = id.split("::");
-      return parts[parts.length - 1] || "";
-    }
-
-    // tree.csv も保険
-    if (id.startsWith("tree::")) {
-      const parts = id.split("::");
-      return parts[parts.length - 1] || "";
-    }
-
-    return id;
-  }
-
-  function setBadge() {
-    if (!badge) return;
-    // 以前の「数バッジ」は不要ならここで 0 にする/非表示にするが、
-    // CSS 側で非表示にしている前提なので値だけ更新
-    badge.textContent = String(selected.size);
-  }
-
-  // ---------------------------------------------------------
-  // CSV load
-  // ---------------------------------------------------------
-  async function fetchText(url) {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error("fetch failed: " + url);
-    return await res.text();
-  }
-
-  function parseCSV(text) {
-    // 最低限のCSV（ダブルクォート対応）
-    const rows = [];
-    let i = 0;
-    let cur = "";
-    let row = [];
-    let inQ = false;
-
-    while (i < text.length) {
-      const ch = text[i];
-
-      if (inQ) {
-        if (ch === '"') {
-          const next = text[i + 1];
-          if (next === '"') {
-            cur += '"';
-            i += 2;
-            continue;
-          } else {
-            inQ = false;
-            i++;
-            continue;
-          }
-        } else {
-          cur += ch;
-          i++;
-          continue;
-        }
-      } else {
-        if (ch === '"') {
-          inQ = true;
-          i++;
-          continue;
-        }
-        if (ch === ",") {
-          row.push(cur);
-          cur = "";
-          i++;
-          continue;
-        }
-        if (ch === "\r") {
-          i++;
-          continue;
-        }
-        if (ch === "\n") {
-          row.push(cur);
-          rows.push(row);
-          row = [];
-          cur = "";
-          i++;
-          continue;
-        }
-        cur += ch;
-        i++;
-      }
-    }
-
-    // last
-    if (cur.length > 0 || row.length > 0) {
-      row.push(cur);
-      rows.push(row);
-    }
-
-    return rows;
-  }
-
-  function loadTreeCats(csvText) {
-    const rows = parseCSV(csvText);
-    // 想定: header: L1,L2,L3,...（少なくとも3列）
-    for (let r = 1; r < rows.length; r++) {
-      const cols = rows[r];
-      const l1 = safeText(cols[0]);
-      const l2 = safeText(cols[1]);
-      const l3 = safeText(cols[2]);
-
-      if (!l1) continue;
-
-      if (!treeRoot.has(l1)) treeRoot.set(l1, new Map());
-      const m2 = treeRoot.get(l1);
-
-      if (!l2) continue;
-
-      if (!m2.has(l2)) m2.set(l2, new Set());
-      const s3 = m2.get(l2);
-
-      if (l3) s3.add(l3);
-
-      // labels
-      const id1 = "tree::1::" + l1;
-      const id2 = "tree::2::" + l1 + "::" + l2;
-      labels.set(id1, l1);
-      labels.set(id2, l2);
-
-      if (l3) {
-        const id3 = "tree::3::" + l1 + "::" + l2 + "::" + l3;
-        labels.set(id3, l3);
-      }
-    }
-  }
-
-  function loadLocationCats(csvText) {
-    const rows = parseCSV(csvText);
-    // location.csv は列が多いが、追加カテゴリは G/H（= 7/8列目、0-indexで6/7）
-    // header行は読み飛ばす
-    for (let r = 1; r < rows.length; r++) {
-      const cols = rows[r] || [];
-      const g = safeText(cols[6]);
-      const h = safeText(cols[7]);
-
-      if (!g) continue;
-
-      locGSet.add(g);
-      if (!locChildren.has(g)) locChildren.set(g, new Set());
-      if (h) locChildren.get(g).add(h);
-
-      const gid = "loc::g::" + g;
-      labels.set(gid, g);
-
-      if (h) {
-        const hid = "loc::h::" + g + "::" + h;
-        labels.set(hid, h);
-      }
-    }
-  }
-
-  // ---------------------------------------------------------
-  // Modal UI
-  // ---------------------------------------------------------
+  // ----------------------------
+  // UI elements
+  // ----------------------------
   function ensureModal() {
-    if (modal) return;
-
-    overlay = document.createElement("div");
-    overlay.className = "dd-modal-overlay";
+    let modal = qs("#tagFilterModal");
+    if (modal) return modal;
 
     modal = document.createElement("div");
-    modal.className = "dd-modal";
+    modal.id = "tagFilterModal";
+    modal.className = "tag-filter-modal";
+    modal.innerHTML = `
+      <div class="tag-filter-backdrop"></div>
+      <div class="tag-filter-dialog" role="dialog" aria-modal="true">
+        <div class="tag-filter-header">
+          <div class="tag-filter-title">絞り込み</div>
+          <div class="tag-filter-actions">
+            <button type="button" class="tag-filter-clear">クリア</button>
+            <button type="button" class="tag-filter-apply">適用</button>
+            <button type="button" class="tag-filter-close" aria-label="Close">×</button>
+          </div>
+        </div>
+        <div class="tag-filter-body">
+          <div class="tag-filter-columns">
+            <div class="tag-filter-col tag-filter-col1">
+              <div class="tag-filter-col-title">カテゴリ</div>
+              <div class="tag-filter-list tag-filter-list1"></div>
+            </div>
+            <div class="tag-filter-col tag-filter-col2">
+              <div class="tag-filter-col-title tag-filter-col2-title"></div>
+              <div class="tag-filter-list tag-filter-list2"></div>
+            </div>
+            <div class="tag-filter-col tag-filter-col3">
+              <div class="tag-filter-col-title tag-filter-col3-title"></div>
+              <div class="tag-filter-list tag-filter-list3"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
 
-    // header
-    const header = document.createElement("div");
-    header.className = "dd-modal-header";
+    // backdrop close
+    qs(".tag-filter-backdrop", modal).addEventListener("click", () => closeModal());
 
-    const title = document.createElement("div");
-    title.className = "dd-modal-title";
-    title.textContent = "絞り込み";
+    // close btn
+    qs(".tag-filter-close", modal).addEventListener("click", () => closeModal());
 
-    const headerBtns = document.createElement("div");
-    headerBtns.className = "dd-modal-actions";
-
-    clearBtn = document.createElement("button");
-    clearBtn.className = "dd-btn dd-btn-ghost";
-    clearBtn.textContent = "クリア";
-    clearBtn.addEventListener("click", () => {
+    // clear
+    qs(".tag-filter-clear", modal).addEventListener("click", () => {
       selected.clear();
-      openL1 = null;
-      openL2 = null;
-      locOpenG = null;
-      saveSelection();
-      setBadge();
-      renderColumns();
-      schedulePostSelected();
+      locGImplicitSelected.clear();
+      // indeterminate reset
+      locGCheckboxEl.forEach((cb) => (cb.indeterminate = false));
+      locGChildSelectedCount.clear();
+      saveSelected();
+      setAppliedMode(MODE_NONE);
+      renderAll();
+      postSelected();
     });
 
-    applyBtn = document.createElement("button");
-    applyBtn.className = "dd-btn dd-btn-primary";
-    applyBtn.textContent = "適用";
-    applyBtn.addEventListener("click", () => {
-      setAppliedMode(MODE_TREE);
-      saveSelection();
-      setBadge();
+    // apply
+    qs(".tag-filter-apply", modal).addEventListener("click", () => {
+      saveSelected();
+      // 適用時は「どちらのモードでもOK」だが、現在表示の内容で決定する
+      // ここでは表示の状態から推測: 追加カテゴリが開いていれば miss、それ以外は tree
+      // （既存実装の意図を壊さないため、mode は現状維持しつつ none を避ける）
+      if (appliedMode === MODE_NONE) {
+        // 何か選択があれば tree とする
+        if (selected.size > 0 || locGImplicitSelected.size > 0) setAppliedMode(MODE_TREE);
+      }
       postSelected();
       closeModal();
     });
 
-    closeBtn = document.createElement("button");
-    closeBtn.className = "dd-btn dd-btn-close";
-    closeBtn.innerHTML = "×";
-    closeBtn.addEventListener("click", () => closeModal());
-
-    headerBtns.appendChild(clearBtn);
-    headerBtns.appendChild(applyBtn);
-    headerBtns.appendChild(closeBtn);
-
-    header.appendChild(title);
-    header.appendChild(headerBtns);
-
-    // body
-    const body = document.createElement("div");
-    body.className = "dd-modal-body";
-
-    col1 = document.createElement("div");
-    col1.className = "dd-col";
-
-    col2 = document.createElement("div");
-    col2.className = "dd-col";
-
-    col3 = document.createElement("div");
-    col3.className = "dd-col";
-
-    body.appendChild(col1);
-    body.appendChild(col2);
-    body.appendChild(col3);
-
-    modal.appendChild(header);
-    modal.appendChild(body);
-
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) closeModal();
-    });
-
-    // ESC
-    document.addEventListener("keydown", onKeyDownEsc);
-  }
-
-  function onKeyDownEsc(e) {
-    if (e.key === "Escape") closeModal();
+    return modal;
   }
 
   function openModal() {
-    ensureModal();
-    overlay.style.display = "block";
-    document.body.classList.add("dd-modal-open");
-
-    // 初回表示
-    renderColumns();
-    setBadge();
+    const modal = ensureModal();
+    modal.classList.add("open");
+    // 初回描画
+    renderAll();
   }
 
   function closeModal() {
-    if (!overlay) return;
-    overlay.style.display = "none";
-    document.body.classList.remove("dd-modal-open");
+    const modal = qs("#tagFilterModal");
+    if (!modal) return;
+    modal.classList.remove("open");
   }
 
-  // ---------------------------------------------------------
-  // Render Columns
-  // ---------------------------------------------------------
-  function clearCol(el) {
-    while (el.firstChild) el.removeChild(el.firstChild);
+  // ----------------------------
+  // CSV parsing
+  // ----------------------------
+  function parseCsv(text) {
+    // シンプル CSV（ダブルクォートや改行も考慮）
+    const rows = [];
+    let i = 0;
+    let field = "";
+    let row = [];
+    let inQuotes = false;
+
+    function endField() {
+      row.push(field);
+      field = "";
+    }
+    function endRow() {
+      rows.push(row);
+      row = [];
+    }
+
+    while (i < text.length) {
+      const c = text[i];
+
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') {
+            field += '"';
+            i += 2;
+            continue;
+          }
+          inQuotes = false;
+          i += 1;
+          continue;
+        }
+        field += c;
+        i += 1;
+        continue;
+      }
+
+      if (c === '"') {
+        inQuotes = true;
+        i += 1;
+        continue;
+      }
+      if (c === ",") {
+        endField();
+        i += 1;
+        continue;
+      }
+      if (c === "\r") {
+        // skip
+        i += 1;
+        continue;
+      }
+      if (c === "\n") {
+        endField();
+        endRow();
+        i += 1;
+        continue;
+      }
+      field += c;
+      i += 1;
+    }
+
+    // last
+    endField();
+    if (row.length > 1 || (row.length === 1 && row[0] !== "")) endRow();
+    return rows;
   }
 
-  function makeTitle(text) {
-    const t = document.createElement("div");
-    t.className = "dd-col-title";
-    t.textContent = text;
-    return t;
+  async function fetchCsv(url) {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`fetch failed: ${url}`);
+    const text = await res.text();
+    return parseCsv(text);
   }
 
-  function makeList() {
-    const list = document.createElement("div");
-    list.className = "dd-list";
-    return list;
+  // ----------------------------
+  // tree (絞り込み) UI
+  // ----------------------------
+  let treeLoaded = false;
+  let treeData = null; // { l1: Map, ... }
+
+  function buildTreeData(rows) {
+    // rows: [ [L1,L2,L3,L4], ... ]
+    // ここではヘッダがあってもなくても動くように、L1..L4 の列数で扱う
+    const root = new Map(); // l1 -> Map
+
+    rows.forEach((r) => {
+      const L1 = (r[0] || "").trim();
+      const L2 = (r[1] || "").trim();
+      const L3 = (r[2] || "").trim();
+      const L4 = (r[3] || "").trim();
+      if (!L1) return;
+
+      if (!root.has(L1)) root.set(L1, new Map());
+      const m2 = root.get(L1);
+
+      if (L2) {
+        if (!m2.has(L2)) m2.set(L2, new Map());
+        const m3 = m2.get(L2);
+
+        if (L3) {
+          if (!m3.has(L3)) m3.set(L3, new Set());
+          const s4 = m3.get(L3);
+
+          if (L4) s4.add(L4);
+        }
+      }
+    });
+
+    return root;
   }
 
-  function makeRow(id, text, hasChildren, onOpen) {
+  function treeId(l1, l2, l3, l4) {
+    const parts = ["tree", l1 || "", l2 || "", l3 || "", l4 || ""].map((s) => String(s));
+    return parts.join("::");
+  }
+
+  function makeTreeRow(id, text, level, hasChildren) {
     const row = document.createElement("div");
-    row.className = "node";
+    row.className = "tag-filter-row";
+    row.dataset.id = id;
+
+    const left = document.createElement("div");
+    left.className = "tag-filter-row-left";
 
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = selected.has(id);
 
-    const lab = document.createElement("div");
-    lab.className = "label";
-    lab.textContent = text;
+    const span = document.createElement("span");
+    span.className = "tag-filter-row-text";
+    span.textContent = text;
+
+    left.appendChild(cb);
+    left.appendChild(span);
 
     const chev = document.createElement("div");
-    chev.className = "chev";
+    chev.className = "tag-filter-row-chev";
     chev.textContent = hasChildren ? "›" : "";
 
-    row.appendChild(cb);
-    row.appendChild(lab);
+    row.appendChild(left);
     row.appendChild(chev);
 
+    label.set(id, text);
+
     row.addEventListener("click", (e) => {
+      // checkboxクリック以外でも toggle
       if (e.target === cb) return;
-      if (hasChildren && onOpen) onOpen();
+      if (!hasChildren) cb.click();
+      else {
+        // 子がある場合は行クリックで展開
+        setTreeOpen(id, level);
+        renderTreeColumns();
+      }
     });
 
     cb.addEventListener("click", (e) => {
       e.stopPropagation();
-      const on = cb.checked;
-      if (on) selected.add(id);
+    });
+    cb.addEventListener("change", () => {
+      if (cb.checked) selected.add(id);
       else selected.delete(id);
-
-      saveSelection();
-      setBadge();
-      renderColumns();
+      saveSelected();
       schedulePostSelected();
+      // indeterminate 表示は tree側ではCSS/既存ロジックに任せる（変更しない）
     });
 
     return row;
   }
 
-  function renderColumns() {
-    if (!col1 || !col2 || !col3) return;
+  let treeOpenL1 = null;
+  let treeOpenL2 = null;
 
-    clearCol(col1);
-    clearCol(col2);
-    clearCol(col3);
+  function setTreeOpen(id, level) {
+    if (level === 1) {
+      treeOpenL1 = id;
+      treeOpenL2 = null;
+    }
+    if (level === 2) {
+      treeOpenL2 = id;
+    }
+  }
 
-    // 第1カラム: tree L1 + 追加カテゴリG（同じ欄に並べる）
-    col1.appendChild(makeTitle("カテゴリ"));
-    const list1 = makeList();
+  function renderTreeColumns() {
+    const modal = ensureModal();
+    const list1 = qs(".tag-filter-list1", modal);
+    const list2 = qs(".tag-filter-list2", modal);
+    const list3 = qs(".tag-filter-list3", modal);
+    const title2 = qs(".tag-filter-col2-title", modal);
+    const title3 = qs(".tag-filter-col3-title", modal);
 
-    // tree L1
-    Array.from(treeRoot.keys()).forEach((l1) => {
-      const id1 = "tree::1::" + l1;
-      const hasChildren = true;
-      const row = makeRow(id1, l1, hasChildren, () => {
-        openL1 = l1;
-        openL2 = null;
+    list1.innerHTML = "";
+    list2.innerHTML = "";
+    list3.innerHTML = "";
+    title2.textContent = "";
+    title3.textContent = "";
 
-        // ★tree を開いたら locOpenG は閉じる（第2カラムの混在を防ぐ）
-        locOpenG = null;
+    if (!treeData) return;
 
-        renderColumns();
-      });
+    // col1
+    const L1s = Array.from(treeData.keys());
+    L1s.forEach((l1) => {
+      const id1 = treeId(l1);
+      const m2 = treeData.get(l1);
+      const hasChildren = m2 && m2.size > 0;
+      const row = makeTreeRow(id1, l1, 1, hasChildren);
       list1.appendChild(row);
     });
 
-    // location additional categories G
-    // tree と見た目を揃える（同じチェックボックス・同じ行高）
-    Array.from(locGSet.values()).forEach((g) => {
-      const gid = "loc::g::" + g;
-      const hasChildren = (locChildren.get(g) || new Set()).size > 0;
+    // col2
+    if (treeOpenL1) {
+      const parts = treeOpenL1.split("::");
+      const l1 = parts[1] || "";
+      title2.textContent = l1;
 
-      const row = makeLocGRow(gid, g);
-      list1.appendChild(row);
-    });
-
-    col1.appendChild(list1);
-
-    // 第2カラム:
-    // 1) tree L2/L3 表示
-    // 2) 追加カテゴリGが開かれていれば、そのHを表示（treeとは排他）
-    if (locOpenG) {
-      // 追加カテゴリH
-      const hArea = renderLocAreas();
-      col2.appendChild(hArea);
-    } else if (openL1) {
-      const m2 = treeRoot.get(openL1) || new Map();
-      col2.appendChild(makeTitle(openL1));
-
-      const list2 = makeList();
-      Array.from(m2.keys()).forEach((l2) => {
-        const id2 = "tree::2::" + openL1 + "::" + l2;
-        const s3 = m2.get(l2) || new Set();
-        const hasChildren = s3.size > 0;
-
-        const row = makeRow(id2, l2, hasChildren, () => {
-          openL2 = l2;
-          renderColumns();
+      const m2 = treeData.get(l1);
+      if (m2) {
+        const L2s = Array.from(m2.keys());
+        L2s.forEach((l2) => {
+          const id2 = treeId(l1, l2);
+          const m3 = m2.get(l2);
+          const hasChildren = m3 && m3.size > 0;
+          const row = makeTreeRow(id2, l2, 2, hasChildren);
+          list2.appendChild(row);
         });
+      }
+    }
 
-        // tree L2 の中間表示（子が一部ONの時）
-        const children = Array.from(s3.values());
-        if (children.length > 0) {
-          let onCount = 0;
-          children.forEach((l3) => {
-            const id3 = "tree::3::" + openL1 + "::" + l2 + "::" + l3;
-            if (selected.has(id3)) onCount++;
-          });
-          const cb = row.querySelector("input[type=checkbox]");
-          if (cb) {
-            cb.indeterminate = onCount > 0 && onCount < children.length;
-            if (onCount === children.length) cb.checked = true;
+    // col3
+    if (treeOpenL1 && treeOpenL2) {
+      const p1 = treeOpenL1.split("::");
+      const l1 = p1[1] || "";
+      const p2 = treeOpenL2.split("::");
+      const l2 = p2[2] || "";
+      title3.textContent = l2;
+
+      const m2 = treeData.get(l1);
+      const m3 = m2 ? m2.get(l2) : null;
+      if (m3) {
+        // col3 は L3 と L4 を同列表示する既存仕様（壊さない）
+        Array.from(m3.keys()).forEach((l3) => {
+          const id3 = treeId(l1, l2, l3);
+          const s4 = m3.get(l3);
+          const hasChildren = s4 && s4.size > 0;
+          const row3 = makeTreeRow(id3, l3, 3, hasChildren);
+          list3.appendChild(row3);
+
+          if (hasChildren) {
+            Array.from(s4).forEach((l4) => {
+              const id4 = treeId(l1, l2, l3, l4);
+              const row4 = makeTreeRow(id4, "  " + l4, 4, false);
+              row4.classList.add("tag-filter-row-l4");
+              list3.appendChild(row4);
+            });
           }
-        }
-
-        list2.appendChild(row);
-      });
-
-      col2.appendChild(list2);
-
-      // 第3カラム: tree L3
-      if (openL2) {
-        const s3 = (treeRoot.get(openL1) || new Map()).get(openL2) || new Set();
-        col3.appendChild(makeTitle(openL2));
-
-        const list3 = makeList();
-        Array.from(s3.values()).forEach((l3) => {
-          const id3 = "tree::3::" + openL1 + "::" + openL2 + "::" + l3;
-          const row = makeRow(id3, l3, false, null);
-          list3.appendChild(row);
         });
-        col3.appendChild(list3);
       }
     }
   }
 
-  function renderLocAreas() {
-    const wrap = document.createElement("div");
-    wrap.className = "dd-loc-wrap";
+  // ----------------------------
+  // location (追加カテゴリ) UI
+  // ----------------------------
+  let locLoaded = false;
+  let locGList = [];
+  let locChildren = new Map(); // g -> Set<h>
+  let locOpenG = null;
 
-    // タイトルは表示しない（要望：不要）
-    // wrap.appendChild(makeTitle("追加カテゴリ"));
-
-    const g = locOpenG;
-    const hs = locChildren.get(g) || new Set();
-
-    // 第2カラムに H を表示（Gは第1カラムにあるのでここでは出さない）
-    const list = makeList();
-
-    // tree と同じ node 表示（チェックボックス + ラベル）
-    // ここでは「G配下H」のみを並べる
-    Array.from(hs.values()).forEach((h) => {
-      const hid = "loc::h::" + g + "::" + h;
-      const row = makeLocHRow(hid, g, h);
-      list.appendChild(row);
-    });
-
-    // Hがない場合のガイド
-    if (hs.size === 0) {
-      const empty = document.createElement("div");
-      empty.className = "dd-muted";
-      empty.textContent = "第1カテゴリを選択してください";
-      wrap.appendChild(empty);
-    } else {
-      wrap.appendChild(list);
-    }
-
-    return wrap;
+  function locHId(g, h) {
+    return `loc::h::${g}::${h}`;
   }
 
-  function makeLocGRow(id, text) {
+  function makeLocGRow(g) {
+    const id = locGIdOf(g);
+
     const row = document.createElement("div");
-    row.className = "node";
+    row.className = "tag-filter-row";
+    row.dataset.id = id;
+
+    const left = document.createElement("div");
+    left.className = "tag-filter-row-left";
 
     const cb = document.createElement("input");
     cb.type = "checkbox";
+    cb.checked = selected.has(id);
+    // 追加カテゴリ(第1) の indeterminate 表示制御用
+    locGCheckboxEl.set(id, cb);
+    if (!locGChildSelectedCount.has(id)) locGChildSelectedCount.set(id, 0);
 
-    // 子(H)の選択状態に応じて「ー(中間)」を出す（既存カテゴリと同じ見た目に合わせる）
-    const kids = locChildren.get(text) || new Set();
-    let selectedKids = 0;
-    kids.forEach((h) => {
-      const hid = "loc::h::" + text + "::" + h;
-      if (selected.has(hid)) selectedKids++;
-    });
+    const span = document.createElement("span");
+    span.className = "tag-filter-row-text";
+    span.textContent = g;
 
-    const allKidsSelected = kids.size > 0 && selectedKids === kids.size;
-    const someKidsSelected = selectedKids > 0 && !allKidsSelected;
-
-    cb.indeterminate = someKidsSelected;
-    cb.checked = !someKidsSelected && (selected.has(id) || allKidsSelected);
-
-    const lab = document.createElement("div");
-    lab.className = "label";
-    lab.textContent = text;
+    left.appendChild(cb);
+    left.appendChild(span);
 
     const chev = document.createElement("div");
-    chev.className = "chev";
+    chev.className = "tag-filter-row-chev";
     chev.textContent = "›";
 
-    row.appendChild(cb);
-    row.appendChild(lab);
+    row.appendChild(left);
     row.appendChild(chev);
 
-    row.addEventListener("click", (e) => {
-      // checkboxクリックは別で処理
-      if (e.target === cb) return;
+    label.set(id, g);
 
-      // ★追加カテゴリを開いたら「第2カラムは追加カテゴリ専用」にしたいので、
-      // ここでは tree の path は維持したまま locOpenG だけセットする（表示は renderColumns が制御）
-      locOpenG = text;
-      renderColumns();
+    row.addEventListener("click", (e) => {
+      if (e.target === cb) return;
+      // 展開
+      locOpenG = g;
+      renderLocAreas();
     });
 
-    cb.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const on = cb.checked;
-
-      // Gチェック: 配下HもまとめてON/OFF
-      if (on) selected.add(id);
+    cb.addEventListener("click", (e) => e.stopPropagation());
+    cb.addEventListener("change", () => {
+      if (cb.checked) selected.add(id);
       else selected.delete(id);
-
-      const kids2 = locChildren.get(text) || new Set();
-      kids2.forEach((h) => {
-        const hid = "loc::h::" + text + "::" + h;
-        if (on) selected.add(hid);
-        else selected.delete(hid);
-      });
-
-      // チェック操作したら、そのGを開いた扱いにする（UX）
-      locOpenG = text;
-
-      saveSelection();
-      setBadge();
-      renderColumns();
+      saveSelected();
+      updateLocGVisualState(id);
       schedulePostSelected();
     });
 
     return row;
   }
 
-  function makeLocHRow(id, g, h) {
+  function makeLocHRow(id, text) {
     const row = document.createElement("div");
-    row.className = "node";
+    row.className = "tag-filter-row";
+    row.dataset.id = id;
+
+    const left = document.createElement("div");
+    left.className = "tag-filter-row-left";
 
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = selected.has(id);
 
-    const lab = document.createElement("div");
-    lab.className = "label";
-    lab.textContent = h;
+    const span = document.createElement("span");
+    span.className = "tag-filter-row-text";
+    span.textContent = text;
+
+    left.appendChild(cb);
+    left.appendChild(span);
 
     const chev = document.createElement("div");
-    chev.className = "chev";
+    chev.className = "tag-filter-row-chev";
     chev.textContent = "";
 
-    row.appendChild(cb);
-    row.appendChild(lab);
+    row.appendChild(left);
     row.appendChild(chev);
+
+    label.set(id, text);
 
     row.addEventListener("click", (e) => {
       if (e.target === cb) return;
-      // 追加カテゴリHは3列目を使わない（現状要件なし）
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
-    cb.addEventListener("click", (e) => {
-      e.stopPropagation();
+    cb.addEventListener("click", (e) => e.stopPropagation());
+    cb.addEventListener("change", () => {
       const on = cb.checked;
-
       if (on) selected.add(id);
+      // 追加カテゴリ(第2) の選択に応じて、親(第1)を indeterminate 表示にし、地球儀反映のため暗黙選択に加える
+      if (id.startsWith('loc::h::')) {
+        const parts = id.split('::');
+        const parentId = locGIdOf(parts[2]);
+        bumpLocGChildCount(parentId, on ? 1 : -1);
+        updateLocGVisualState(parentId);
+      }
       else selected.delete(id);
 
-      saveSelection();
-      setBadge();
-      renderColumns();
+      saveSelected();
       schedulePostSelected();
     });
 
     return row;
   }
 
-  // ---------------------------------------------------------
-  // init
-  // ---------------------------------------------------------
-  async function init() {
-    loadSelection();
+  function renderLocAreas() {
+    const modal = ensureModal();
+    const list1 = qs(".tag-filter-list1", modal);
+    const list2 = qs(".tag-filter-list2", modal);
+    const list3 = qs(".tag-filter-list3", modal);
+    const title2 = qs(".tag-filter-col2-title", modal);
+    const title3 = qs(".tag-filter-col3-title", modal);
 
-    try {
-      const treeText = await fetchText(TREE_CSV_URL);
-      loadTreeCats(treeText);
-    } catch (e) {
-      // tree.csv が無い/失敗でも落とさない
-    }
+    list1.innerHTML = "";
+    list2.innerHTML = "";
+    list3.innerHTML = "";
+    title2.textContent = "";
+    title3.textContent = "";
 
-    try {
-      const locText = await fetchText(LOCATION_CSV_URL);
-      loadLocationCats(locText);
-    } catch (e) {
-      // location.csv が無い/失敗でも落とさない
-    }
+    // col1: 既存カテゴリ（treeのL1）を見せるのではなく、ここでは「追加カテゴリ（第1）」は別表示にしない方針を維持
+    // ただし、UI上は tree と統合済みのため、ここは treeColumns が描画済みの想定。
+    // この関数は「追加カテゴリの第2カラム」を差し替える役割のみ。
 
-    // button badge (もし存在するなら)
-    badge = document.getElementById("tagFilterBadge");
+    // ※ 現行UIでは、追加カテゴリは第2カラム内に表示する設計（既存の見た目を壊さない）
+    // ここでは第2カラム(list2)に「追加カテゴリ（第2）」を表示する
 
-    setBadge();
+    // col2 title：不要（表示しない＝空文字）
+    // col2 list：locOpenG が決まっていれば第2候補を表示
+    if (!locOpenG) return;
 
-    btn.addEventListener("click", () => {
-      openModal();
+    const children = locChildren.get(locOpenG);
+    if (!children) return;
+
+    // 第2候補を表示（タイトルは不要）
+    Array.from(children).forEach((h) => {
+      const id = locHId(locOpenG, h);
+      const row = makeLocHRow(id, h);
+      list2.appendChild(row);
+    });
+  }
+
+  async function loadLocCsv() {
+    const rows = await fetchCsv(LOCATION_CSV_URL);
+    // location.csv: ヘッダあり想定（titleJp,lat,lng,url,G,H,... など）
+    // ただし列位置が変わっても動くようにヘッダから探す
+    if (!rows || rows.length === 0) return;
+
+    const header = rows[0].map((s) => String(s || "").trim());
+    const idxG = header.findIndex((h) => h === "G");
+    const idxH = header.findIndex((h) => h === "H");
+
+    // ヘッダがない場合の保険（G/H が見つからない時）
+    const fallbackIdxG = 6; // 0-based: G
+    const fallbackIdxH = 7; // 0-based: H
+
+    const gSet = new Set();
+    const childMap = new Map(); // g -> Set<h>
+
+    rows.slice(1).forEach((r) => {
+      const g = String((idxG >= 0 ? r[idxG] : r[fallbackIdxG]) || "").trim();
+      const h = String((idxH >= 0 ? r[idxH] : r[fallbackIdxH]) || "").trim();
+      if (!g) return;
+
+      gSet.add(g);
+      if (!childMap.has(g)) childMap.set(g, new Set());
+      if (h) childMap.get(g).add(h);
+
+      // ラベル登録（postSelected の互換）
+      const gid = locGIdOf(g);
+      label.set(gid, g);
+
+      if (h) {
+        const hid = locHId(g, h);
+        label.set(hid, h);
+      }
     });
 
-    // 初期適用モードに応じて、起動時に送る（必要なら）
-    // ここでは「保存があるなら送る」で安全に
-    if (selected.size > 0) {
-      postSelected();
+    locGList = Array.from(gSet);
+    locChildren = childMap;
+
+    // 既に選択状態がある場合、子選択数を復元して indeterminate を再現
+    // （保存しているのは selected のみなので、selected から再計算）
+    // locGChildSelectedCount は子の id から親を数える
+    locGChildSelectedCount.clear();
+    locGImplicitSelected.clear();
+
+    selected.forEach((id) => {
+      if (id.startsWith("loc::h::")) {
+        const parts = id.split("::");
+        const gName = parts[2];
+        const parentId = locGIdOf(gName);
+        bumpLocGChildCount(parentId, 1);
+      }
+    });
+
+    locLoaded = true;
+  }
+
+  // ----------------------------
+  // renderAll
+  // ----------------------------
+  function renderAll() {
+    const modal = ensureModal();
+
+    // まず tree を描画
+    renderTreeColumns();
+
+    // 追加カテゴリ（第1）は tree の L1 に統合されている前提のため、
+    // loc側は第2カラムだけ差し替える（UIを壊さないため）
+    // ※ locOpenG の選択は tree のクリックに合わせて設定されている想定だが、
+    //   既存実装に合わせ、ここでは locOpenG があれば描画する
+    if (locLoaded) {
+      // G 列の indeterminate 表示のため、Gの総数を記録（ここはレンダリングのタイミングでOK）
+      // ただし checkboxEl は makeLocGRow 時に登録されるので、ここでは第2のみ描画する
+      renderLocAreas();
     }
   }
 
-  init();
+  // ----------------------------
+  // Hook: 既存カテゴリ(L1)クリック時に locOpenG を同期
+  // ----------------------------
+  function hookTreeClicksToLoc() {
+    const modal = ensureModal();
+    const list1 = qs(".tag-filter-list1", modal);
+    if (!list1) return;
+
+    // イベント委譲: L1 行クリックで locOpenG 更新（該当があれば）
+    list1.addEventListener("click", (e) => {
+      const row = e.target.closest(".tag-filter-row");
+      if (!row) return;
+      const id = row.dataset.id || "";
+      if (!id.startsWith("tree::")) return;
+
+      const parts = id.split("::");
+      const l1 = parts[1] || "";
+
+      // locGList に存在する場合のみ locOpenG を更新
+      if (locGList.includes(l1)) {
+        locOpenG = l1;
+        renderLocAreas();
+      } else {
+        // 既存カテゴリを選んだら追加カテゴリの第2は空にする（混在防止）
+        locOpenG = null;
+        renderLocAreas();
+      }
+    });
+  }
+
+  // ----------------------------
+  // bootstrap
+  // ----------------------------
+  async function init() {
+    loadState();
+    ensureModal();
+
+    // CSV 読み込み
+    try {
+      const treeRows = await fetchCsv(TREE_CSV_URL);
+      treeData = buildTreeData(treeRows.slice(1)); // 先頭がヘッダでも OK
+      treeLoaded = true;
+    } catch (e) {
+      // tree が読めなくても動作継続
+      treeLoaded = false;
+      treeData = new Map();
+    }
+
+    try {
+      await loadLocCsv();
+    } catch (e) {
+      locLoaded = false;
+      locGList = [];
+      locChildren = new Map();
+    }
+
+    // tree クリックに loc を同期
+    hookTreeClicksToLoc();
+
+    // 外部ボタン（絞り込みボタン）を探して openModal に繋ぐ
+    // 既存の UI を壊さないため、候補を複数見る
+    const openBtn =
+      qs("#tagFilterButton") ||
+      qs(".tag-filter-open") ||
+      qs("button[data-open-tagfilter]") ||
+      qs("img#filterIcon") ||
+      null;
+
+    if (openBtn) {
+      openBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        openModal();
+      });
+    } else {
+      // 既存の filter.png ボタンがある場合はそれを拾う
+      const imgBtn = qsa("img").find((img) => (img.getAttribute("src") || "").includes("filter.png"));
+      if (imgBtn) {
+        imgBtn.style.cursor = "pointer";
+        imgBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          openModal();
+        });
+      }
+    }
+
+    // 初回 post
+    postSelected();
+  }
+
+  // DOM ready
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 })();
