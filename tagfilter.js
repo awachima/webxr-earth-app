@@ -677,12 +677,17 @@
     const col2 = createColumn(l1 ? label.get(l1) || " " : " ");
     renderList(col2, l1, checked, indeterminate);
 
-    // 第2カテゴリ（H）: 第2カラムに表示（第1カテゴリ選択時に表示）
+    // 第2カテゴリ（H）: 第2カラムに表示（第1カテゴリ(G)を「開いている」時だけ表示）
     if (locAreaG) {
       const hArea = ensureLocAreaHExists();
+      // いったんDOMから外す（前の状態が残らないように）
       if (hArea.parentNode) hArea.parentNode.removeChild(hArea);
       hArea.classList.add("loc-area-in-col2");
-      col2.appendChild(hArea);
+
+      // ★重要: 第1カテゴリ(G)が未選択なら、第2カラムには出さない（ツリー側の第2カラムを汚染しない）
+      if (locOpenG) {
+        col2.appendChild(hArea);
+      }
     }
 
     const l2 = path[1] || null;
@@ -868,6 +873,7 @@
     const idx2 = header.indexOf("level2");
     const idx3 = header.indexOf("level3");
     if (idx1 < 0) return;
+
 
     for (let i = 1; i < lines.length; i++) {
       const cols = csvParseLine(lines[i]);
