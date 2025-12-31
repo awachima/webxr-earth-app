@@ -151,10 +151,8 @@
   // ----------------------------
   //  location.csv(G/H) -> extra category UI
   // ----------------------------
-  // ★重要: 追加タグ開始列は「絶対にG/H」固定
-  //   - Excel/Sheets の列記号: G/H
-  //   - JS の配列index(0始まり): 6/7
-  //   ※ 7/8 に見えるのは「人間の数え方(1始まり)」のズレです
+  // ----------------------------
+  // 既定は G/H (0始まりで 6/7)
   let LOC_G_INDEX = 6;
   let LOC_H_INDEX = 7;
 
@@ -211,10 +209,27 @@
     locDebugMessage = "";
 
     // Primary（Google Sheets CSV）
-    try {
-      const r = await fetch(LOCATION_URL_PRIMARY, { cache: "no-store" });
-      if (r.ok) text = await r.text();
-    } catch (_) {}
+    // ★公開CSVが「使用範囲(A:Eだけ等)」として扱われる場合、G/H以降が出力されないことがあります。
+    // そのため range パラメータ付きも順に試します（既存仕様は一切変更しない）。
+    const locPrimaryCandidates = [
+      LOCATION_URL_PRIMARY,
+      LOCATION_URL_PRIMARY + "&range=A:K",
+      LOCATION_URL_PRIMARY + "&range=A:Z",
+    ];
+
+    for (const u of locPrimaryCandidates) {
+      try {
+        const r = await fetch(u, { cache: "no-store" });
+        if (r.ok) {
+          const t = await r.text();
+          // 最低でも2行以上（ヘッダー+1行）あるっぽいものだけ採用
+          if (t && t.trim().length > 0) {
+            text = t;
+            break;
+          }
+        }
+      } catch (_) {}
+    }
 
     // Fallback（同階層の location.csv）
     if (!text) {
