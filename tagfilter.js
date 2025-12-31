@@ -13,8 +13,9 @@
   const TREE_URL_FALLBACK = "./tree.csv";
 
   // ★追加: location.csv（G/Hを追加カテゴリに使う）
+  // ★重要: ここを「マスターが貼った公開CSV」に合わせる
   const LOCATION_URL_PRIMARY =
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxY1OEEnEqJi1gK6D156ql0Ybe5Hqsn-mrAmvC3p98oRYYdXFNTjUY3-SMNgusPHqowztL3aAF3COl/pub?gid=717261533&single=true&output=csv";
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv";
   const LOCATION_URL_FALLBACK = "./location.csv";
 
   const btn = document.getElementById("tagFilterBtn");
@@ -151,8 +152,7 @@
   // ----------------------------
   //  location.csv(G/H) -> extra category UI
   // ----------------------------
-  // ----------------------------
-  // 既定は G/H (0始まりで 6/7)
+  // ★重要: 追加タグ開始列は「絶対にG/H」固定（0始まりで 6/7）
   let LOC_G_INDEX = 6;
   let LOC_H_INDEX = 7;
 
@@ -209,8 +209,8 @@
     locDebugMessage = "";
 
     // Primary（Google Sheets CSV）
-    // ★公開CSVが「使用範囲(A:Eだけ等)」として扱われる場合、G/H以降が出力されないことがあります。
-    // そのため range パラメータ付きも順に試します（既存仕様は一切変更しない）。
+    // ★公開CSVが「使用範囲が狭い(A〜Eだけ等)」として出力される場合、G/H以降が落ちることがあります。
+    // その場合に備えて range パラメータ付きも順に試します（仕様はG/H固定のまま）。
     const locPrimaryCandidates = [
       LOCATION_URL_PRIMARY,
       LOCATION_URL_PRIMARY + "&range=A:K",
@@ -220,13 +220,11 @@
     for (const u of locPrimaryCandidates) {
       try {
         const r = await fetch(u, { cache: "no-store" });
-        if (r.ok) {
-          const t = await r.text();
-          // 最低でも2行以上（ヘッダー+1行）あるっぽいものだけ採用
-          if (t && t.trim().length > 0) {
-            text = t;
-            break;
-          }
+        if (!r.ok) continue;
+        const t = await r.text();
+        if (t && t.trim().length > 0) {
+          text = t;
+          break;
         }
       } catch (_) {}
     }
@@ -257,12 +255,10 @@
 
     // ★重要: G/H固定（推定で上書きしない）
     // 先頭行のヘッダー解析は行うが、列推定結果で LOC_G_INDEX / LOC_H_INDEX を変更しない
-    // （マスター要件: 追加タグ開始列は絶対にG/H）
     try {
       const headCells = csvParseLine(lines[0]);
       const guessed = guessLocationGHIndexFromHeader(headCells);
       if (guessed && (guessed.gi !== LOC_G_INDEX || guessed.hi !== LOC_H_INDEX)) {
-        // “推定はズレている” ことだけを表示（動作はG/H固定）
         locDebugMessage =
           `補助判定: 先頭行からは列(${guessed.gi + 1}/${guessed.hi + 1})が候補に見えますが、仕様によりG/H固定で読み取ります`;
       }
@@ -271,7 +267,7 @@
     // ヘッダー判定（2列目/3列目が数値でないならヘッダー扱い）
     let start = 0;
     try {
-      const head = csvParseLine(lines[0]); // 既存Helperを利用
+      const head = csvParseLine(lines[0]);
       const lat = parseFloat((head[1] || "").replace(/[−–‐]/g, "-"));
       const lng = parseFloat((head[2] || "").replace(/[−–‐]/g, "-"));
       if (isNaN(lat) || isNaN(lng)) start = 1;
@@ -281,7 +277,6 @@
     const childMap = new Map();
 
     // 列数不足チェック（最低でもHまで必要）
-    // ※ 行によって列数が違うCSVもあり得るので、まずは先頭の列数で雑に判断し、最終的には各行で防御する
     try {
       const firstData = csvParseLine(lines[Math.min(start, lines.length - 1)]);
       if ((firstData || []).length <= LOC_H_INDEX) {
@@ -305,8 +300,6 @@
       if (!childMap.has(g)) childMap.set(g, new Set());
       if (h) childMap.get(g).add(h);
 
-      // ★重要: postSelected() は label を送るので、ここで label 登録しておく
-      // G/H は「表示名 = タグ名」をそのまま扱う（earth側tagsに入れるため）
       label.set("loc::g::" + g, g);
       if (h) label.set("loc::h::" + g + "::" + h, h);
     }
@@ -384,7 +377,6 @@
   }
 
   function makeLocRow(id, text, isG) {
-    // 既存の .node デザインに合わせる（renderColumns() と同系統）
     const row = document.createElement("div");
     row.className = "node";
 
@@ -408,7 +400,6 @@
       e.stopPropagation();
       const on = cb.checked;
 
-      // GをON/OFFしたら、その配下のHもまとめてON/OFF（“Gの子”ルール）
       if (id.startsWith("loc::g::")) {
         const g = text;
 
@@ -429,10 +420,7 @@
       saveSelection();
       setBadge();
 
-      // 既存カラムのチェック状態も矛盾しないよう更新
       renderColumns();
-
-      // 追加カテゴリも更新
       renderLocArea();
 
       schedulePostSelected();
@@ -442,7 +430,6 @@
   }
 
   function setBadge() {
-    // (0) も含めて常に表示（既存UI仕様に合わせる）
     try {
       badge.textContent = `(${selected.size})`;
       badge.style.display = "inline";
@@ -497,7 +484,6 @@
     const pNode = nodesById.get(parentId);
     if (pNode) pNode.children.add(nodeId);
 
-    // build path
     const ancestors = [];
     let cur = nodeId;
     while (cur && cur !== ROOT_ID) {
@@ -521,18 +507,15 @@
 
   function setNodeAndDescendants(nodeId, on) {
     if (!nodeId || nodeId === ROOT_ID || nodeId === EMPTY_ID) return;
-    // set node
     if (on) selected.add(nodeId);
     else selected.delete(nodeId);
 
-    // set descendants
     const kids = childrenByParent.get(nodeId);
     if (!kids) return;
     kids.forEach((k) => setNodeAndDescendants(k, on));
   }
 
   function computeIndeterminateStates() {
-    // For each node, compute if it should be indeterminate based on descendants selection.
     const checked = new Set();
     const indeterminate = new Set();
 
@@ -556,7 +539,7 @@
       if (selfChecked) {
         any = true;
       } else {
-        all = false; // if self isn't checked, cannot be "all" in this simple model
+        all = false;
       }
 
       if (selfChecked) checked.add(nodeId);
@@ -564,7 +547,6 @@
       return { any, all };
     }
 
-    // walk from ROOT's children
     getChildren(ROOT_ID).forEach((id) => walk(id));
     return { checked, indeterminate };
   }
@@ -592,7 +574,6 @@
       .map((id) => nodesById.get(id))
       .filter(Boolean);
 
-    // stable sort by label
     kids.sort((a, b) => (a.label || "").localeCompare(b.label || "", "ja"));
 
     kids.forEach((node) => {
@@ -617,7 +598,6 @@
       row.appendChild(lab);
       row.appendChild(chev);
 
-      // checkbox click: toggle with descendants
       cb.addEventListener("click", (e) => {
         e.stopPropagation();
         const on = cb.checked;
@@ -625,12 +605,9 @@
         saveSelection();
         setBadge();
         renderColumns();
-
-        // ★ applyBtn が無い構成なら「自動適用」
         schedulePostSelected();
       });
 
-      // row click: open next column (path)
       row.addEventListener("click", () => {
         const depthIdx = node.depth - 1;
         path = path.slice(0, depthIdx);
@@ -665,18 +642,11 @@
     const col1 = createColumn("カテゴリ");
     renderList(col1, ROOT_ID, 1, checked, indeterminate);
 
-    // ▼▼ 追加カテゴリ（location.csv G/H）を「カテゴリ枠(col1)の中」に入れる ▼▼
     if (locArea) {
-      // 以前どこかに入れていた場合は取り外してから入れ直す（重複表示防止）
       if (locArea.parentNode) locArea.parentNode.removeChild(locArea);
-
-      // “カテゴリ枠の中で表示するモード”用のクラス（CSSで使うなら）
       locArea.classList.add("loc-area-in-col1");
-
-      // 「カテゴリ」カラムの末尾＝□文化の下に続く位置
       col1.appendChild(locArea);
     }
-    // ▲▲ ここまで ▲▲
 
     cols.push(col1);
 
@@ -686,14 +656,13 @@
     cols.push(col2);
 
     const l2 = path[1] || null;
-    const showL2 = l2 && nodeHasChildren(l2); // ★ 2カラム目が終端(子なし)なら3カラム目のタイトルに出さない
+    const showL2 = l2 && nodeHasChildren(l2);
     const col3 = createColumn(showL2 ? label.get(l2) || " " : " ");
     renderList(col3, showL2 ? l2 : null, 3, checked, indeterminate);
     cols.push(col3);
 
     cols.forEach((c) => colWrap.appendChild(c));
 
-    // ★ クリアボタンは常時表示（選択が無い時だけ無効化）
     if (clearBtn) {
       clearBtn.style.display = "";
       clearBtn.removeAttribute("aria-hidden");
@@ -710,7 +679,6 @@
   //  Earth messaging
   // ----------------------------
   function postSelected() {
-    // earth側は「タグ名」を期待しているので label を送る
     const tags = Array.from(selected)
       .map((id) => label.get(id) || id)
       .map((s) => String(s).trim())
@@ -746,17 +714,13 @@
   //  Modal open/close
   // ----------------------------
   function openModal() {
-    // main.js が style.display で開閉している構成でも確実に開く
     backdrop.style.display = "flex";
     backdrop.setAttribute("aria-hidden", "false");
     btn.setAttribute("aria-expanded", "true");
-
-    // tagfilter.js 側の open 判定（ESC など）にも使う
     backdrop.classList.add("open");
 
     document.body.style.overflow = "hidden";
 
-    // position modal so its top-left matches the button position
     modal.style.visibility = "hidden";
     modal.style.left = "0px";
     modal.style.top = "0px";
@@ -780,7 +744,6 @@
         modal.style.left = left + "px";
         modal.style.top = top + "px";
       } catch (e) {
-        // fallback
       } finally {
         modal.style.visibility = "visible";
       }
@@ -792,13 +755,10 @@
   function closeModal() {
     backdrop.setAttribute("aria-hidden", "true");
     btn.setAttribute("aria-expanded", "false");
-
-    // class も display も両方閉じる（どちらの方式でも確実に閉じる）
     backdrop.classList.remove("open");
     backdrop.style.display = "none";
 
     document.body.style.overflow = "";
-
     modal.style.visibility = "";
   }
 
@@ -808,12 +768,10 @@
   btn.addEventListener("click", openModal);
   closeBtn.addEventListener("click", closeModal);
 
-  // click backdrop closes only when clicking outside modal
   backdrop.addEventListener("click", (e) => {
     if (e.target === backdrop) closeModal();
   });
 
-  // ★ apply/clear がある構成だけイベントを生やす
   if (applyBtn) {
     applyBtn.addEventListener("click", () => {
       saveSelection();
@@ -832,7 +790,6 @@
     });
   }
 
-  // esc closes
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && backdrop.classList.contains("open")) {
       closeModal();
@@ -876,7 +833,6 @@
     const idx3 = header.indexOf("level3");
     if (idx1 < 0) return;
 
-    // Each row creates nodes for each level; nodeId is built from path
     for (let i = 1; i < lines.length; i++) {
       const cols = csvParseLine(lines[i]);
       const l1 = normalize(cols[idx1]);
@@ -885,7 +841,6 @@
 
       if (!l1) continue;
 
-      // ★防御: データ行に "level1/level2/level3" が混ざっていてもツリーにしない
       const a = l1.toLowerCase();
       const b = (l2 || "").toLowerCase();
       const c = (l3 || "").toLowerCase();
