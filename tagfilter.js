@@ -11,11 +11,11 @@
 
   // フォールバック（同梱tree.csvがある場合）
   const TREE_URL_FALLBACK = "./tree.csv";
+
   // ★追加: location.csv（G/Hを追加カテゴリに使う）
   const LOCATION_URL_PRIMARY =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxY1OEEnEqJi1gK6D156ql0Ybe5Hqsn-mrAmvC3p98oRYYdXFNTjUY3-SMNgusPHqowztL3aAF3COl/pub?gid=717261533&single=true&output=csv";
   const LOCATION_URL_FALLBACK = "./location.csv";
-
 
   const btn = document.getElementById("tagFilterBtn");
   const badge = document.getElementById("tagFilterCount");
@@ -63,7 +63,6 @@
   let earthReady = false;
   let autoApplied = false;
 
-
   // iframe の load が tagfilter.js 読み込みより先に発火していると、
   // earth.html 側の dd-earth-ready が受け取れず、自動再適用が走らないことがある。
   // そのため「iframeが読み込まれている」こと自体でも earthReady を立てる。
@@ -74,14 +73,14 @@
   }
 
   // 通常: iframe load で確実に検知
-  iframe.addEventListener('load', () => {
+  iframe.addEventListener("load", () => {
     markEarthReadyFromIframe();
   });
 
   // 既に読み込み済み（load が先に終わっている）ケースも拾う
   setTimeout(() => {
     try {
-      if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+      if (iframe.contentDocument && iframe.contentDocument.readyState === "complete") {
         markEarthReadyFromIframe();
       }
     } catch (e) {}
@@ -148,22 +147,65 @@
     if (!map.has(key)) map.set(key, new Set());
     return map.get(key);
   }
-	
+
   // ----------------------------
   //  location.csv(G/H) -> extra category UI
   // ----------------------------
-  const LOC_G_INDEX = 6; // G列（0始まり）
-  const LOC_H_INDEX = 7; // H列（0始まり）
+  // 既定は G/H (0始まりで 6/7)
+  let LOC_G_INDEX = 6;
+  let LOC_H_INDEX = 7;
 
   let locReady = false;
-  let locGList = [];                 // ["街", "自然", ...]
-  let locChildren = new Map();        // G -> Set(H)
-  let locOpenG = null;               // 右ペインに出す対象G
+  let locGList = []; // ["街", "自然", ...]
+  let locChildren = new Map(); // G -> Set(H)
+  let locOpenG = null; // 右ペインに出す対象G
+  let locDebugMessage = ""; // 表示だけ（壊さない）
+
+  function guessLocationGHIndexFromHeader(headerCells) {
+    // ヘッダー名からG/Hに相当する列を推定する（見つからなければ null）
+    const h = (headerCells || []).map((x) => normalize(x).toLowerCase());
+
+    // よくありそうな候補（必要になったら追加）
+    const gCandidates = ["g", "tag_g", "tagg", "genre_g", "miss_g", "category_g", "extra_g", "levelg", "level_4"];
+    const hCandidates = ["h", "tag_h", "tagh", "genre_h", "miss_h", "category_h", "extra_h", "levelh", "level_5"];
+
+    let gi = -1;
+    let hi = -1;
+
+    for (const key of gCandidates) {
+      const idx = h.indexOf(key);
+      if (idx >= 0) {
+        gi = idx;
+        break;
+      }
+    }
+    for (const key of hCandidates) {
+      const idx = h.indexOf(key);
+      if (idx >= 0) {
+        hi = idx;
+        break;
+      }
+    }
+
+    if (gi >= 0 && hi >= 0) return { gi, hi };
+
+    // "miss" 系がありそうなら miss を含む列を探す（g/h相当を2本）
+    const missCols = [];
+    h.forEach((name, idx) => {
+      if (name.includes("miss")) missCols.push(idx);
+    });
+    if (missCols.length >= 2) {
+      return { gi: missCols[0], hi: missCols[1] };
+    }
+
+    return null;
+  }
 
   async function loadLocationCats() {
     if (!locArea) return; // index.html側が未対応でも落とさない
 
     let text = "";
+    locDebugMessage = "";
 
     // Primary（Google Sheets CSV）
     try {
@@ -182,6 +224,7 @@
     if (!text) {
       // 読めない場合でもUI箱は残す（空表示）
       locReady = false;
+      locDebugMessage = "location.csv を読み込めませんでした（URL/gid を確認してください）";
       renderLocArea();
       return;
     }
@@ -189,9 +232,20 @@
     const lines = text.trim().split(/\r?\n/);
     if (!lines.length) {
       locReady = false;
+      locDebugMessage = "location.csv が空です";
       renderLocArea();
       return;
     }
+
+    // 先頭行をヘッダー候補として解析し、列名からG/H推定を試す
+    try {
+      const headCells = csvParseLine(lines[0]);
+      const guessed = guessLocationGHIndexFromHeader(headCells);
+      if (guessed) {
+        LOC_G_INDEX = guessed.gi;
+        LOC_H_INDEX = guessed.hi;
+      }
+    } catch (_) {}
 
     // ヘッダー判定（2列目/3列目が数値でないならヘッダー扱い）
     let start = 0;
@@ -205,10 +259,25 @@
     const gSet = new Set();
     const childMap = new Map();
 
+    // 列数不足チェック（最低でもHまで必要）
+    // ※ 行によって列数が違うCSVもあり得るので、まずは先頭の列数で雑に判断し、最終的には各行で防御する
+    try {
+      const firstData = csvParseLine(lines[Math.min(start, lines.length - 1)]);
+      if ((firstData || []).length <= LOC_G_INDEX) {
+        locDebugMessage =
+          "location.csv の列数が想定より少ないため、G/H を読み取れません（公開CSVにG/Hが含まれているか確認してください）";
+      }
+    } catch (_) {}
+
     for (let i = start; i < lines.length; i++) {
       const parts = csvParseLine(lines[i]);
+
+      // 行ごとに列数が足りない場合はスキップ
+      if (!parts || parts.length <= LOC_G_INDEX) continue;
+
       const g = normalize(parts[LOC_G_INDEX]);
-      const h = normalize(parts[LOC_H_INDEX]);
+      const h = parts.length > LOC_H_INDEX ? normalize(parts[LOC_H_INDEX]) : "";
+
       if (!g) continue;
 
       gSet.add(g);
@@ -223,7 +292,7 @@
 
     locGList = Array.from(gSet).sort((a, b) => a.localeCompare(b, "ja"));
     locChildren = childMap;
-    locOpenG = (locOpenG && childMap.has(locOpenG)) ? locOpenG : (locGList[0] || null);
+    locOpenG = locOpenG && childMap.has(locOpenG) ? locOpenG : locGList[0] || null;
 
     locReady = true;
     renderLocArea();
@@ -246,6 +315,16 @@
     const hR = document.createElement("h3");
     hR.textContent = "追加カテゴリ（第2）";
     right.appendChild(hR);
+
+    // デバッグメッセージ（表示だけ。既存UIは壊さない）
+    if (locDebugMessage) {
+      const msg0 = document.createElement("div");
+      msg0.style.opacity = "0.65";
+      msg0.style.padding = "6px 2px";
+      msg0.style.fontSize = "12px";
+      msg0.textContent = locDebugMessage;
+      left.appendChild(msg0);
+    }
 
     if (!locReady) {
       const msg = document.createElement("div");
@@ -270,12 +349,14 @@
     });
 
     // 右: 選択中Gの子（H一覧）
-    const setH = locOpenG ? (locChildren.get(locOpenG) || new Set()) : new Set();
-    Array.from(setH).sort((a, b) => a.localeCompare(b, "ja")).forEach((h) => {
-      const id = "loc::h::" + locOpenG + "::" + h;
-      const row = makeLocRow(id, h, false);
-      right.appendChild(row);
-    });
+    const setH = locOpenG ? locChildren.get(locOpenG) || new Set() : new Set();
+    Array.from(setH)
+      .sort((a, b) => a.localeCompare(b, "ja"))
+      .forEach((h) => {
+        const id = "loc::h::" + locOpenG + "::" + h;
+        const row = makeLocRow(id, h, false);
+        right.appendChild(row);
+      });
 
     locArea.appendChild(left);
     locArea.appendChild(right);
@@ -339,8 +420,6 @@
     return row;
   }
 
-	
-
   function setBadge() {
     // (0) も含めて常に表示（既存UI仕様に合わせる）
     try {
@@ -351,7 +430,10 @@
 
   function saveSelection() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(selected).filter((id)=>id && id !== ROOT_ID && id !== EMPTY_ID)));
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(Array.from(selected).filter((id) => id && id !== ROOT_ID && id !== EMPTY_ID))
+      );
     } catch (e) {}
   }
 
@@ -561,18 +643,19 @@
 
     const col1 = createColumn("カテゴリ");
     renderList(col1, ROOT_ID, 1, checked, indeterminate);
-	  // ▼▼ 追加カテゴリ（location.csv G/H）を「カテゴリ枠(col1)の中」に入れる ▼▼
-if (locArea) {
-  // 以前どこかに入れていた場合は取り外してから入れ直す（重複表示防止）
-  if (locArea.parentNode) locArea.parentNode.removeChild(locArea);
 
-  // “カテゴリ枠の中で表示するモード”用のクラス（CSSで使うなら）
-  locArea.classList.add("loc-area-in-col1");
+    // ▼▼ 追加カテゴリ（location.csv G/H）を「カテゴリ枠(col1)の中」に入れる ▼▼
+    if (locArea) {
+      // 以前どこかに入れていた場合は取り外してから入れ直す（重複表示防止）
+      if (locArea.parentNode) locArea.parentNode.removeChild(locArea);
 
-  // 「カテゴリ」カラムの末尾＝□文化の下に続く位置
-  col1.appendChild(locArea);
-}
-// ▲▲ ここまで ▲▲
+      // “カテゴリ枠の中で表示するモード”用のクラス（CSSで使うなら）
+      locArea.classList.add("loc-area-in-col1");
+
+      // 「カテゴリ」カラムの末尾＝□文化の下に続く位置
+      col1.appendChild(locArea);
+    }
+    // ▲▲ ここまで ▲▲
 
     cols.push(col1);
 
@@ -778,7 +861,16 @@ if (locArea) {
       const l1 = normalize(cols[idx1]);
       const l2 = idx2 >= 0 ? normalize(cols[idx2]) : "";
       const l3 = idx3 >= 0 ? normalize(cols[idx3]) : "";
+
       if (!l1) continue;
+
+      // ★防御: データ行に "level1/level2/level3" が混ざっていてもツリーにしない
+      const a = l1.toLowerCase();
+      const b = (l2 || "").toLowerCase();
+      const c = (l3 || "").toLowerCase();
+      if (a === "level1" && (b === "level2" || b === "") && (c === "level3" || c === "")) {
+        continue;
+      }
 
       const id1 = "L1|" + safeIdFromLabel(l1);
       addNode(id1, l1, 1, ROOT_ID);
@@ -801,7 +893,7 @@ if (locArea) {
       const csv = await fetchCsv(TREE_URL_PRIMARY);
       buildTreeFromCsv(csv);
       treeReady = true;
-	  await loadLocationCats();
+      await loadLocationCats();
       renderColumns();
       tryAutoApply();
       return;
@@ -811,7 +903,7 @@ if (locArea) {
       const csv = await fetchCsv(TREE_URL_FALLBACK);
       buildTreeFromCsv(csv);
       treeReady = true;
-	  await loadLocationCats();
+      await loadLocationCats();
       renderColumns();
       tryAutoApply();
     } catch (e2) {
