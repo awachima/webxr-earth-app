@@ -72,12 +72,9 @@
   // earth.html 側の dd-earth-ready が受け取れず、自動再適用が走らないことがある。
   // そのため「iframeが読み込まれている」こと自体でも earthReady を立てる。
   function markEarthReadyFromIframe() {
-    // iframe load は「earth が ready を送ってくる前提」を置けないため、
-    // ここでは ready を立てず、earth へ再通知要求だけ送る（順序問題を回避）
-    try {
-      iframe.contentWindow.postMessage({ type: "dd-tagfilter-parent-ready" }, "*");
-    } catch (e) {
-    }
+    if (earthReady) return;
+    earthReady = true;
+    tryAutoApply();
   }
 
   // 通常: iframe load で確実に検知
@@ -754,7 +751,14 @@
   // ----------------------------
   function postSelected() {
     // label が未解決のIDは「今は送らない」（ID文字列を送ると全消しになり得る）
-    const tags = Array.from(selected)
+    // ★重要: 親カテゴリ（子を持つノード）は「見出し」なので送らない（AND条件で0件化し得る）
+    const ids = Array.from(selected).filter((id) => {
+      const n = nodesById.get(id);
+      if (!n) return true; // loc(G/H) など木構造外の選択はそのまま送る
+      return !(n.children && n.children.size > 0); // leaf のみ
+    });
+
+    const tags = ids
       .map((id) => label.get(id))
       .map((s) => (s == null ? "" : String(s).trim()))
       .filter(Boolean);
