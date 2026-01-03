@@ -599,6 +599,7 @@ AFRAME.registerComponent('marker-placer',{
 
         // 受信したら即再計算（フィルタ後にクラスタ再作成）
         this.updateClusters();
+    try{ window.parent.postMessage({ type: 'dd-earth-ready' }, '*'); }catch(_){ }
 
         // 任意: 反映通知（index.html が必要なら使える）
         try{
@@ -620,9 +621,6 @@ AFRAME.registerComponent('marker-placer',{
       }else{ console.error('CSV fetch failed:', res.status); }
     }catch(e){ console.error("データ取得エラー:",e); }
     this.updateClusters();
-
-    // init完了通知（親：tagfilter/index へ）
-    try{ window.parent.postMessage({ type: 'dd-earth-ready' }, '*'); }catch(_){ }
   },
 
   // ★ CSV解析（タグ列は将来増えても壊れないように「後ろ側をまとめて拾う」）
@@ -765,8 +763,8 @@ AFRAME.registerComponent('marker-placer',{
   },
 
   // ★★★ マーカー絞り込みの「前段階」: 視点側半球だけに絞る ★★★
-  filterLocationsForCurrentView:function(){
-    const base = this.allLocations || [];
+  filterLocationsForCurrentView:function(list){
+    const base = (list || this.allLocations || []);
     if (base.length === 0) return base;
 
     // カメラやEarthの情報が取れない場合はそのまま
@@ -819,11 +817,11 @@ AFRAME.registerComponent('marker-placer',{
   updateClusters:function(){
     this.currentMarkers.forEach(m=>{ if(m && m.parentNode) m.parentNode.removeChild(m); }); this.currentMarkers=[];
 
-    // ★ ①前段階：視点側半球に絞る
-    let sourceList = this.filterLocationsForCurrentView();
+    // ★ ①タグで絞る（selectedTagsが空なら全通し）
+    let sourceList = this.applyTagFilter(this.allLocations || []);
 
-    // ★ ②タグで絞る（selectedTagsが空なら全通し）
-    sourceList = this.applyTagFilter(sourceList);
+    // ★ ②前段階：視点側半球に絞る（0件なら①の結果を維持する）
+    sourceList = this.filterLocationsForCurrentView(sourceList);
 
     var th=this.computeThreshold();
     var unclustered=sourceList.slice();
