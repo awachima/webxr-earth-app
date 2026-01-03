@@ -507,6 +507,10 @@
             .filter((id) => id && id !== ROOT_ID && id !== EMPTY_ID)
         );
         hadSavedSelection = selected.size > 0;
+
+        // ★修正: 「hadSavedSelection が true になった最後の瞬間」にも必ず再評価する
+        // earthReady / treeReady が既に立っている順序でも、ここで自動適用に到達できる
+        tryAutoApply();
       }
     } catch (e) {}
   }
