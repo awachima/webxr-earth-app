@@ -552,13 +552,27 @@ AFRAME.registerComponent('marker-placer',{
       this.currentMarkers.forEach(marker => { var mesh=marker.getObject3D('mesh'); if(mesh) mesh.material.color.set('#FF7F8A'); });
     });
 
-    // index.html → earth.html 絞り込み受信
+    
+
+    // 親（index.html）へ「earth 側準備完了」を通知（1回だけ）
+    this._sendEarthReadyOnce = () => {
+      if (this._sentEarthReady) return;
+      this._sentEarthReady = true;
+      try { window.parent.postMessage({ type: 'dd-earth-ready' }, '*'); } catch (_) {}
+    };
+// index.html → earth.html 絞り込み受信
     this._onFilterMessage = (event) => {
       try{
         const data = event && event.data ? event.data : null;
         if (!data) return;
 
         const t = (data.type || data.kind || '').toString();
+
+        // 親が先に準備完了していた場合の再通知要求
+        if (t === 'dd-tagfilter-parent-ready') {
+          this._sendEarthReadyOnce();
+          return;
+        }
 
         // index.html（現行）: { type:'dd-tags-apply', tags:[...] }
         // 互換: { type:'FILTER_TAGS_APPLY', payload:{selectedTags:[...]} }
@@ -599,7 +613,6 @@ AFRAME.registerComponent('marker-placer',{
 
         // 受信したら即再計算（フィルタ後にクラスタ再作成）
         this.updateClusters();
-    try{ window.parent.postMessage({ type: 'dd-earth-ready' }, '*'); }catch(_){ }
 
         // 任意: 反映通知（index.html が必要なら使える）
         try{
@@ -621,6 +634,9 @@ AFRAME.registerComponent('marker-placer',{
       }else{ console.error('CSV fetch failed:', res.status); }
     }catch(e){ console.error("データ取得エラー:",e); }
     this.updateClusters();
+
+    // 初期描画が完了したタイミングで ready を通知
+    this._sendEarthReadyOnce();
   },
 
   // ★ CSV解析（タグ列は将来増えても壊れないように「後ろ側をまとめて拾う」）

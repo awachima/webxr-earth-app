@@ -72,9 +72,12 @@
   // earth.html 側の dd-earth-ready が受け取れず、自動再適用が走らないことがある。
   // そのため「iframeが読み込まれている」こと自体でも earthReady を立てる。
   function markEarthReadyFromIframe() {
-    if (earthReady) return;
-    earthReady = true;
-    tryAutoApply();
+    // iframe load は「earth が ready を送ってくる前提」を置けないため、
+    // ここでは ready を立てず、earth へ再通知要求だけ送る（順序問題を回避）
+    try {
+      iframe.contentWindow.postMessage({ type: "dd-tagfilter-parent-ready" }, "*");
+    } catch (e) {
+    }
   }
 
   // 通常: iframe load で確実に検知
@@ -507,10 +510,6 @@
             .filter((id) => id && id !== ROOT_ID && id !== EMPTY_ID)
         );
         hadSavedSelection = selected.size > 0;
-
-        // ★修正: 「hadSavedSelection が true になった最後の瞬間」にも必ず再評価する
-        // earthReady / treeReady が既に立っている順序でも、ここで自動適用に到達できる
-        tryAutoApply();
       }
     } catch (e) {}
   }
