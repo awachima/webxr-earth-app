@@ -803,16 +803,6 @@ AFRAME.registerComponent('marker-placer',{
         for (let k=0;k<pieces.length;k++){
           if (selSet.has(pieces[k])) { hit = true; break; }
         }
-
-        // それでも当たらない場合は「包含」で救済（例: "体験/トレッキング" に "トレッキング"）
-        if (!hit){
-          const nraw = norm(raw);
-          for (const s of selSet){
-            if (!s) continue;
-            if (nraw === s) { hit = true; break; }
-            if (nraw.includes(s)) { hit = true; break; }
-          }
-        }
       }
 
       if (hit) out.push(loc);
