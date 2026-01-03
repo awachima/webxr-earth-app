@@ -750,9 +750,10 @@
   //  Earth messaging
   // ----------------------------
   function postSelected() {
+    // label が未解決のIDは「今は送らない」（ID文字列を送ると全消しになり得る）
     const tags = Array.from(selected)
-      .map((id) => label.get(id) || id)
-      .map((s) => String(s).trim())
+      .map((id) => label.get(id))
+      .map((s) => (s == null ? "" : String(s).trim()))
       .filter(Boolean);
 
     try {
@@ -768,15 +769,25 @@
     if (!treeReady) return;
     if (!hadSavedSelection) return;
 
+    // ★重要: 選択IDの label が揃うまで待つ（起動直後の一瞬でIDが送られるのを防ぐ）
+    const unresolved = Array.from(selected).some((id) => !label.has(id));
+    if (unresolved) {
+      // 少し待って再試行（短時間で揃う想定）
+      setTimeout(tryAutoApply, 50);
+      return;
+    }
+
     autoApplied = true;
     postSelected();
   }
+
 
   window.addEventListener("message", (ev) => {
     const data = ev && ev.data;
     if (!data || typeof data !== "object") return;
     if (data.type === "dd-earth-ready") {
-      earthReady = true;
+		console.log("[tagfilter] got dd-earth-ready");
+		earthReady = true;
       tryAutoApply();
     }
   });
