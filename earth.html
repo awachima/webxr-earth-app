@@ -599,7 +599,6 @@ AFRAME.registerComponent('marker-placer',{
 
         // 受信したら即再計算（フィルタ後にクラスタ再作成）
         this.updateClusters();
-    try{ window.parent.postMessage({ type: 'dd-earth-ready' }, '*'); }catch(_){ }
 
         // 任意: 反映通知（index.html が必要なら使える）
         try{
@@ -621,6 +620,9 @@ AFRAME.registerComponent('marker-placer',{
       }else{ console.error('CSV fetch failed:', res.status); }
     }catch(e){ console.error("データ取得エラー:",e); }
     this.updateClusters();
+
+    // init完了通知（親：tagfilter/index へ）
+    try{ window.parent.postMessage({ type: 'dd-earth-ready' }, '*'); }catch(_){ }
   },
 
   // ★ CSV解析（タグ列は将来増えても壊れないように「後ろ側をまとめて拾う」）
@@ -728,20 +730,9 @@ AFRAME.registerComponent('marker-placer',{
 
         const tagStart = Math.max(0, Math.min(this._tagStartIndex || 4, parts.length));
         for (let c = tagStart; c < parts.length; c++){
-          const cell = (parts[c] || '');
-          if (!cell) continue;
-
-          // 1セルに「A / B」「A｜B」「A,B」等で複数タグが入っていても拾う
-          const pieces = String(cell)
-            .replace(/\u00A0/g, ' ')          // nbsp
-            .replace(/[\u200B-\u200D\uFEFF]/g, '') // zero-width
-            .split(/[\n\r,，、;；\/|｜>＞→⇒]+/);
-
-          for (let pi = 0; pi < pieces.length; pi++){
-            const t = String(pieces[pi] || '').trim();
-            if (!t) continue;
-            tags.push(t);
-          }
+          const t = (parts[c] || '').trim();
+          if (!t) continue;
+          tags.push(t);
         }
         if (isNaN(lat) || isNaN(lon)) {
           locations.push({ title: title, lat: -90, lon: 0, url: url, tags: tags });
@@ -759,52 +750,15 @@ AFRAME.registerComponent('marker-placer',{
     const sel = this.selectedTags || [];
     if (!sel.length) return base;
 
-    // 正規化（全角/半角・余分な空白・ゼロ幅を吸収）
-    const norm = (s) => {
-      try{
-        return String(s || '')
-          .normalize('NFKC')
-          .replace(/\u00A0/g, ' ')
-          .replace(/[\u200B-\u200D\uFEFF]/g, '')
-          .trim();
-      }catch(e){
-        return String(s || '').trim();
-      }
-    };
-
-    const selSet = new Set(sel.map(norm).filter(Boolean));
-
-    // loc.tags は「単語」だけとは限らないので、区切り文字で分解して照合する
-    const splitPieces = (s) => {
-      const out = [];
-      const parts = String(s || '')
-        .replace(/\u00A0/g, ' ')
-        .replace(/[\u200B-\u200D\uFEFF]/g, '')
-        .split(/[\n\r,，、;；\/|｜>＞→⇒]+/);
-      for (let i=0;i<parts.length;i++){
-        const t = norm(parts[i]);
-        if (t) out.push(t);
-      }
-      return out;
-    };
-
+    const set = new Set(sel);
     const out = [];
     for (let i=0;i<base.length;i++){
       const loc = base[i];
       const tags = (loc && Array.isArray(loc.tags)) ? loc.tags : [];
-
       let hit = false;
-
-      for (let j=0;j<tags.length && !hit;j++){
-        const raw = tags[j];
-        const pieces = splitPieces(raw);
-
-        // まずは分解したトークンで一致
-        for (let k=0;k<pieces.length;k++){
-          if (selSet.has(pieces[k])) { hit = true; break; }
-        }
+      for (let j=0;j<tags.length;j++){
+        if (set.has(tags[j])) { hit = true; break; }
       }
-
       if (hit) out.push(loc);
     }
     return out;
