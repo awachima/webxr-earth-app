@@ -1,820 +1,280 @@
 // ===== ヘッダー高さに応じて --header-offset を更新 =====
 function adjustHeaderOffset(){
-  var header = document.querySelector('header');
-  if (!header) return;
-  var h = header.getBoundingClientRect().height;
-  document.documentElement.style.setProperty('--header-offset', h + 'px');
+  const header = document.querySelector('.site-header');
+  if(!header) return;
+  const h = header.getBoundingClientRect().height || 0;
+  document.documentElement.style.setProperty('--header-offset', `${Math.ceil(h)}px`);
 }
 window.addEventListener('load', adjustHeaderOffset);
 window.addEventListener('resize', adjustHeaderOffset);
 
 // ===== Helpers =====
-const $  = (s)=>document.querySelector(s);
-const $$ = (s)=>Array.from(document.querySelectorAll(s));
-const pad=(n)=>String(n).padStart(2,'0');
-const toISO=(local)=>{
-  const d=new Date(local);
-  const off=-d.getTimezoneOffset();
-  const sign=off>=0?'+':'-';
-  const a=Math.abs(off);
-  return local+`${sign}${pad(Math.floor(a/60))}:${pad(a%60)}`;
-};
-const uuid=()=> (crypto.randomUUID?.() || ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16)));
-const randKey=(n=16)=>{
-  const a=new Uint8Array(n);
-  crypto.getRandomValues(a);
-  return [...a].map(x=>x.toString(16).padStart(2,'0')).join('');
-};
+function qs(sel, root=document){ return root.querySelector(sel); }
+function qsa(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
 
-// ===== Storage =====
-const S='meetups-store', O='meetups-owners';
-const readStore =()=>JSON.parse(localStorage.getItem(S)||'[]');
-const writeStore=(arr)=>localStorage.setItem(S,JSON.stringify(arr));
-const readOwners=()=>JSON.parse(localStorage.getItem(O)||'{}');
-const writeOwners=(map)=>localStorage.setItem(O,JSON.stringify(map));
-const isOwner   =(roomId)=>Boolean(readOwners()[roomId]);
+function safeText(s){ return (s==null) ? '' : String(s); }
+function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
 
-const REGISTRY_API = 'https://do-chat.awachima7.workers.dev/api/rooms';
-const NEGATIVE_LIMIT_MS = 20*60*1000;
-
-// ===== タイマー & 自動削除 =====
-function autoDeleteRoom(roomId){
-  if (!roomId) return;
-  const remain = readStore().filter(x=>x.roomId!==roomId);
-  writeStore(remain);
-  const owners = readOwners(); delete owners[roomId]; writeOwners(owners);
-  const c = document.querySelector(`.card[data-room-id="${roomId}"]`);
-  if (c) c.remove();
-  console.info('[auto-delete]', roomId, 'deleted (20 minutes after start)');
+// ===== モーダル共通：開閉 =====
+function openModal(id){
+  const modal = document.getElementById(id);
+  if(!modal) return;
+  modal.style.display = 'block';
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
 }
-
-function initCountdown(card){
-  const start = new Date(card.dataset.start);
-  const el    = card.querySelector('[data-countdown]');
-  const label = (window.i18n && window.i18n.meetups && window.i18n.meetups.cardStartsLabel) || 'Starts in';
-  const roomId = card.dataset.roomId || '';
-  const expireAt = new Date(start.getTime() + NEGATIVE_LIMIT_MS);
-
-  const tick = ()=>{
-    const now  = new Date();
-    const diff = start - now;
-    if (diff > 0){
-      const h=Math.floor(diff/3600000),
-            m=Math.floor(diff/60000)%60,
-            s=Math.floor(diff/1000)%60;
-      if (el) el.textContent = `${label}: ${pad(h)}:${pad(m)}:${pad(s)}`;
-      requestAnimationFrame(tick);
-      return;
-    }
-    const remainMs = expireAt - now;
-    if (remainMs > 0){
-      const expLabel = (window.i18n && window.i18n.meetups && window.i18n.meetups.cardExpiresIn) || 'Expires in';
-      const remainMin = Math.ceil(remainMs/60000);
-      if (el) el.textContent = `${expLabel} ${pad(remainMin)} min`;
-      requestAnimationFrame(tick);
-    } else {
-      const expiredLabel = (window.i18n && window.i18n.meetups && window.i18n.meetups.cardExpired) || 'Expired';
-      if (el) el.textContent = expiredLabel;
-      autoDeleteRoom(roomId);
-    }
-  };
-  requestAnimationFrame(tick);
-}
-
-// ===== カード操作 =====
-function attachEnter(card){
-  const btn=card.querySelector('[data-enter]');
-  btn.onclick=()=>{
-    // ▼ ここで現在の言語を取得して lobby.html に渡す
-    let currentLang = 'en';
-    if (window.currentLang){
-      currentLang = window.currentLang;
-    } else {
-      try{
-        const stored = localStorage.getItem('lang');
-        if (stored) currentLang = stored;
-      }catch(e){}
-    }
-
-    const p=new URLSearchParams({
-      roomId   : card.dataset.roomId || '',
-      title    : card.dataset.title,
-      start    : card.dataset.start,
-      limit    : card.dataset.limit,
-      target   : card.dataset.url,
-      lang     : currentLang,
-      eventType: card.dataset.eventType || 'free',
-      price    : card.dataset.price || ''
-    });
-    location.href = `./lobby.html?${p.toString()}`;
-  };
-}
-
-function renderTools(card){
-  const roomId=card.dataset.roomId;
-  let tools=card.querySelector('.tools');
-  if(!tools){
-    tools=document.createElement('div');
-    tools.className='tools';
-    card.appendChild(tools);
-  }
-  tools.innerHTML='';
-  if(roomId && isOwner(roomId)){
-    const b=document.createElement('button');
-    b.className='btn icon';
-    const t = (window.i18n && window.i18n.meetups) || {};
-    const editTooltip = t.editTooltip || 'Edit';
-    b.title = editTooltip;
-    b.textContent='✎';
-    b.onclick=()=>openModal('edit', {
-      roomId,
-      title: card.dataset.title,
-      start: card.dataset.start,
-      limit: card.dataset.limit,
-      target: card.dataset.url,
-      eventType: card.dataset.eventType || 'free',
-      price: card.dataset.price || ''
-    });
-    tools.appendChild(b);
-  }
-}
-
-function upsertCard(item){
-  const grid=$('#grid');
-  let card=grid.querySelector(`.card[data-room-id="${item.roomId}"]`);
-  if(!card){
-    card=document.createElement('article');
-    card.className='card';
-    const t = (window.i18n && window.i18n.meetups) || {};
-    const startLabel = t.cardStartsLabel || 'Starts in';
-    const enterLabel = t.enterLobby || 'Enter Lobby';
-    card.innerHTML=`
-      <div class="title"></div>
-      <div class="event-type" data-event-type></div>
-      <div class="meta"><span data-countdown>${startLabel}: --:--:--</span></div>
-      <div><a class="btn primary" data-enter>${enterLabel}</a></div>`;
-  }
-  card.dataset.roomId=item.roomId;
-  card.dataset.title=item.title;
-  card.querySelector('.title').textContent=item.title;
-  card.dataset.start=item.start;
-  card.dataset.url=item.target;
-  card.dataset.limit=item.limit;
-  // イベント種別と金額も data-* に保存
-  card.dataset.eventType = item.eventType || 'free';
-  card.dataset.price     = (item.price ?? '').toString();
-
-  // ★ イベント種別表示文言（多言語対応）
-  const etEl = card.querySelector('[data-event-type]');
-  if (etEl){
-    const type  = item.eventType || 'free';
-    const price = (item.price ?? '').toString().trim();
-    const t = (window.i18n && window.i18n.meetups) || {};
-    const freeLabel = t.freeEvent || 'Free event';
-    const paidLabel = t.paidEvent || 'Paid event';
-    const paidTpl   = t.paidEventWithPrice || 'Paid event ({price})';
-    let label = '';
-    if (type === 'paid'){
-      label = price ? paidTpl.replace('{price}', price) : paidLabel;
-    } else {
-      label = freeLabel;
-    }
-    etEl.textContent = label;
-  }
-
-  if (card.parentElement !== grid) grid.prepend(card);
-  initCountdown(card);
-  attachEnter(card);
-  renderTools(card);
-}
-
-function persist(item){
-  const arr=readStore().filter(x=>x.roomId!==item.roomId);
-  arr.unshift(item);
-  writeStore(arr.slice(0,100));
-}
-
-function restore(){
-  $$('.card').forEach(c=>{
-    initCountdown(c);
-    attachEnter(c);
-    renderTools(c);
+function closeModal(){
+  qsa('.modal').forEach(m=>{
+    m.style.display = 'none';
+    m.setAttribute('aria-hidden', 'true');
   });
-  readStore().forEach(upsertCard);
+  document.body.classList.remove('modal-open');
 }
 
-// ===== モーダル =====
-const backdrop=$('#backdrop');
-const modalTitle=$('#modalTitle');
-const mTitle=$('#mTitle'), mLimit=$('#mLimit'), mStart=$('#mStart'), mTarget=$('#mTarget');
-const mStartFallback = $('#mStartFallback');
-const mMonth = $('#mMonth'), mDay = $('#mDay'), mHour = $('#mHour'), mMinute = $('#mMinute');
-const statusMsg=$('#statusMsg');
-const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
+// ===== 待合室（Meetup Room）関連 =====
+const API_BASE = "https://do-chat.awachima7.workers.dev";
 
-// Free/Paid ラジオ＋金額入力
-const mEventTypeRadios = document.querySelectorAll("input[name='mEventType']");
-const mPrice = $('#mPrice');
-const priceWrapper = $('#priceWrapper');
-
-// Quest / datetime-local 非対応検出
-const isQuest = /\b(OculusBrowser|Meta Quest Browser|MetaQuestBrowser|Quest)\b/i.test(navigator.userAgent);
-function supportsDateTimeLocal(){
-  const i=document.createElement('input');
-  i.setAttribute('type','datetime-local');
-  return i.type === 'datetime-local';
+async function apiGet(path){
+  const res = await fetch(API_BASE + path, { method:'GET' });
+  if(!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
+  return await res.json();
 }
-const useFallback = isQuest || !supportsDateTimeLocal();
-
-// フォールバック用（セレクト）の年情報
-let fallbackYear = new Date().getFullYear();
-
-function daysInMonth(year, month){
-  // month: 1〜12
-  return new Date(year, month, 0).getDate();
+async function apiPost(path, body){
+  const res = await fetch(API_BASE + path, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify(body || {})
+  });
+  if(!res.ok){
+    const t = await res.text().catch(()=> '');
+    throw new Error(`POST ${path} failed: ${res.status} ${t}`);
+  }
+  return await res.json();
 }
 
-function populateDateSelects(){
-  if (!mMonth || !mDay || !mHour || !mMinute) return;
+function formatCountdown(ms){
+  const sign = ms < 0 ? "-" : "";
+  ms = Math.abs(ms);
+  const s = Math.floor(ms/1000);
+  const hh = Math.floor(s/3600);
+  const mm = Math.floor((s%3600)/60);
+  const ss = Math.floor(s%60);
+  const pad = (n)=> String(n).padStart(2,'0');
+  return `${sign}${hh}:${pad(mm)}:${pad(ss)}`;
+}
 
-  if (!mMonth.options.length){
-    for (let i=1;i<=12;i++){
-      const opt=document.createElement('option');
-      opt.value=String(i);
-      opt.textContent=String(i);
-      mMonth.appendChild(opt);
-    }
-  }
-  if (!mHour.options.length){
-    for (let h=0;h<24;h++){
-      const opt=document.createElement('option');
-      opt.value=String(h);
-      opt.textContent=pad(h);
-      mHour.appendChild(opt);
-    }
-  }
-  if (!mMinute.options.length){
-    for (let m=0;m<60;m+=10){
-      const opt=document.createElement('option');
-      opt.value=String(m);
-      opt.textContent=pad(m);
-      mMinute.appendChild(opt);
-    }
+function createRoomCard(room){
+  const card = document.createElement('div');
+  card.className = 'room-card';
+
+  const title = document.createElement('div');
+  title.className = 'room-title';
+  title.textContent = safeText(room.title || 'Untitled');
+
+  const info = document.createElement('div');
+  info.className = 'room-info';
+
+  const type = document.createElement('div');
+  type.className = 'room-type';
+  type.textContent = safeText(room.eventType || '');
+
+  const countdown = document.createElement('div');
+  countdown.className = 'room-countdown';
+  countdown.dataset.start = safeText(room.startTime || '');
+
+  info.appendChild(type);
+  info.appendChild(countdown);
+
+  const actions = document.createElement('div');
+  actions.className = 'room-actions';
+
+  const enter = document.createElement('a');
+  enter.className = 'btn';
+  enter.setAttribute('data-enter', '');
+  enter.href = safeText(room.url || '#');
+  enter.target = '_blank';
+  enter.rel = 'noopener';
+  enter.textContent = '入室する';
+
+  const edit = document.createElement('button');
+  edit.className = 'btn btn-edit';
+  edit.type = 'button';
+  edit.textContent = '編集';
+  edit.addEventListener('click', ()=>{
+    openEditModal(room);
+  });
+
+  actions.appendChild(enter);
+  actions.appendChild(edit);
+
+  card.appendChild(title);
+  card.appendChild(info);
+  card.appendChild(actions);
+
+  return card;
+}
+
+let roomTimer = null;
+
+function startRoomCountdownTick(container){
+  if(roomTimer) clearInterval(roomTimer);
+  const tick = ()=>{
+    const now = Date.now();
+    qsa('.room-countdown', container).forEach(el=>{
+      const startStr = el.dataset.start;
+      if(!startStr) return;
+      const start = Date.parse(startStr);
+      if(isNaN(start)) return;
+      const diff = start - now;
+      el.textContent = `開始まで：${formatCountdown(diff)}`;
+    });
+  };
+  tick();
+  roomTimer = setInterval(tick, 1000);
+}
+
+async function refreshRooms(){
+  const container = document.getElementById('roomsContainer');
+  if(!container) return;
+  container.innerHTML = '';
+  try{
+    const data = await apiGet('/rooms');
+    const rooms = (data && Array.isArray(data.rooms)) ? data.rooms : [];
+    rooms.forEach(r=>{
+      container.appendChild(createRoomCard(r));
+    });
+    startRoomCountdownTick(container);
+  }catch(e){
+    console.error('[rooms] load error:', e);
+    const err = document.createElement('div');
+    err.className = 'room-error';
+    err.textContent = '待合室の読み込みに失敗しました。';
+    container.appendChild(err);
   }
 }
 
-function updateDayOptions(year, month, currentDay){
-  if (!mDay) return;
-  const maxDay = daysInMonth(year, month || 1);
-  const prev = currentDay || parseInt(mDay.value || '1',10) || 1;
-
-  while (mDay.firstChild){
-    mDay.removeChild(mDay.firstChild);
-  }
-  for (let d=1; d<=maxDay; d++){
-    const opt=document.createElement('option');
-    opt.value=String(d);
-    opt.textContent=String(d);
-    mDay.appendChild(opt);
-  }
-  const clamped = Math.min(prev, maxDay);
-  mDay.value = String(clamped);
-}
-
-function initStartInput(){
-  const now=new Date();
-  now.setMinutes(now.getMinutes()+30);
-  now.setSeconds(0,0);
-  const yyyy=now.getFullYear(), mm=pad(now.getMonth()+1), dd=pad(now.getDate());
-  const hh=pad(now.getHours()), mi=pad(now.getMinutes());
-
-  if (useFallback){
-    // Quest 等: 月/日/時/分 セレクトを使用
-    mStart.style.display='none';
-    mStartFallback.style.display='grid';
-
-    fallbackYear = now.getFullYear();
-    populateDateSelects();
-
-    const monthNum = now.getMonth()+1;
-    const dayNum   = now.getDate();
-    const hourNum  = now.getHours();
-    let minuteNum  = now.getMinutes();
-    minuteNum = Math.ceil(minuteNum / 10) * 10;
-    if (minuteNum >= 60) minuteNum = 50;
-
-    mMonth.value = String(monthNum);
-    updateDayOptions(fallbackYear, monthNum, dayNum);
-    mHour.value = String(hourNum);
-    mMinute.value = String(minuteNum);
-  }else{
-    // PC など: datetime-local を使用
-    mStart.style.display='';
-    mStartFallback.style.display='none';
-    mStart.value=`${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-  }
-}
-
-// EventType + Price UI
+// ===== モーダル：作成/編集 =====
 function setEventTypeInModal(type, price){
-  const val = (type === 'paid') ? 'paid' : 'free';
-  if (mEventTypeRadios && mEventTypeRadios.length){
-    mEventTypeRadios.forEach(r=>{
-      r.checked = (r.value === val);
-    });
+  const paidWrap = document.getElementById('paidPriceWrap');
+  const priceInput = document.getElementById('price');
+  if(!paidWrap || !priceInput) return;
+
+  if(type === 'paid'){
+    paidWrap.style.display = 'block';
+    priceInput.value = price || '';
+  }else{
+    paidWrap.style.display = 'none';
+    priceInput.value = '';
   }
-  if (priceWrapper && mPrice){
-    if (val === 'paid'){
-      priceWrapper.style.display = 'block';
-      if (price !== undefined && price !== null){
-        mPrice.value = String(price);
+}
+
+function openEditModal(room){
+  openModal('editModal');
+  const title = document.getElementById('title2');
+  const url = document.getElementById('url2');
+  const start = document.getElementById('start2');
+  const type = document.getElementById('eventType2');
+  const price = document.getElementById('price2');
+
+  if(title) title.value = safeText(room.title);
+  if(url) url.value = safeText(room.url);
+  if(start) start.value = safeText(room.startTime);
+
+  if(type){
+    type.value = safeText(room.eventType || 'free');
+    if(type.value === 'paid'){
+      const wrap = document.getElementById('paidPriceWrap2');
+      if(wrap) wrap.style.display = 'block';
+      if(price) price.value = safeText(room.price || '');
+    }else{
+      const wrap = document.getElementById('paidPriceWrap2');
+      if(wrap) wrap.style.display = 'none';
+      if(price) price.value = '';
+    }
+  }
+
+  const saveBtn = document.getElementById('save');
+  const delBtn  = document.getElementById('delete');
+
+  if(saveBtn){
+    saveBtn.onclick = async ()=>{
+      try{
+        const body = {
+          id: room.id,
+          title: title ? title.value : '',
+          url: url ? url.value : '',
+          startTime: start ? start.value : '',
+          eventType: type ? type.value : 'free',
+          price: (type && type.value === 'paid' && price) ? price.value : ''
+        };
+        await apiPost('/rooms/update', body);
+        closeModal();
+        await refreshRooms();
+      }catch(e){
+        console.error('[rooms] update error:', e);
+        alert('更新に失敗しました。Console をご確認ください。');
       }
-    }else{
-      priceWrapper.style.display = 'none';
-      mPrice.value = '';
-    }
+    };
+  }
+
+  if(delBtn){
+    delBtn.onclick = async ()=>{
+      if(!confirm('この待合室を削除しますか？')) return;
+      try{
+        await apiPost('/rooms/delete', { id: room.id });
+        closeModal();
+        await refreshRooms();
+      }catch(e){
+        console.error('[rooms] delete error:', e);
+        alert('削除に失敗しました。Console をご確認ください。');
+      }
+    };
   }
 }
 
-let mode='create';
-let editingRoomId=null;
-let editingTarget=null;
-
-function openModal(m='create', payload=null){
-  mode=m;
-  window.mode = m; // 言語適用時のボタン文言切り替え用
-  statusMsg.style.display='none';
-  statusMsg.textContent='';
-
-  if(m==='create'){
-    if (window.i18n && window.i18n.modal){
-      modalTitle.textContent = window.i18n.modal.createTitle || 'Create meetup';
-      submit.textContent = window.i18n.modal.submitCreate || 'Create meetup';
-    }else{
-      modalTitle.textContent='Create meetup';
-      submit.textContent='Create meetup';
-    }
-    duplicate.style.display='none';
-    delBtn.style.display='none';
-    mTarget.disabled=false;
-    mTitle.value='';
-    mLimit.value='10';
-    mTarget.value='';
-    editingRoomId=null;
-    editingTarget=null;
-    initStartInput();
-    // 新規作成時は無料扱い＆Price 非表示
-    setEventTypeInModal('free', '');
-  }else{
-    const owners=readOwners();
-    if(!payload || !owners[payload.roomId]){
-      const msg = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.noPermission)
-        || 'You do not have permission to edit this room on this device';
-      alert(msg);
-      return;
-    }
-    if (window.i18n && window.i18n.modal){
-      modalTitle.textContent = window.i18n.modal.editTitle || 'Edit meetup';
-      submit.textContent = window.i18n.modal.submitUpdate || 'Update';
-    }else{
-      modalTitle.textContent='Edit meetup';
-      submit.textContent='Update';
-    }
-    duplicate.style.display='inline-block';
-    delBtn.style.display='inline-block';
-    mTarget.disabled=true;
-    editingRoomId=payload.roomId;
-    editingTarget=payload.target;
-    mTitle.value=payload.title||'';
-    mLimit.value=String(payload.limit||'10');
-
-    const d = new Date(payload.start||Date.now());
-    if (useFallback){
-      // セレクト版
-      mStart.style.display='none';
-      mStartFallback.style.display='grid';
-
-      fallbackYear = d.getFullYear();
-      populateDateSelects();
-
-      const monthNum = d.getMonth()+1;
-      const dayNum   = d.getDate();
-      const hourNum  = d.getHours();
-      let minuteNum  = d.getMinutes();
-      minuteNum = Math.floor(minuteNum / 10) * 10;
-      if (minuteNum >= 60) minuteNum = 50;
-
-      mMonth.value = String(monthNum);
-      updateDayOptions(fallbackYear, monthNum, dayNum);
-      mHour.value = String(hourNum);
-      mMinute.value = String(minuteNum);
-    }else{
-      // datetime-local 版
-      mStart.style.display='';
-      mStartFallback.style.display='none';
-      mStart.value=(payload.start||'').slice(0,16);
-    }
-    mTarget.value=payload.target||'';
-
-    // 既存データの種別・金額を反映（無ければ free）
-    const existingType  = payload.eventType || 'free';
-    const existingPrice = payload.price || '';
-    setEventTypeInModal(existingType, existingPrice);
-  }
-  backdrop.style.display='flex';
-}
-function closeModal(){ backdrop.style.display='none'; }
-
-// ===== カスタムアラート =====
-const alertBackdrop = $('#alertBackdrop');
-const alertClose = $('#alertClose');
-const alertOk = $('#alertOk');
-function showUrlAlert(){
-  if(alertBackdrop){ alertBackdrop.style.display='flex'; }
-}
-function hideUrlAlert(){
-  if(alertBackdrop){ alertBackdrop.style.display='none'; }
-}
-if(alertClose) alertClose.onclick = hideUrlAlert;
-if(alertOk) alertOk.onclick = hideUrlAlert;
-
-// ===== サイト説明モーダル =====
-const aboutBackdrop = $('#aboutBackdrop');
-const aboutBtn = $('#aboutBtn');
-const aboutClose = $('#aboutClose');
-const aboutOk = $('#aboutOk');
-function openAbout(){
-  if (aboutBackdrop) aboutBackdrop.style.display = 'flex';
-}
-function closeAboutModal(){
-  if (aboutBackdrop) aboutBackdrop.style.display = 'none';
-}
-if (aboutBtn)   aboutBtn.onclick   = openAbout;
-if (aboutClose) aboutClose.onclick = closeAboutModal;
-if (aboutOk)    aboutOk.onclick    = closeAboutModal;
-
-// ===== Meetup Rooms の使い方モーダル =====
-const guideBackdrop = $('#guideBackdrop');
-const guideBtn = $('#guideBtn');
-const guideClose = $('#guideClose');
-const guideOk = $('#guideOk');
-function openGuide(){
-  if (guideBackdrop) guideBackdrop.style.display = 'flex';
-}
-function closeGuideModal(){
-  if (guideBackdrop) guideBackdrop.style.display = 'none';
-}
-if (guideBtn)   guideBtn.onclick   = openGuide;
-if (guideClose) guideClose.onclick = closeGuideModal;
-if (guideOk)    guideOk.onclick    = closeGuideModal;
-
-async function postRegistry(item){
-  try{
-    const owner = localStorage.getItem('nickname') || null;
-    const ownerKey = readOwners()[item.roomId] || null;
-    await fetch(REGISTRY_API, {
-      method: "POST",
-      headers: {"content-type":"application/json"},
-      body: JSON.stringify({
-        roomId: item.roomId,
-        title: item.title,
-        start: item.start,
-        limit: item.limit,
-        target: item.target,
-        owner,
-        ownerKey,
-        eventType: item.eventType || 'free',
-        price: item.price ?? ''
-      })
-    });
-  }catch(e){ console.warn('[registry]', e); }
-}
-
-/**
- * 日時の組み立て
- * - PC: datetime-local の値をそのまま使う
- * - Quest 等: 年 + セレクト（月/日/時/分）から組み立てる
- * さらに、
- * - 「現在より過去」の日時の場合は、自動的に「翌年の同じ月日・時刻」に繰り上げる
- */
-function composeStartISO(){
-  const now = new Date();
-
-  if (!useFallback){
-    if (!mStart.value) return '';
-
-    // mStart.value は "YYYY-MM-DDTHH:mm"
-    const base = new Date(mStart.value);
-    if (isNaN(base.getTime())) return '';
-
-    // 過去なら翌年に繰り上げ
-    if (base < now){
-      base.setFullYear(base.getFullYear() + 1);
-    }
-
-    const y  = base.getFullYear();
-    const mo = pad(base.getMonth() + 1);
-    const d  = pad(base.getDate());
-    const h  = pad(base.getHours());
-    const mi = pad(base.getMinutes());
-    const localFixed = `${y}-${mo}-${d}T${h}:${mi}`;
-    return toISO(localFixed);
-  }
-
-  // フォールバック（Quest 等）の場合：
-  // fallbackYear + セレクトから Date を作り、過去なら翌年に繰り上げ
-  const baseYear = fallbackYear || now.getFullYear();
-  let month = parseInt(mMonth.value || '0', 10) || 1;
-  let day   = parseInt(mDay.value   || '0', 10) || 1;
-  let hour  = parseInt(mHour.value  || '0', 10) || 0;
-  let min   = parseInt(mMinute.value|| '0', 10) || 0;
-
-  // 月・日を一応 1〜12 / 1〜31 の範囲にクリップしてから Date を作成
-  month = Math.min(Math.max(month, 1), 12);
-  day   = Math.min(Math.max(day,   1), 31);
-
-  let dObj = new Date(baseYear, month - 1, day, hour, min);
-  if (isNaN(dObj.getTime())) return '';
-
-  // 過去なら翌年に繰り上げ
-  if (dObj < now){
-    dObj.setFullYear(dObj.getFullYear() + 1);
-  }
-
-  const y2  = dObj.getFullYear();
-  const mo2 = pad(dObj.getMonth() + 1);
-  const d2  = pad(dObj.getDate());
-  const h2  = dObj.getHours().toString().padStart(2,'0');
-  const mi2 = dObj.getMinutes().toString().padStart(2,'0');
-
-  return toISO(`${y2}-${mo2}-${d2}T${h2}:${mi2}`);
-}
-
-async function onSubmit(){
-  let roomId=editingRoomId, target=editingTarget;
-  const title=(mTitle.value||'Meetup').trim();
-  const limit=parseInt(mLimit.value,10)||10;
-
-  const startISO = composeStartISO();
-  if(!startISO){
-    const msg = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.startRequired)
-      || 'Please enter the meeting time.';
-    alert(msg);
-    return;
-  }
-
-  // イベント種別と金額取得
-  let eventType = 'free';
-  if (mEventTypeRadios && mEventTypeRadios.length){
-    const checked = Array.from(mEventTypeRadios).find(r=>r.checked);
-    if (checked && checked.value === 'paid') eventType = 'paid';
-  }
-  let price = '';
-  if (eventType === 'paid' && mPrice && mPrice.value){
-    price = mPrice.value.trim();
-  }
-
-  if(mode==='create'){
-    target=(mTarget.value||'').trim();
-
-    /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
-    if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
-      showUrlAlert();
-      return;
-    }
-
-    roomId=uuid();
-    const ownersMap=readOwners();
-    ownersMap[roomId]=randKey();
-    writeOwners(ownersMap);
-  }
-
-  const prev = readStore().find(x=>x.roomId===roomId);
-  const nowIso = new Date().toISOString();
-  const item={
-    roomId,
-    title,
-    start: startISO,
-    limit: String(limit),
-    target,
-    updatedAt: nowIso,
-    createdAt: prev?.createdAt || nowIso,
-    eventType,
-    price
-  };
-
-  upsertCard(item);
-  persist(item);
-  postRegistry(item);
-
-  if (window.i18n && window.i18n.modal && window.i18n.modal.validation){
-    statusMsg.textContent = (mode==='create')
-      ? (window.i18n.modal.statusCreated || 'Created')
-      : (window.i18n.modal.statusUpdated || 'Updated');
-  }else{
-    statusMsg.textContent = (mode==='create') ? 'Created' : 'Updated';
-  }
-  statusMsg.style.display = 'block';
-}
-
-function onDuplicate(){
-  if(!editingRoomId) return;
-  const owners=readOwners();
-  const newId=uuid();
-  owners[newId]=randKey();
-  writeOwners(owners);
-
-  const startISO = composeStartISO() || new Date().toISOString();
-  const nowIso = new Date().toISOString();
-
-  // 現在モーダルに入っている種別と金額を取得して複製にも反映
-  let eventType = 'free';
-  if (mEventTypeRadios && mEventTypeRadios.length){
-    const checked = Array.from(mEventTypeRadios).find(r=>r.checked);
-    if (checked && checked.value === 'paid') eventType = 'paid';
-  }
-  let price = '';
-  if (eventType === 'paid' && mPrice && mPrice.value){
-    price = mPrice.value.trim();
-  }
-
-  const item={
-    roomId:newId,
-    title:(mTitle.value||'Meetup').trim(),
-    start:startISO,
-    limit:String(parseInt(mLimit.value,10)||10),
-    target:editingTarget,
-    updatedAt:nowIso,
-    createdAt:nowIso,
-    eventType,
-    price
-  };
-  upsertCard(item);
-  persist(item);
-  postRegistry(item);
-  const msg = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.duplicated)
-    || 'Duplicated. The destination URL is the same as the original.';
-  alert(msg);
-}
-
-async function onDelete(){
-  if(!editingRoomId) return;
-  try{
-    const ownerKey = readOwners()[editingRoomId];
-    if (!ownerKey){
-      const msg = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.ownerMissing)
-        || 'Owner information is missing on this device, so the room cannot be deleted.';
-      alert(msg);
-      return;
-    }
-    const res = await fetch(REGISTRY_API, {
-      method:"DELETE",
-      headers:{"content-type":"application/json"},
-      body:JSON.stringify({ roomId: editingRoomId, ownerKey })
-    });
-    if (!res.ok){
-      const data = await res.json().catch(()=>({}));
-      const prefix = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.deleteFailedPrefix)
-        || 'Failed to delete';
-      alert(`${prefix}: ${data.error || res.statusText}`);
-      return;
-    }
-  }catch(e){
-    const msg = (window.i18n && window.i18n.modal && window.i18n.modal.validation && window.i18n.modal.validation.serverError)
-      || 'An error occurred while connecting to the server.';
-    alert(msg);
-    console.warn('[registry DELETE]', e);
-    return;
-  }
-  autoDeleteRoom(editingRoomId);
-  closeModal();
-}
-
-// 共有部屋一覧の読み込み
-async function loadShared(){
-  try{
-    const res = await fetch(REGISTRY_API);
-    const j = await res.json();
-    if (j && j.ok && Array.isArray(j.rooms)){
-      const remoteRoomIds = new Set(j.rooms.map(r=>r.roomId));
-      document.querySelectorAll('#grid .card').forEach(card=>{
-        const roomId = card.dataset.roomId;
-        if (roomId && !remoteRoomIds.has(roomId)) card.remove();
-      });
-      j.rooms.forEach(upsertCard);
-    }
-  }catch(e){
-    console.warn('[registry GET]', e);
-  }
-}
-
-// ===== 初期化（言語読み込み後に startApp() から呼び出す） =====
-function startApp(){
-  restore();
-
-  // 月変更時に日付の上限を月に合わせてクランプ
-  if (mMonth && mDay){
-    mMonth.addEventListener('change', ()=>{
-      const year = fallbackYear || new Date().getFullYear();
-      const currentDay = parseInt(mDay.value || '1',10) || 1;
-      const monthNum   = parseInt(mMonth.value || '1',10) || 1;
-      updateDayOptions(year, monthNum, currentDay);
-    });
-  }
-
-  // EventType ラジオの挙動（paid で Price 表示）
-  if (mEventTypeRadios && mEventTypeRadios.length){
-    mEventTypeRadios.forEach(r=>{
-      r.addEventListener('change', ()=>{
-        if (!r.checked) return;
-        const newType = (r.value === 'paid') ? 'paid' : 'free';
-        setEventTypeInModal(newType, mPrice ? mPrice.value : '');
-      });
-    });
-    // 起動時は free
-    setEventTypeInModal('free', '');
-  }
-
-  // タイトル右の作成ボタン
-  const oc = document.getElementById('openCreate');
-  if (oc) oc.onclick = () => openModal('create');
-
-  // 読み込み直後は確実に非表示（チラ見え対策）
-  closeModal();
-
-  // タグ絞り込みモーダル（iframe上 左上ボタン）
-  setupTagFilterModal();
-
-  // ツアー提案（Lucy）パネル：tourist-information ボタンで開閉
-  setupRecommendPanelToggle();
-
-  // ★ここが今回の本丸：存在しない要素で例外停止しないようにガード
-  const closeBtn  = document.getElementById('close');
-  if (closeBtn) closeBtn.onclick = closeModal;
-  const closeBtn2 = document.getElementById('close2');
-  if (closeBtn2) closeBtn2.onclick = closeModal;
-
-  const submitBtn = document.getElementById('submit');
-  if (submitBtn) submitBtn.onclick = onSubmit;
-  const duplicateBtn = document.getElementById('duplicate');
-  if (duplicateBtn) duplicateBtn.onclick = onDuplicate;
-  const deleteBtn = document.getElementById('delete');
-  if (deleteBtn) deleteBtn.onclick = onDelete;
-
-  loadShared();
-  setInterval(loadShared, 30000);
-}
-
-
-// ===== タグ絞り込みモーダル（#tagFilterBtn → #tagFilterBackdrop） =====
+// ===== タグ絞り込みモーダル（iframe上 左上ボタン） =====
 function setupTagFilterModal(){
-  const btn = document.getElementById('tagFilterBtn');
-  const backdrop = document.getElementById('tagFilterBackdrop');
-  const closeBtn = document.getElementById('tagFilterClose');
-  if (!btn || !backdrop || !closeBtn) return;
+  const btn = document.getElementById('filterBtn');
+  const modal = document.getElementById('modal');
+  const close = document.getElementById('close');
+  const close2 = document.getElementById('close2');
+  if(!btn || !modal) return;
 
   const open = ()=>{
-    backdrop.style.display = 'flex';
-    backdrop.setAttribute('aria-hidden', 'false');
-    btn.setAttribute('aria-expanded', 'true');
+    modal.style.display = 'block';
+    modal.setAttribute('aria-hidden', 'false');
+  };
+  const closeM = ()=>{
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
   };
 
-  const close = ()=>{
-    backdrop.style.display = 'none';
-    backdrop.setAttribute('aria-hidden', 'true');
-    btn.setAttribute('aria-expanded', 'false');
-  };
-
-  // ボタンで開く
   btn.addEventListener('click', (ev)=>{
     ev.preventDefault();
     ev.stopPropagation();
     open();
   });
+  if(close) close.addEventListener('click', closeM);
+  if(close2) close2.addEventListener('click', closeM);
 
-  // ×で閉じる
-  closeBtn.addEventListener('click', (ev)=>{
-    ev.preventDefault();
-    close();
-  });
-
-  // 背景クリックで閉じる（中身クリックでは閉じない）
-  backdrop.addEventListener('click', (ev)=>{
-    if (ev.target === backdrop){
-      close();
+  // 外側クリックで閉じる
+  document.addEventListener('click', (ev)=>{
+    if(modal.style.display !== 'block') return;
+    const panel = qs('.modal-content', modal);
+    if(panel && !panel.contains(ev.target) && ev.target !== btn){
+      closeM();
     }
   });
 
   // ESC で閉じる
   document.addEventListener('keydown', (ev)=>{
-    if (ev.key === 'Escape'){
-      // 他モーダルの ESC と競合しても「閉じる」だけなので安全
-      close();
+    if(ev.key === 'Escape'){
+      closeM();
     }
   });
 
   // もし初期状態が表示されてしまう環境があれば、確実に閉じる
-  close();
+  closeM();
 }
 
 // ===== ツアー提案（Lucy）パネル：表示/非表示トグル =====
@@ -854,6 +314,113 @@ function setupRecommendPanelToggle(){
   });
 }
 
+// ===== ツアー提案（Lucy）チャット：送信が効かない時のフェイルセーフ =====
+// 目的：recommend.js が何らかの理由で実行されない／要素が差し替わる等でも、最低限送信が動くようにする
+function setupLucyRecommendChatFallback(){
+  const input = document.getElementById('recommendInput');
+  const sendBtn = document.getElementById('recommendSend');
+  const chatBox = document.getElementById('recommendChat');
+
+  if (!input || !sendBtn || !chatBox) return;
+
+  // 既に recommend.js 側でバインド済みなら何もしない
+  if (sendBtn.dataset && sendBtn.dataset.lucyBound === '1') return;
+
+  const ENDPOINT = 'https://lucy-recommend.awachima7.workers.dev/';
+  const ASSISTANT = 'Lucy';
+  let history = [];
+
+  function append(role, text){
+    const wrap = document.createElement('div');
+    wrap.style.margin = '6px 0';
+
+    const label = document.createElement('div');
+    label.style.fontWeight = '700';
+    label.style.fontSize = '0.85rem';
+    label.style.opacity = '0.85';
+    label.textContent = (role === 'user') ? 'You' : ASSISTANT;
+
+    const body = document.createElement('div');
+    body.style.whiteSpace = 'pre-wrap';
+    body.style.fontSize = '0.92rem';
+    body.textContent = text;
+
+    wrap.appendChild(label);
+    wrap.appendChild(body);
+    chatBox.appendChild(wrap);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  function sendHighlights(highlightRows, exampleSpots){
+    try{
+      const iframe = document.getElementById('webxr-iframe');
+      if (!iframe || !iframe.contentWindow) return;
+      iframe.contentWindow.postMessage({
+        type: 'dd-lucy-highlight',
+        highlightRows: Array.isArray(highlightRows) ? highlightRows : [],
+        exampleSpots: Array.isArray(exampleSpots) ? exampleSpots : []
+      }, '*');
+    }catch(e){}
+  }
+
+  async function handleSend(){
+    const msg = (input.value || '').trim();
+    if (!msg) return;
+
+    input.value = '';
+    append('user', msg);
+
+    // 送信中は多重送信を防ぐ
+    const prevDisabled = sendBtn.disabled;
+    sendBtn.disabled = true;
+
+    try{
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, history })
+      });
+
+      const data = await res.json().catch(()=>null);
+
+      if (!res.ok || !data){
+        append('assistant', '接続状況が少し不安定なようで、候補をうまく取得できませんでした。\nお手数ですが、時間をおいてもう一度お試しいただけますか？');
+        return;
+      }
+
+      const reply = (data.reply && String(data.reply).trim()) ? String(data.reply).trim() : '(no reply)';
+      append('assistant', reply);
+
+      history.push({ role: 'user', text: msg });
+      history.push({ role: 'assistant', text: reply });
+      history = history.slice(-6);
+
+      sendHighlights(data.highlightRows, data.exampleSpots);
+    }catch(e){
+      append('assistant', '送信に失敗したようです。Network / Console をご確認ください。');
+      console.error('[Lucy fallback] send error:', e);
+    }finally{
+      sendBtn.disabled = prevDisabled;
+    }
+  }
+
+  sendBtn.addEventListener('click', (ev)=>{
+    ev.preventDefault();
+    handleSend();
+  });
+
+  input.addEventListener('keydown', (ev)=>{
+    if (ev.key === 'Enter'){
+      ev.preventDefault();
+      handleSend();
+    }
+  });
+
+  // バインド済みマーク（devtools でも判別しやすい）
+  if (sendBtn.dataset) sendBtn.dataset.lucyBound = '1';
+  console.debug('[Lucy fallback] listeners attached');
+}
+
 // （将来用）管理者パスワード関連
 const ADMIN_HASH="27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
 function toHex(buf){return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");}
@@ -868,231 +435,144 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
   var iframe = document.getElementById('webxr-iframe');
   if(!iframe) return;
 
-  function lockPageScroll(){ document.documentElement.style.overflowY = 'hidden'; }
-  function unlockPageScroll(){ document.documentElement.style.overflowY = ''; }
-
-  iframe.addEventListener('mouseenter', lockPageScroll);
-  iframe.addEventListener('mouseleave', unlockPageScroll);
-  window.addEventListener('blur', unlockPageScroll);
-  window.addEventListener('beforeunload', unlockPageScroll);
-})();
-
-// ===== 言語切り替え（外部 JSON 読み込み） =====
-(function(){
-  let appStarted = false;
-
-  const LANGUAGE_LABELS = {
-    en: 'English',
-    ja: '日本語',
-    zh: '中文',
-    fa: 'فارسی',
-    hi: 'हिन्दी',
-    he: 'עברית'
+  var onWheel = function(ev){
+    // iframe上にカーソルがある間は、ページ全体スクロールを抑止
+    ev.preventDefault();
   };
 
-  function updateHtmlLangAndDir(lang){
-    const root = document.documentElement;
-    root.lang = lang || 'en';
-    if (lang === 'fa' || lang === 'he'){
-      root.dir = 'rtl';
-    } else {
-      root.dir = 'ltr';
-    }
+  var entered = false;
+  iframe.addEventListener('mouseenter', function(){
+    if(entered) return;
+    entered = true;
+    window.addEventListener('wheel', onWheel, { passive:false });
+  });
+
+  iframe.addEventListener('mouseleave', function(){
+    entered = false;
+    window.removeEventListener('wheel', onWheel, { passive:false });
+  });
+})();
+
+// ===== 初期化（IIFE） =====
+(function(){
+  // 待合室一覧の取得
+  refreshRooms().catch(()=>{});
+
+  // 待合室作成モーダルのイベント初期化
+  const createBtn = document.getElementById('create');
+  const createBtn2 = document.getElementById('create2');
+  const modal = document.getElementById('createModal');
+  const modal2 = document.getElementById('editModal');
+
+  if(createBtn){
+    createBtn.addEventListener('click', ()=> openModal('createModal'));
+  }
+  if(createBtn2){
+    createBtn2.addEventListener('click', ()=> openModal('createModal'));
   }
 
+  const cancel = document.getElementById('cancel');
+  if(cancel) cancel.onclick = closeModal;
+
+  const cancel2 = document.getElementById('cancel2');
+  if(cancel2) cancel2.onclick = closeModal;
+
+  // イベント種別（無料/有料）
+  const eventType = document.getElementById('eventType');
+  if(eventType){
+    eventType.addEventListener('change', (e)=>{
+      const v = e.target.value;
+      setEventTypeInModal(v, '');
+    });
+    // 起動時は free
+    setEventTypeInModal('free', '');
+  }
+
+  // タイトル右の作成ボタン
+  const oc = document.getElementById('openCreate');
+  if (oc) oc.onclick = () => openModal('create');
+
+  // 読み込み直後は確実に非表示（チラ見え対策）
+  closeModal();
+
+  // タグ絞り込みモーダル（iframe上 左上ボタン）
+  setupTagFilterModal();
+
+  // ツアー提案（Lucy）パネル：tourist-information ボタンで開閉
+  setupRecommendPanelToggle();
+
+  // ツアー提案（Lucy）チャット：送信が効かない時のフェイルセーフ
+  setupLucyRecommendChatFallback();
+
+  // ★ここが今回の本丸：存在しない要素で例外停止しないようにガード
+  const closeBtn  = document.getElementById('close');
+  if (closeBtn) closeBtn.onclick = closeModal;
+  const closeBtn2 = document.getElementById('close2');
+  if (closeBtn2) closeBtn2.onclick = closeModal;
+
+  // 作成確定
+  const submit = document.getElementById('submit');
+  if(submit){
+    submit.addEventListener('click', async ()=>{
+      try{
+        const title = (document.getElementById('title')||{}).value || '';
+        const url = (document.getElementById('url')||{}).value || '';
+        const start = (document.getElementById('start')||{}).value || '';
+        const type = (document.getElementById('eventType')||{}).value || 'free';
+        const price = (type === 'paid') ? ((document.getElementById('price')||{}).value || '') : '';
+
+        const body = { title, url, startTime: start, eventType: type, price };
+        await apiPost('/rooms/create', body);
+        closeModal();
+        await refreshRooms();
+      }catch(e){
+        console.error('[rooms] create error:', e);
+        alert('作成に失敗しました。Console をご確認ください。');
+      }
+    });
+  }
+
+  // ===== 言語切り替え（右上） =====
   async function loadLanguage(lang){
-    let data = {};
     try{
-      const res = await fetch('./lang/' + lang + '.json');
-      if (!res.ok) throw new Error('Failed to load language: ' + lang);
-      data = await res.json();
+      const res = await fetch(`./lang/${lang}.json`, { cache:'no-store' });
+      if(!res.ok) throw new Error('lang load fail');
+      const dict = await res.json();
+      applyLanguage(dict, lang);
+      try{ localStorage.setItem('lang', lang); }catch(e){}
     }catch(e){
-      console.error(e);
-      // 読み込み失敗時は既存の window.i18n をそのまま使う
-      data = window.i18n || {};
+      console.warn('lang load error', e);
     }
-    window.i18n = data || {};
-    window.currentLang = lang;
-    try{ localStorage.setItem('lang', lang); }catch(e){}
-    updateHtmlLangAndDir(lang);
-    applyLanguage();
   }
 
-  function applyLanguage(){
-    const t = window.i18n || {};
-    const current = window.currentLang || 'en';
-
-    // ページタイトル
-    if (t.pageTitle){
-      document.title = t.pageTitle;
-    }
-
-    // ヘッダーロゴテキスト
-    const siteTitleEl = document.querySelector('.brand-logo-text');
-    if (siteTitleEl){
-      siteTitleEl.textContent = t.siteTitle || 'Dokodemo Doors Fan Site';
-    }
-
-    // 上部ボタン
-    if (t.buttons){
-      const aboutBtn = document.getElementById('aboutBtn');
-      const guideBtn = document.getElementById('guideBtn');
-      if (aboutBtn && t.buttons.about) aboutBtn.textContent = t.buttons.about;
-      if (guideBtn && t.buttons.guide) guideBtn.textContent = t.buttons.guide;
-    }
-
-    // About モーダル
-    if (t.about){
-      const aboutTitle = document.getElementById('aboutTitle');
-      const aboutBody  = document.getElementById('aboutBody');
-      if (aboutTitle && t.about.title) aboutTitle.textContent = t.about.title;
-      if (aboutBody && t.about.bodyHtml) aboutBody.innerHTML = t.about.bodyHtml;
-    }
-    if (t.aboutModal && t.aboutModal.ok){
-      const aboutOk = document.getElementById('aboutOk');
-      if (aboutOk) aboutOk.textContent = t.aboutModal.ok;
-    }
-
-    // Guide モーダル
-    if (t.guide){
-      const guideTitle = document.getElementById('guideTitle');
-      const guideBody  = document.getElementById('guideBody');
-      if (guideTitle && t.guide.title) guideTitle.textContent = t.guide.title;
-      if (guideBody && t.guide.bodyHtml) guideBody.innerHTML = t.guide.bodyHtml;
-    }
-    if (t.guideModal && t.guideModal.ok){
-      const guideOk = document.getElementById('guideOk');
-      if (guideOk) guideOk.textContent = t.guideModal.ok;
-    }
-
-    // Meetup Rooms ヘッダー
-    if (t.meetups){
-      const meetupsTitle = document.querySelector('.meetups__title');
-      const createBtn = document.getElementById('openCreate');
-      if (meetupsTitle && t.meetups.title) meetupsTitle.textContent = t.meetups.title;
-      if (createBtn && t.meetups.createButton) createBtn.textContent = t.meetups.createButton;
-
-      // カード内の Enter Lobby ボタン
-      if (t.meetups.enterLobby){
-        document.querySelectorAll('#grid .card [data-enter]').forEach(btn=>{
-          btn.textContent = t.meetups.enterLobby;
-        });
+  function applyLanguage(dict, lang){
+    // data-i18n を持つ要素へ反映
+    qsa('[data-i18n]').forEach(el=>{
+      const k = el.getAttribute('data-i18n');
+      if(!k) return;
+      if(dict && dict[k]!=null){
+        el.textContent = dict[k];
       }
-
-      // カウントダウン表示のラベル部分だけ差し替え
-      if (t.meetups.cardStartsLabel){
-        document.querySelectorAll('#grid .card [data-countdown]').forEach(span=>{
-          const txt = span.textContent || '';
-          const m = txt.match(/: (.*)$/);
-          const suffix = m ? m[1] : '--:--:--';
-          span.textContent = `${t.meetups.cardStartsLabel}: ${suffix}`;
-        });
-      }
-
-      // カード内のイベント種別表示（多言語更新）
-      document.querySelectorAll('#grid .card').forEach(card=>{
-        const etEl = card.querySelector('[data-event-type]');
-        if (!etEl) return;
-        const type  = card.dataset.eventType || 'free';
-        const price = (card.dataset.price || '').trim();
-        const freeLabel = t.meetups.freeEvent || 'Free event';
-        const paidLabel = t.meetups.paidEvent || 'Paid event';
-        const paidTpl   = t.meetups.paidEventWithPrice || 'Paid event ({price})';
-        let label = '';
-        if (type === 'paid'){
-          label = price ? paidTpl.replace('{price}', price) : paidLabel;
-        }else{
-          label = freeLabel;
-        }
-        etEl.textContent = label;
-      });
-    }
-
-    // 作成/編集モーダル（ラベル類）
-    if (t.modal && t.modal.form){
-      const lblTitle = document.querySelector("label[for='mTitle']");
-      const lblLimit = document.querySelector("label[for='mLimit']");
-      const lblStart = document.querySelector("label[for='mStart']");
-      const lblTarget= document.querySelector("label[for='mTarget']");
-      if (lblTitle && t.modal.form.titleLabel) lblTitle.textContent = t.modal.form.titleLabel;
-      if (lblLimit && t.modal.form.limitLabel) lblLimit.textContent = t.modal.form.limitLabel;
-      if (lblStart && t.modal.form.startLabel) lblStart.textContent = t.modal.form.startLabel;
-      if (lblTarget && t.modal.form.targetLabel) lblTarget.textContent = t.modal.form.targetLabel;
-      const note = document.querySelector('.note');
-      if (note && t.modal.form.targetNote) note.textContent = t.modal.form.targetNote;
-
-      // モーダル説明文（HTML）
-      const desc = document.getElementById('modalDescription');
-      if (desc && t.modal.form.descriptionHtml){
-        desc.innerHTML = t.modal.form.descriptionHtml;
-      }
-
-      // Free/Paid/Price ラベル
-      const evTypeLabel = document.getElementById('mEventTypeLabel');
-      const freeSpan    = document.getElementById('mEventTypeFreeLabel');
-      const paidSpan    = document.getElementById('mEventTypePaidLabel');
-      const priceLabel  = document.getElementById('mPriceLabel');
-      if (evTypeLabel && t.modal.form.eventTypeLabel) evTypeLabel.textContent = t.modal.form.eventTypeLabel;
-      if (freeSpan && t.modal.form.eventTypeFree)     freeSpan.textContent    = t.modal.form.eventTypeFree;
-      if (paidSpan && t.modal.form.eventTypePaid)     paidSpan.textContent    = t.modal.form.eventTypePaid;
-      if (priceLabel && t.modal.form.priceLabel)      priceLabel.textContent  = t.modal.form.priceLabel;
-      if (window.mPrice && t.modal.form.pricePlaceholder){
-        window.mPrice.placeholder = t.modal.form.pricePlaceholder;
-      }
-    }
-
-    // 作成/編集モーダル（ボタン類）
-    if (t.modal){
-      // モードに応じて submit 文言を切り替え
-      const submitBtn = document.getElementById('submit');
-      if (submitBtn){
-        if (window.mode === 'edit'){
-          if (t.modal.submitUpdate) submitBtn.textContent = t.modal.submitUpdate;
-        } else {
-          if (t.modal.submitCreate) submitBtn.textContent = t.modal.submitCreate;
-        }
-      }
-      const dupBtn = document.getElementById('duplicate');
-      const delBtn = document.getElementById('delete');
-      if (dupBtn && t.modal.duplicate) dupBtn.textContent = t.modal.duplicate;
-      if (delBtn && t.modal.delete) delBtn.textContent = t.modal.delete;
-    }
-
-    // 言語メニュー
-    const toggle = document.getElementById('langToggle');
-    if (toggle){
-      toggle.textContent = LANGUAGE_LABELS[current] || current;
-    }
-    const menu = document.getElementById('langMenu');
-    if (menu){
-      menu.querySelectorAll('button[data-lang]').forEach(b=>{
-        const l = b.getAttribute('data-lang');
-        b.textContent = LANGUAGE_LABELS[l] || l;
-      });
-    }
-
-    // 言語適用後に startApp を一度だけ起動
-    if (!appStarted){
-      appStarted = true;
-      startApp();
-    }
+    });
+    document.documentElement.lang = lang || 'en';
   }
 
   function setupLangMenu(){
-    const toggle = document.getElementById('langToggle');
+    const wrap = document.getElementById('langWrap');
+    const btn = document.getElementById('langBtn');
     const menu = document.getElementById('langMenu');
-    if (!toggle || !menu) return;
+    if(!wrap || !btn || !menu) return;
 
-    function open(){
+    const open = ()=>{
       menu.style.display = 'block';
-      toggle.setAttribute('aria-expanded','true');
-    }
-    function close(){
+      btn.setAttribute('aria-expanded', 'true');
+    };
+    const close = ()=>{
       menu.style.display = 'none';
-      toggle.setAttribute('aria-expanded','false');
-    }
+      btn.setAttribute('aria-expanded', 'false');
+    };
 
-    toggle.addEventListener('click', (ev)=>{
+    btn.addEventListener('click', (ev)=>{
       ev.preventDefault();
       ev.stopPropagation();
       const openNow = (menu.style.display === 'block');
@@ -1110,8 +590,8 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
     menu.querySelectorAll('button[data-lang]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const lang = btn.getAttribute('data-lang') || 'en';
-        close();
         loadLanguage(lang);
+        close();
       });
     });
 
