@@ -4,149 +4,216 @@
 // - Worker からのレスポンス reply / highlightRows / exampleSpots を扱う
 // - highlightRows は iframe(earth.html) に postMessage で送信（地球儀連携用）
 
-document.addEventListener("DOMContentLoaded", () => {
-  const input = document.getElementById("recommendInput");
-  const sendBtn = document.getElementById("recommendSend");
-  const chatBox = document.getElementById("recommendChat");
+(() => {
+  const API_ENDPOINT = "https://lucy-recommend.awachima7.workers.dev/";
+  const MAX_HISTORY = 6;
 
-  if (!input || !sendBtn || !chatBox) {
-    // 要素が見つからない場合は何もしない（別ページ対策）
-    return;
+  // 送信中フラグ（多重送信防止）
+  let sending = false;
+
+  // 履歴（Worker に渡す用）
+  const history = [];
+
+  function getEls() {
+    const input = document.getElementById("recommendInput");
+    const chatBox = document.getElementById("recommendChat");
+    // 送信ボタンは差し替わる可能性があるので毎回取り直す
+    const sendBtn = document.getElementById("recommendSend");
+    return { input, sendBtn, chatBox };
   }
 
-  // 既にバインド済みなら二重登録しない
-  if (sendBtn.dataset && sendBtn.dataset.lucyBound === "1") {
-    return;
+  function pushHistory(role, text) {
+    history.push({ role, text });
+    // 末尾 MAX_HISTORY 件だけ保持
+    while (history.length > MAX_HISTORY) history.shift();
   }
-
-  const ASSISTANT_NAME = "Lucy";
-  const WORKER_URL = "https://lucy-recommend.awachima7.workers.dev/";
-
-  // 直近の会話履歴（Worker に渡す用）
-  let history = [];
-
-  // --- チャット表示用ヘルパー ---
 
   function appendMessage(role, text) {
+    const { chatBox } = getEls();
+    if (!chatBox) return;
+
     const line = document.createElement("div");
-    line.className = "chat-line";
-
-    const label = document.createElement("div");
-    label.className = "chat-label";
-    label.textContent = role === "user" ? "You" : ASSISTANT_NAME;
-
-    const body = document.createElement("div");
-    body.className = "chat-body";
-
-    // 改行を <br> に変換
-    body.textContent = text;
-
-    // 最低限の見た目（CSS が無い環境でも崩れないように）
     line.style.margin = "6px 0";
-    label.style.fontWeight = "700";
-    label.style.fontSize = "0.85rem";
-    label.style.opacity = "0.85";
-    body.style.whiteSpace = "pre-wrap";
-    body.style.fontSize = "0.92rem";
+    line.style.whiteSpace = "pre-wrap";
+    line.style.wordBreak = "break-word";
 
-    line.appendChild(label);
-    line.appendChild(body);
-    chatBox.appendChild(line);
+    if (role === "user") {
+      line.style.fontWeight = "600";
+      line.textContent = text;
+    } else {
+      line.textContent = text;
+    }
 
+    chatBox.value += (chatBox.value ? "\n\n" : "") + line.textContent;
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
-  function trimHistory() {
-    if (history.length > 6) {
-      history = history.slice(history.length - 6);
+  function appendThinkingMessage() {
+    const { chatBox } = getEls();
+    if (!chatBox) return null;
+
+    const marker = "\n\n（考え中…）";
+    chatBox.value += marker;
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    return marker;
+  }
+
+  function removeThinkingMessage(marker) {
+    const { chatBox } = getEls();
+    if (!chatBox || !marker) return;
+
+    if (chatBox.value.endsWith(marker)) {
+      chatBox.value = chatBox.value.slice(0, -marker.length);
+    } else {
+      // 念のため（末尾以外に混ざった場合）
+      chatBox.value = chatBox.value.replace(marker, "");
     }
   }
 
-  // --- Earth へ highlightRows を送る ---
-  function sendHighlightsToEarth(highlightRows, exampleSpots) {
+  function sendHighlightRowsToEarth(rows) {
     try {
+      if (!Array.isArray(rows) || rows.length === 0) {
+        console.debug("[Lucy] highlightRows is empty or invalid. skip.");
+        return;
+      }
+
       const iframe = document.getElementById("webxr-iframe");
       if (!iframe || !iframe.contentWindow) {
         console.debug("[Lucy] iframe #webxr-iframe not found, cannot send highlightRows.");
         return;
       }
+
       const payload = {
-        type: "dd-lucy-highlight",
-        highlightRows: Array.isArray(highlightRows) ? highlightRows : [],
-        exampleSpots: Array.isArray(exampleSpots) ? exampleSpots : [],
+        type: "lucy-filter-rows",
+        rows: rows,
       };
+
       console.debug("[Lucy] postMessage to Earth:", payload);
       iframe.contentWindow.postMessage(payload, "*");
     } catch (e) {
-      console.warn("[Lucy] sendHighlightsToEarth error:", e);
+      console.error("[Lucy] postMessage error:", e);
     }
   }
 
   async function handleSend() {
-    const message = (input.value || "").trim();
-    if (!message) return;
+    const { input, sendBtn } = getEls();
+    if (!input) return;
 
-    // UI 更新
+    const text = (input.value || "").trim();
+    if (!text) return;
+
+    if (sending) return;
+    sending = true;
+
+    // ボタンを一時的に無効化（存在する場合）
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.style.opacity = "0.7";
+      sendBtn.style.cursor = "not-allowed";
+    }
+
+    // 入力欄を先にクリア
     input.value = "";
-    appendMessage("user", message);
 
-    // 送信中はボタン無効化
-    const prevDisabled = sendBtn.disabled;
-    sendBtn.disabled = true;
+    // 自分の発言を表示＆履歴に追加
+    appendMessage("user", text);
+    pushHistory("user", text);
+
+    // 「考え中」メッセージを表示
+    const thinkingMarker = appendThinkingMessage();
 
     try {
-      const res = await fetch(WORKER_URL, {
+      const res = await fetch(API_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message,
-          history,
+          message: text,
+          history: history.slice(-MAX_HISTORY),
         }),
       });
 
       const data = await res.json().catch(() => null);
 
+      removeThinkingMessage(thinkingMarker);
+
       if (!res.ok || !data) {
-        appendMessage(
-          "assistant",
-          "接続状況が少し不安定なようで、候補をうまく取得できませんでした。\nお手数ですが、時間をおいてもう一度お試しいただけますか？"
-        );
+        const msg =
+          "接続状況が少し不安定なようで、候補をうまく取得できませんでした。\n" +
+          "お手数ですが、時間をおいてもう一度お試しいただけますか？";
+        appendMessage("assistant", msg);
+        pushHistory("assistant", msg);
         return;
       }
 
-      const reply = (data.reply && String(data.reply).trim()) ? String(data.reply).trim() : "(no reply)";
-      appendMessage("assistant", reply);
+      const reply = (data.reply || "").trim();
+      if (reply) {
+        appendMessage("assistant", reply);
+        pushHistory("assistant", reply);
+      } else {
+        const msg =
+          "うまく候補をまとめられなかったようです。\n行ってみたい国や、雰囲気（にぎやか・静か・自然多めなど）を、もう少し教えていただけますか？";
+        appendMessage("assistant", msg);
+        pushHistory("assistant", msg);
+      }
 
-      // 履歴更新（直近だけ）
-      history.push({ role: "user", text: message });
-      history.push({ role: "assistant", text: reply });
-      trimHistory();
-
-      // Earth へ連携（失敗してもチャットは続行）
-      sendHighlightsToEarth(data.highlightRows, data.exampleSpots);
+      // 地球儀へハイライト行を送る（あれば）
+      if (Array.isArray(data.highlightRows) && data.highlightRows.length) {
+        sendHighlightRowsToEarth(data.highlightRows);
+      }
     } catch (e) {
-      console.error("[Lucy] send error:", e);
-      appendMessage(
-        "assistant",
-        "送信に失敗したようです。Network / Console をご確認ください。"
-      );
+      console.error("[Lucy] fetch error:", e);
+      removeThinkingMessage(thinkingMarker);
+
+      const msg =
+        "接続状況が少し不安定なようで、候補をうまく取得できませんでした。\n" +
+        "お手数ですが、時間をおいてもう一度お試しいただけますか？";
+      appendMessage("assistant", msg);
+      pushHistory("assistant", msg);
     } finally {
-      sendBtn.disabled = prevDisabled;
+      sending = false;
+
+      // ボタン復帰
+      const { sendBtn: btn2 } = getEls();
+      if (btn2) {
+        btn2.disabled = false;
+        btn2.style.opacity = "";
+        btn2.style.cursor = "";
+      }
     }
   }
 
-  // ボタンクリック
-  sendBtn.addEventListener("click", handleSend);
+  // ========= イベント委譲（差し替えに強い） =========
+  function bindOnce() {
+    if (window.__lucyRecommendBound) return;
+    window.__lucyRecommendBound = true;
 
-  // Enter キーで送信
-  input.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") {
+    // クリック送信（ボタンが差し替わっても拾う）
+    document.addEventListener("click", (ev) => {
+      const btn = ev.target && ev.target.closest ? ev.target.closest("#recommendSend") : null;
+      if (!btn) return;
       ev.preventDefault();
       handleSend();
-    }
-  });
+    });
 
-  // バインド済みマーク（main.js 側のフェイルセーフと競合しないため）
-  if (sendBtn.dataset) sendBtn.dataset.lucyBound = "1";
-  console.debug("[Lucy] listeners attached (recommend.js)");
-});
+    // Enter 送信（入力欄が差し替わっても拾う）
+    document.addEventListener("keydown", (ev) => {
+      const t = ev.target;
+      if (!t || t.id !== "recommendInput") return;
+
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        handleSend();
+      }
+    });
+
+    console.log("[Lucy] recommend.js: event handlers bound (delegation).");
+  }
+
+  // DOM 準備タイミングに依存しない
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindOnce);
+  } else {
+    bindOnce();
+  }
+})();
