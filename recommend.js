@@ -3,15 +3,10 @@
 // - Enter / 送信ボタンで送信
 // - recommendChat が textarea でも div でも表示できるように対応
 // - Lucy Worker: https://lucy-recommend.awachima7.workers.dev/
-//
-// 2026-01: responseMode（offer/bridge/chat）と state を送る
 
 (() => {
   const API_ENDPOINT = "https://lucy-recommend.awachima7.workers.dev/";
   const MAX_HISTORY = 6;
-
-  // state 保存キー
-  const LUCY_STATE_KEY = "dd_lucy_state_v1";
 
   let sending = false;
   const history = []; // { role: "user" | "assistant", text: string }
@@ -34,129 +29,8 @@
     while (history.length > MAX_HISTORY) history.shift();
   }
 
-  // ===== Lucy state =====
-  function defaultLucyState() {
-    return {
-      phase: "entry", // "entry" | "narrow" | "context"
-      intent: "mid",  // "high" | "mid" | "low" | "idle"
-      conditions: {
-        mood: null,
-        place: null,
-        era: null,
-        genre: null,
-      },
-      stats: {
-        offTopicStreak: 0,
-        bridgeIgnoredStreak: 0,
-        lastAssistantMode: null, // "offer" | "bridge" | "chat"
-      },
-      bridge: {
-        lastOffTopicHadGeoHook: false,
-        allowedOnce: true,
-      },
-    };
-  }
-
-  function loadLucyState() {
-    try {
-      const raw = localStorage.getItem(LUCY_STATE_KEY);
-      if (!raw) return defaultLucyState();
-      const obj = JSON.parse(raw);
-      const base = defaultLucyState();
-      return {
-        ...base,
-        ...obj,
-        conditions: { ...base.conditions, ...(obj && obj.conditions ? obj.conditions : {}) },
-        stats: { ...base.stats, ...(obj && obj.stats ? obj.stats : {}) },
-        bridge: { ...base.bridge, ...(obj && obj.bridge ? obj.bridge : {}) },
-      };
-    } catch (_e) {
-      return defaultLucyState();
-    }
-  }
-
-  function saveLucyState(state) {
-    try {
-      localStorage.setItem(LUCY_STATE_KEY, JSON.stringify(state));
-    } catch (_e) {}
-  }
-
-  // ===== intent判定（最小）=====
-  function looksTravelIntent(text) {
-    const t = (text || "").trim();
-    return /おすすめ|探して|行きたい|ツアー|旅行|観光|見たい|候補|提案|どこでもドア|VRツアー|スポット/.test(t);
-  }
-
-  function looksKnowledgeOrChitChat(text) {
-    const t = (text || "").trim();
-    return /知ってる|どんな話|あらすじ|って何|とは|教えて|説明|違い|意味|原因|なんで|いつ|誰|どこ/.test(t);
-  }
-
-  // “地理フック”がある雑談なら bridge しやすい
-  function looksGeoHook(text) {
-    const t = (text || "").trim();
-    return /エジプト|インド|中国|日本|東京|京都|バリ|バリ島|アメリカ|フランス|イタリア|中東|ヨーロッパ/.test(t);
-  }
-
-  function didUserAcceptBridgeHeuristic(userText) {
-    return looksGeoHook(userText) || looksTravelIntent(userText);
-  }
-
-  function updateIntent(state, userText, didUserAcceptBridge) {
-    if (looksTravelIntent(userText)) {
-      state.intent = "high";
-      state.stats.offTopicStreak = 0;
-      state.stats.bridgeIgnoredStreak = 0;
-      state.bridge.allowedOnce = true;
-      state.bridge.lastOffTopicHadGeoHook = false;
-      return state;
-    }
-
-    const offTopicish = looksKnowledgeOrChitChat(userText) && !looksTravelIntent(userText);
-    if (offTopicish) state.stats.offTopicStreak += 1;
-    else state.stats.offTopicStreak = 0;
-
-    if (state.stats.lastAssistantMode === "bridge") {
-      if (didUserAcceptBridge) state.stats.bridgeIgnoredStreak = 0;
-      else state.stats.bridgeIgnoredStreak += 1;
-    }
-
-    if (state.stats.offTopicStreak >= 2 || state.stats.bridgeIgnoredStreak >= 2) {
-      state.intent = "idle";
-      state.bridge.allowedOnce = false;
-    } else {
-      state.intent = offTopicish ? "low" : "mid";
-    }
-
-    state.bridge.lastOffTopicHadGeoHook = looksGeoHook(userText);
-    return state;
-  }
-
-  function decideResponseMode(state) {
-    // 完全雑談モード（橋渡しもやめる）
-    if (state.intent === "idle") {
-      state.stats.lastAssistantMode = "chat";
-      return "chat";
-    }
-
-    // 雑談っぽい → chat / bridge
-    if (state.intent === "low") {
-      if (state.bridge.allowedOnce && state.bridge.lastOffTopicHadGeoHook) {
-        state.bridge.allowedOnce = false;
-        state.stats.lastAssistantMode = "bridge";
-        return "bridge";
-      }
-      state.stats.lastAssistantMode = "chat";
-      return "chat";
-    }
-
-    // 通常は offer
-    state.stats.lastAssistantMode = "offer";
-    return "offer";
-  }
-
-  // ===== UI =====
   function ensureChatLineContainer(chat) {
+    // div などの場合は中にログ用コンテナを作る
     if (!chat) return null;
     if (isTextAreaLike(chat)) return null;
 
@@ -179,6 +53,7 @@
 
     const label = role === "user" ? "You" : "Lucy";
 
+    // textarea / input の場合
     if (isTextAreaLike(chat)) {
       const prefix = chat.value ? "\n\n" : "";
       chat.value += `${prefix}${label}:\n${text}`;
@@ -186,6 +61,7 @@
       return;
     }
 
+    // div などの場合
     const box = ensureChatLineContainer(chat);
     if (!box) return;
 
@@ -211,6 +87,7 @@
     wrap.appendChild(body);
     box.appendChild(wrap);
 
+    // 下までスクロール（chat がスクロール領域の想定）
     chat.scrollTop = chat.scrollHeight;
   }
 
@@ -240,6 +117,40 @@
     }
   }
 
+  // ===== 追加：レスポンス内容を安全に取得（JSON/テキスト両対応） =====
+  async function readResponseSafely(res) {
+    const status = res && typeof res.status === "number" ? res.status : 0;
+    const ok = !!(res && res.ok);
+    let rawText = "";
+
+    try {
+      rawText = await res.text();
+    } catch (_e) {
+      rawText = "";
+    }
+
+    let data = null;
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch (_e) {
+        data = null;
+      }
+    }
+
+    return { ok, status, rawText, data };
+  }
+
+  function buildNetworkFallback(status, rawText) {
+    const s = status ? `HTTP ${status}` : "HTTP (unknown)";
+    const hint =
+      "接続状況が少し不安定なようで、候補をうまく取得できませんでした。\n" +
+      "お手数ですが、時間をおいてもう一度お試しいただけますか？";
+
+    // ユーザー表示は最小限（ただし原因切り分けのため status は出す）
+    return `${hint}\n(${s})`;
+  }
+
   async function handleSend() {
     const { input } = getEls();
     if (!input) return;
@@ -247,31 +158,15 @@
     const msg = (input.value || "").trim();
     if (!msg) return;
 
+    // 多重送信防止
     if (sending) return;
     sending = true;
     setSendDisabled(true);
 
-    // state（送信前に判定）
-    const lucyState = loadLucyState();
-
-    const acceptBridge =
-      lucyState.stats.lastAssistantMode === "bridge"
-        ? didUserAcceptBridgeHeuristic(msg)
-        : false;
-
-    updateIntent(lucyState, msg, acceptBridge);
-    const responseMode = decideResponseMode(lucyState);
-
-    // UI更新
+    // 先に UI 更新
     input.value = "";
     appendToChat("user", msg);
     pushHistory("user", msg);
-
-    const stateForWorker = {
-      phase: lucyState.phase,
-      intent: lucyState.intent,
-      conditions: lucyState.conditions,
-    };
 
     try {
       const res = await fetch(API_ENDPOINT, {
@@ -280,23 +175,23 @@
         body: JSON.stringify({
           message: msg,
           history: history.slice(-MAX_HISTORY),
-          responseMode,
-          state: stateForWorker,
         }),
       });
 
-      const data = await res.json().catch(() => null);
+      // ★ここが本体：非OK/非JSONでも「何が返ってきたか」分かるようにする
+      const { ok, status, rawText, data } = await readResponseSafely(res);
 
-      if (!res.ok || !data) {
-        appendToChat(
-          "assistant",
-          "接続状況が少し不安定なようで、候補をうまく取得できませんでした。\nお手数ですが、時間をおいてもう一度お試しいただけますか？"
-        );
-        pushHistory(
-          "assistant",
-          "接続状況が少し不安定なようで、候補をうまく取得できませんでした。"
-        );
-        saveLucyState(lucyState);
+      if (!ok || !data) {
+        // Console には詳細を出す（切り分け用）
+        console.error("[Lucy] API response not ok / not json:", {
+          status,
+          ok,
+          rawSample: (rawText || "").slice(0, 300),
+        });
+
+        const msgToUser = buildNetworkFallback(status, rawText);
+        appendToChat("assistant", msgToUser);
+        pushHistory("assistant", `接続状況が少し不安定なようです。（HTTP ${status || "?"}）`);
         return;
       }
 
@@ -311,8 +206,8 @@
         pushHistory("assistant", fallback);
       }
 
+      // Earth 連携（あれば）
       sendHighlightsToEarth(data.highlightRows, data.exampleSpots);
-      saveLucyState(lucyState);
     } catch (e) {
       console.error("[Lucy] fetch error:", e);
       appendToChat(
@@ -320,13 +215,13 @@
         "送信に失敗したようです。Network / Console をご確認ください。"
       );
       pushHistory("assistant", "送信に失敗したようです。");
-      saveLucyState(lucyState);
     } finally {
       sending = false;
       setSendDisabled(false);
     }
   }
 
+  // ===== イベント委譲（差し替えに強い） =====
   function bindOnce() {
     if (window.__lucyRecommendBound) return;
     window.__lucyRecommendBound = true;
