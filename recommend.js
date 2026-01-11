@@ -1,262 +1,281 @@
-// recommend.js
-// Lucy チャット（ツアー提案）
-// - Enter / 送信ボタンで送信
-// - recommendChat が textarea でも div でも表示できるように対応
-// - Lucy Worker: https://lucy-recommend.awachima7.workers.dev/
-
+/**
+ * recommend.js
+ * - index.html の既存UI (#recommendInput / #recommendSend / #recommendChat) を使って
+ *   Cloudflare Worker の /chat に POST し、reply と nextState を表示・保持する。
+ * - nextState は recommend.js 側で保持し、次回リクエストに同梱（ステートレス設計）。
+ * - エラー（ネットワーク/JSON/HTTP非2xx）は画面に表示。
+ * - debug（ALLOW_DEBUG=1 のとき）は console に出す（必要なら window にも退避）。
+ */
 (() => {
-  // エンドポイントは window.LUCY_API_ENDPOINT で上書き可能（デバッグ用）
-  const API_ENDPOINT_BASE = (window.LUCY_API_ENDPOINT && String(window.LUCY_API_ENDPOINT).trim())
-    ? String(window.LUCY_API_ENDPOINT).trim()
-    : "https://lucy-recommend.awachima7.workers.dev/";
+  "use strict";
 
-  function apiEndpoint() {
-    // POSTでも念のためキャッシュ回避（環境切替の取り違えを検出しやすくする）
-    const sep = API_ENDPOINT_BASE.includes("?") ? "&" : "?";
-    return API_ENDPOINT_BASE + sep + "v=" + Date.now();
+  // =========================================================
+  // 1) 設定（ここだけ最初に調整）
+  // =========================================================
+  // 例: "https://lucy-recommend.awachima7.workers.dev/chat"
+  const WORKER_CHAT_URL = "https://lucy-recommend.awachima7.workers.dev/chat";
+
+  // state 永続化（任意）
+  const STORAGE_KEY_STATE = "dd_recommend_next_state_v1";
+  const STORAGE_KEY_CHAT  = "dd_recommend_chat_log_v1"; // 画面ログを軽く残す（任意）
+
+  // 画面ログの最大保持（重くならないように）
+  const MAX_LOG_LINES = 60;
+
+  // =========================================================
+  // 2) DOM取得（既存UIを利用）
+  // =========================================================
+  const inputEl = document.getElementById("recommendInput");
+  const sendBtn = document.getElementById("recommendSend");
+  const chatEl  = document.getElementById("recommendChat");
+
+  // touristInfoBtn / recommendSection は「あるなら」連携（無くても動く）
+  const touristInfoBtn = document.getElementById("touristInfoBtn");
+  const recommendSection = document.getElementById("recommendSection");
+
+  if (!inputEl || !sendBtn || !chatEl) {
+    // 既存UIが無い場合は何もしない（今回は index.html にある前提）
+    console.warn("[recommend.js] Required DOM not found. (#recommendInput/#recommendSend/#recommendChat)");
+    return;
   }
 
-  const MAX_HISTORY = 6;
+  // =========================================================
+  // 3) 内部状態（nextState を保持）
+  // =========================================================
+  let nextState = null;
 
-  let sending = false;
-  const history = []; // { role: "user" | "assistant", text: string }
-
-  function getEls() {
-    const input = document.getElementById("recommendInput");
-    const sendBtn = document.getElementById("recommendSend");
-    const chat = document.getElementById("recommendChat");
-    return { input, sendBtn, chat };
+  // =========================================================
+  // 4) ユーティリティ
+  // =========================================================
+  function safeJsonParse(text) {
+    try { return { ok: true, value: JSON.parse(text) }; }
+    catch (e) { return { ok: false, error: e }; }
   }
 
-  function isTextAreaLike(el) {
-    if (!el) return false;
-    const tag = (el.tagName || "").toLowerCase();
-    return tag === "textarea" || tag === "input";
-  }
-
-  function setSendDisabled(disabled) {
-    const { input, sendBtn } = getEls();
-    if (input) input.disabled = !!disabled;
-    if (sendBtn) sendBtn.disabled = !!disabled;
-  }
-
-  function pushHistory(role, text) {
-    history.push({ role, text: String(text || "") });
-    if (history.length > MAX_HISTORY) {
-      history.splice(0, history.length - MAX_HISTORY);
-    }
-  }
-
-  function ensureChatLineBox() {
-    const { chat } = getEls();
-    if (!chat) return null;
-
-    // textarea / input の場合は、従来通り value に追記する
-    if (isTextAreaLike(chat)) return null;
-
-    let box = chat.querySelector(".lucy-chat-lines");
-    if (!box) {
-      box = document.createElement("div");
-      box.className = "lucy-chat-lines";
-      box.style.display = "flex";
-      box.style.flexDirection = "column";
-      box.style.gap = "10px";
-      box.style.padding = "8px 0";
-      chat.appendChild(box);
-    }
-    return box;
-  }
-
-  function appendToChat(role, text) {
-    const { chat } = getEls();
-    if (!chat) return;
-
-    const t = String(text || "");
-
-    // textarea / input の場合
-    if (isTextAreaLike(chat)) {
-      const prefix = role === "user" ? "You" : "Lucy";
-      const cur = chat.value || "";
-      chat.value = (cur ? cur + "\n\n" : "") + `${prefix}\n${t}`;
-      // 最下部へ
-      chat.scrollTop = chat.scrollHeight;
-      return;
-    }
-
-    // div の場合
-    const box = ensureChatLineBox();
-    if (!box) return;
-
-    const bubble = document.createElement("div");
-    bubble.className = `lucy-chat-bubble ${role}`;
-    bubble.style.maxWidth = "95%";
-    bubble.style.whiteSpace = "pre-wrap";
-    bubble.style.wordBreak = "break-word";
-    bubble.style.padding = "10px 12px";
-    bubble.style.borderRadius = "12px";
-    bubble.style.lineHeight = "1.45";
-
-    if (role === "user") {
-      bubble.style.alignSelf = "flex-end";
-      bubble.style.background = "rgba(50,112,166,0.12)";
-    } else {
-      bubble.style.alignSelf = "flex-start";
-      bubble.style.background = "rgba(255,255,255,0.08)";
-    }
-
-    const name = document.createElement("div");
-    name.style.fontSize = "12px";
-    name.style.opacity = "0.75";
-    name.style.marginBottom = "4px";
-    name.textContent = role === "user" ? "You" : "Lucy";
-
-    const body = document.createElement("div");
-    body.textContent = t;
-
-    bubble.appendChild(name);
-    bubble.appendChild(body);
-    box.appendChild(bubble);
-
-    // 最下部へ
+  function loadState() {
     try {
-      box.scrollTop = box.scrollHeight;
-      chat.scrollTop = chat.scrollHeight;
-    } catch (_e) {}
-  }
-
-  function sendHighlightsToEarth(highlightRows, exampleSpots) {
-    // earth iframe があれば postMessage する（無ければ何もしない）
-    try {
-      const iframe = document.getElementById("earthFrame") || document.querySelector("iframe");
-      if (!iframe || !iframe.contentWindow) return;
-
-      iframe.contentWindow.postMessage(
-        {
-          type: "lucy-highlight-rows",
-          highlightRows: Array.isArray(highlightRows) ? highlightRows : [],
-          exampleSpots: Array.isArray(exampleSpots) ? exampleSpots : [],
-        },
-        "*"
-      );
-    } catch (e) {
-      console.warn("[Lucy] sendHighlightsToEarth failed:", e);
+      const raw = localStorage.getItem(STORAGE_KEY_STATE);
+      if (!raw) return null;
+      const parsed = safeJsonParse(raw);
+      return parsed.ok && parsed.value && typeof parsed.value === "object" ? parsed.value : null;
+    } catch (_) {
+      return null;
     }
   }
 
-  async function handleSend() {
-    const { input } = getEls();
-    if (!input) return;
-
-    const msg = (input.value || "").trim();
-    if (!msg) return;
-
-    // 多重送信防止
-    if (sending) return;
-    sending = true;
-    setSendDisabled(true);
-
-    // 先に UI 更新
-    input.value = "";
-    appendToChat("user", msg);
-    pushHistory("user", msg);
-
+  function saveState(stateObj) {
     try {
-      const res = await fetch(apiEndpoint(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({
-          message: msg,
-          history: history.slice(-MAX_HISTORY),
-        }),
-      });
-
-      // JSON が取れないケースにも耐える
-      const data = await res.json().catch(() => null);
-
-      // Worker 側のデプロイ取り違えを見分けるための情報（あれば）
-      if (data && data.buildId) {
-        console.log("[Lucy] buildId:", data.buildId);
+      if (!stateObj) {
+        localStorage.removeItem(STORAGE_KEY_STATE);
+        return;
       }
+      localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(stateObj));
+    } catch (_) {}
+  }
 
-      if (!res.ok || !data) {
-        appendToChat(
-          "assistant",
-          "接続状況が少し不安定なようで、候補をうまく取得できませんでした。\nお手数ですが、時間をおいてもう一度お試しいただけますか？"
-        );
-        pushHistory(
-          "assistant",
-          "接続状況が少し不安定なようで、候補をうまく取得できませんでした。"
-        );
+  function loadChatLog() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_CHAT);
+      if (!raw) return [];
+      const parsed = safeJsonParse(raw);
+      return parsed.ok && Array.isArray(parsed.value) ? parsed.value : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveChatLog(lines) {
+    try {
+      localStorage.setItem(STORAGE_KEY_CHAT, JSON.stringify(lines.slice(-MAX_LOG_LINES)));
+    } catch (_) {}
+  }
+
+  function setSending(isSending) {
+    sendBtn.disabled = !!isSending;
+    inputEl.disabled = !!isSending;
+    if (isSending) {
+      sendBtn.dataset._prevText = sendBtn.textContent || "";
+      sendBtn.textContent = "送信中…";
+    } else {
+      const prev = sendBtn.dataset._prevText;
+      if (typeof prev === "string" && prev.length) sendBtn.textContent = prev;
+      delete sendBtn.dataset._prevText;
+    }
+  }
+
+  function appendLine(line) {
+    const current = (chatEl.textContent || "").split("\n").filter(Boolean);
+    current.push(line);
+    const clipped = current.slice(-MAX_LOG_LINES);
+    chatEl.textContent = clipped.join("\n");
+    chatEl.scrollTop = chatEl.scrollHeight;
+    saveChatLog(clipped);
+  }
+
+  function appendUser(text) {
+    appendLine(`You: ${text}`);
+  }
+
+  function appendLucy(text) {
+    appendLine(`Lucy: ${text}`);
+  }
+
+  function appendError(title, detail) {
+    const msg = detail ? `${title}\n${detail}` : title;
+    appendLine(`[ERROR] ${msg}`);
+  }
+
+  function normalizeUserText(s) {
+    return String(s || "").replace(/\s+/g, " ").trim();
+  }
+
+  // =========================================================
+  // 5) 初期化（復元）
+  // =========================================================
+  // ボタン文言（既存の「近日公開」表記を崩さず、実運用では差し替え）
+  // ※完全に変えたくなければ、下2行をコメントアウトしてください。
+  if ((sendBtn.textContent || "").includes("近日公開")) {
+    sendBtn.textContent = "質問する";
+  }
+
+  // state復元
+  nextState = loadState();
+
+  // 画面ログ復元（任意）
+  const savedLines = loadChatLog();
+  if (savedLines.length) {
+    chatEl.textContent = savedLines.join("\n");
+    chatEl.scrollTop = chatEl.scrollHeight;
+  } else {
+    // 初回は軽い案内を入れても良いが、既存デザインを尊重して何も入れない
+  }
+
+  // touristInfoBtn で recommendSection を開閉している既存実装がある可能性があるので、
+  // recommend.js 側では「邪魔しない」方針：追加のトグルはしない。
+  // ただし、送信時にパネルが閉じていたら開くだけ（控えめに補助）
+  function ensurePanelOpenSoftly() {
+    if (!recommendSection) return;
+    if (recommendSection.classList.contains("is-collapsed")) {
+      recommendSection.classList.remove("is-collapsed");
+      if (touristInfoBtn) touristInfoBtn.setAttribute("aria-expanded", "true");
+    }
+  }
+
+  // =========================================================
+  // 6) Worker呼び出し本体
+  // =========================================================
+  async function callWorker(userText) {
+    const payload = { userText: userText };
+    // 初回は state を送らない（null or 省略）
+    if (nextState && typeof nextState === "object") {
+      payload.state = nextState;
+    }
+
+    const res = await fetch(WORKER_CHAT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    // 非2xxでも body を読んでユーザーに出す
+    const rawText = await res.text().catch(() => "");
+    const parsed = safeJsonParse(rawText);
+
+    if (!res.ok) {
+      const detail =
+        parsed.ok
+          ? JSON.stringify(parsed.value, null, 2)
+          : rawText
+            ? rawText
+            : "(no response body)";
+      throw new Error(`HTTP ${res.status} ${res.statusText}\n${detail}`);
+    }
+
+    if (!parsed.ok) {
+      throw new Error(`JSONパースに失敗しました。\n${rawText || "(empty body)"}`);
+    }
+
+    return parsed.value;
+  }
+
+  // =========================================================
+  // 7) 送信ハンドラ
+  // =========================================================
+  async function onSend() {
+    const text = normalizeUserText(inputEl.value);
+    if (!text) return;
+
+    ensurePanelOpenSoftly();
+
+    appendUser(text);
+    inputEl.value = "";
+
+    setSending(true);
+    try {
+      const data = await callWorker(text);
+
+      // 想定：{ ok:true, reply:string, nextState:object, (debug?:object) }
+      if (!data || typeof data !== "object") {
+        appendError("Worker応答が不正です（オブジェクトではありません）", String(data));
         return;
       }
 
-      const reply = (data.reply && String(data.reply).trim()) ? String(data.reply).trim() : "";
-      if (reply) {
-        appendToChat("assistant", reply);
-        pushHistory("assistant", reply);
-      } else {
-        const fallback =
-          "うまく候補をまとめられなかったようです。\n行ってみたい国や、雰囲気（にぎやか・静か・自然多めなど）を、もう少し教えていただけますか？";
-        appendToChat("assistant", fallback);
-        pushHistory("assistant", fallback);
+      if (data.ok !== true) {
+        appendError("Workerが ok:true を返しませんでした", JSON.stringify(data, null, 2));
+        return;
       }
 
-      // Earth 連携（あれば）
-      sendHighlightsToEarth(data.highlightRows, data.exampleSpots);
-    } catch (e) {
-      console.error("[Lucy] fetch error:", e);
-      appendToChat(
-        "assistant",
-        "送信に失敗したようです。Network / Console をご確認ください。"
-      );
-      pushHistory("assistant", "送信に失敗したようです。");
+      const reply = typeof data.reply === "string" ? data.reply : "";
+      if (!reply) {
+        appendError("reply が空、または文字列ではありません", JSON.stringify(data, null, 2));
+      } else {
+        appendLucy(reply);
+      }
+
+      const ns = data.nextState && typeof data.nextState === "object" ? data.nextState : null;
+      if (!ns) {
+        appendError("nextState が取得できませんでした（次回以降の会話継続ができません）", JSON.stringify(data, null, 2));
+      } else {
+        nextState = ns;
+        saveState(nextState);
+      }
+
+      // debug（ALLOW_DEBUG=1）対応
+      if (data.debug) {
+        try {
+          console.log("[Lucy debug]", data.debug);
+          // 画面に出さず、必要時に参照できるよう退避
+          window.__LUCY_LAST_DEBUG = data.debug;
+        } catch (_) {}
+      }
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      appendError("通信に失敗しました", msg);
+      console.error("[recommend.js] send failed:", err);
     } finally {
-      sending = false;
-      setSendDisabled(false);
+      setSending(false);
+      inputEl.focus();
     }
   }
 
-  function bindOnce() {
-    if (window.__lucyRecommendBound) return;
-    window.__lucyRecommendBound = true;
+  // =========================================================
+  // 8) イベント配線
+  // =========================================================
+  sendBtn.addEventListener("click", onSend);
 
-    const { input, sendBtn } = getEls();
-
-    if (sendBtn) {
-      sendBtn.addEventListener("click", (e) => {
-        e.preventDefault();
-        handleSend();
-      });
+  // Enter で送信（Shift+Enter は無効：入力欄は input[type=text] なので基本発生しないが保険）
+  inputEl.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) {
+      ev.preventDefault();
+      onSend();
     }
-
-    if (input) {
-      input.addEventListener("keydown", (e) => {
-        // Enter 送信（Shift+Enter は改行）
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          handleSend();
-        }
-      });
-    }
-
-    // 初期表示（任意）
-    // appendToChat("assistant", "いらっしゃいませ。どんなツアーをお探しですか？");
-  }
-
-  // DOM の差し替えに強くする
-  function onReady(fn) {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", fn);
-    } else {
-      fn();
-    }
-  }
-
-  onReady(() => {
-    bindOnce();
-
-    // もし後から要素が差し替わる構成なら、一定間隔で再バインドしても良いが、
-    // まずは bindOnce のみで十分。必要になったら追加する。
   });
+
+  // デバッグ用：コンソールから state を消したい時
+  window.__LUCY_CLEAR_STATE = () => {
+    nextState = null;
+    saveState(null);
+    console.log("[Lucy] state cleared");
+  };
+
 })();
