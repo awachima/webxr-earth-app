@@ -1,413 +1,136 @@
-/**
- * recommend.js
- * - index.html の既存UI (#recommendInput / #recommendSend / #recommendChat) を使って
- *   Cloudflare Worker の /chat に POST し、reply と nextState を表示・保持する。
- * - nextState は recommend.js 側で保持し、次回リクエストに同梱（ステートレス設計）。
- * - エラー（ネットワーク/JSON/HTTP非2xx）は画面に表示。
- * - debug（ALLOW_DEBUG=1 のとき）は console に出す（必要なら window にも退避）。
- *
- * ★修正点：
- * - Lucyのreplyに含まれる <a href="..."> を「リンクとして」表示するため、
- *   chat欄を textContent ではなく DOM 要素として描画（Lucyのみ安全にHTMLを許可）。
- */
-(() => {
-  "use strict";
+/* recommend.js - リロードで完全リセット & 自動挨拶版 */
 
-  // =========================================================
-  // 1) 設定（ここだけ最初に調整）
-  // =========================================================
-  // 例: "https://lucy-recommend.awachima7.workers.dev/chat"
-  const WORKER_CHAT_URL = "https://lucy-recommend.awachima7.workers.dev/chat";
+const WORKER_URL = "https://lucy-worker.dokodemodoors.workers.dev/chat"; // ★あなたのWorkerのURLに合わせてください
 
-  // state 永続化（任意）
-  const STORAGE_KEY_STATE = "dd_recommend_next_state_v1";
-  const STORAGE_KEY_CHAT  = "dd_recommend_chat_log_v1"; // 画面ログを軽く残す（任意）
+// 現在の状態（メモリ上のみで管理し、リロードで消える）
+let currentState = {
+    step: "S0",
+    turnCount: 0,
+    lastPatternIndex: 0,
+    history: []
+};
 
-  // 画面ログの最大保持（重くならないように）
-  const MAX_LOG_LINES = 60;
+// DOM要素
+const chatWindow = document.getElementById('chat-window');
+const userInput = document.getElementById('user-input');
+const sendBtn = document.getElementById('send-btn');
+const loading = document.getElementById('loading');
 
-  // =========================================================
-  // 2) DOM取得（既存UIを利用）
-  // =========================================================
-  const inputEl = document.getElementById("recommendInput");
-  const sendBtn = document.getElementById("recommendSend");
-  const chatEl  = document.getElementById("recommendChat");
+// 初期化：ページ読み込み時に必ずS0（挨拶）から開始
+window.addEventListener('load', () => {
+    // 念のためセッションストレージもクリアしておく（以前のキャッシュ対策）
+    sessionStorage.removeItem('lucyState');
+    
+    // UIをクリア
+    chatWindow.innerHTML = '';
+    
+    // 初回挨拶をWorkerに要求
+    callWorker(null, "S0"); 
+});
 
-  // touristInfoBtn / recommendSection は「あるなら」連携（無くても動く）
-  const touristInfoBtn = document.getElementById("touristInfoBtn");
-  const recommendSection = document.getElementById("recommendSection");
+// 送信ボタンクリック
+sendBtn.addEventListener('click', () => {
+    handleUserSubmit();
+});
 
-  if (!inputEl || !sendBtn || !chatEl) {
-    console.warn("[recommend.js] Required DOM not found. (#recommendInput/#recommendSend/#recommendChat)");
-    return;
-  }
-
-  // =========================================================
-  // 3) 内部状態（nextState を保持）
-  // =========================================================
-  let nextState = null;
-
-  // 画面ログ（復元用）
-  // 例: { role:"user"|"lucy"|"error", text:"...", html:"..." }
-  let chatLog = [];
-
-  // =========================================================
-  // 4) ユーティリティ
-  // =========================================================
-  function safeJsonParse(text) {
-    try { return { ok: true, value: JSON.parse(text) }; }
-    catch (e) { return { ok: false, error: e }; }
-  }
-
-  function loadState() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_STATE);
-      if (!raw) return null;
-      const parsed = safeJsonParse(raw);
-      return parsed.ok && parsed.value && typeof parsed.value === "object" ? parsed.value : null;
-    } catch (_) {
-      return null;
+// Enterキー対応
+userInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        handleUserSubmit();
     }
-  }
+});
 
-  function saveState(stateObj) {
-    try {
-      if (!stateObj) {
-        localStorage.removeItem(STORAGE_KEY_STATE);
-        return;
-      }
-      localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(stateObj));
-    } catch (_) {}
-  }
-
-  function loadChatLog() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_CHAT);
-      if (!raw) return [];
-      const parsed = safeJsonParse(raw);
-      return parsed.ok && Array.isArray(parsed.value) ? parsed.value : [];
-    } catch (_) {
-      return [];
-    }
-  }
-
-  function saveChatLog(lines) {
-    try {
-      localStorage.setItem(STORAGE_KEY_CHAT, JSON.stringify(lines.slice(-MAX_LOG_LINES)));
-    } catch (_) {}
-  }
-
-  function setSending(isSending) {
-    sendBtn.disabled = !!isSending;
-    inputEl.disabled = !!isSending;
-    if (isSending) {
-      sendBtn.dataset._prevText = sendBtn.textContent || "";
-      sendBtn.textContent = "送信中…";
-    } else {
-      const prev = sendBtn.dataset._prevText;
-      if (typeof prev === "string" && prev.length) sendBtn.textContent = prev;
-      delete sendBtn.dataset._prevText;
-    }
-  }
-
-  function normalizeUserText(s) {
-    return String(s || "").replace(/\s+/g, " ").trim();
-  }
-
-  // HTMLエスケープ（ユーザー入力やエラー表示用）
-  function escapeHtml(s) {
-    return String(s || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
-
-  // Lucy返信のうち、許可するのは <a href="https?://...">text</a> のみ（それ以外はテキスト化）
-  // また、改行 \n は <br> に変換する
-  function sanitizeLucyReplyToHtml(rawText) {
-    const input = String(rawText || "");
-    const withBr = input.replace(/\r\n/g, "\n");
-
-    // DOMParserで一旦HTMLとして解釈させる（ただし許可要素は限定して再構築）
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(`<div>${withBr}</div>`, "text/html");
-    const root = doc.body.firstElementChild;
-
-    function isSafeHttpUrl(url) {
-      try {
-        const u = new URL(url, window.location.href);
-        return u.protocol === "http:" || u.protocol === "https:";
-      } catch (_) {
-        return false;
-      }
-    }
-
-    function walk(node, outParts) {
-      if (!node) return;
-
-      // テキストノード
-      if (node.nodeType === Node.TEXT_NODE) {
-        // 改行はこの段階では残っている可能性があるので後で処理せず、ここで <br> にする
-        const t = node.nodeValue || "";
-        const chunks = t.split("\n");
-        for (let i = 0; i < chunks.length; i++) {
-          outParts.push(escapeHtml(chunks[i]));
-          if (i < chunks.length - 1) outParts.push("<br>");
-        }
-        return;
-      }
-
-      // 要素ノード
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const tag = (node.tagName || "").toLowerCase();
-
-        if (tag === "br") {
-          outParts.push("<br>");
-          return;
-        }
-
-        if (tag === "a") {
-          const href = node.getAttribute("href") || "";
-          const text = node.textContent || "";
-          if (href && isSafeHttpUrl(href)) {
-            const safeHref = escapeHtml(href);
-            const safeText = escapeHtml(text);
-            outParts.push(
-              `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeText}</a>`
-            );
-          } else {
-            // 危険/不正URLはリンク化しない
-            outParts.push(escapeHtml(text));
-          }
-          return;
-        }
-
-        // それ以外のタグは「中身だけ」再帰（タグ自体は捨てる）
-        const children = Array.from(node.childNodes || []);
-        for (const c of children) walk(c, outParts);
-        return;
-      }
-
-      // その他（コメントなど）は無視
-    }
-
-    const parts = [];
-    const children = Array.from((root && root.childNodes) ? root.childNodes : []);
-    for (const c of children) walk(c, parts);
-
-    return parts.join("");
-  }
-
-  // 1行（1メッセージ）をDOMとして追加
-  function appendMessage(role, label, content, isHtml) {
-    const line = document.createElement("div");
-    line.className = `chat-line chat-${role}`;
-
-    const prefix = document.createElement("span");
-    prefix.className = "chat-prefix";
-    prefix.textContent = `${label}: `;
-
-    const body = document.createElement("span");
-    body.className = "chat-body";
-
-    if (isHtml) {
-      body.innerHTML = content; // ここは sanitizeLucyReplyToHtml の結果のみを入れる
-    } else {
-      body.textContent = content;
-    }
-
-    line.appendChild(prefix);
-    line.appendChild(body);
-    chatEl.appendChild(line);
-
-    // スクロール追従
-    chatEl.scrollTop = chatEl.scrollHeight;
-
-    // ログ保存（復元用）
-    const entry = isHtml
-      ? { role, label, html: content }
-      : { role, label, text: content };
-
-    chatLog.push(entry);
-    chatLog = chatLog.slice(-MAX_LOG_LINES);
-    saveChatLog(chatLog);
-  }
-
-  function appendUser(text) {
-    appendMessage("user", "You", String(text || ""), false);
-  }
-
-  function appendLucy(replyText) {
-    const html = sanitizeLucyReplyToHtml(replyText);
-    appendMessage("lucy", "Lucy", html, true);
-  }
-
-  function appendError(title, detail) {
-    const msg = detail ? `${title}\n${detail}` : title;
-    appendMessage("error", "ERROR", msg, false);
-  }
-
-  // =========================================================
-  // 5) 初期化（復元）
-  // =========================================================
-  // ボタン文言（既存の「近日公開」表記を崩さず、実運用では差し替え）
-  // ※完全に変えたくなければ、下2行をコメントアウトしてください。
-  if ((sendBtn.textContent || "").includes("近日公開")) {
-    sendBtn.textContent = "質問する";
-  }
-
-  // state復元
-  nextState = loadState();
-
-  // chat復元
-  chatLog = loadChatLog();
-  if (chatLog.length) {
-    // 既存DOMをクリアして再描画
-    chatEl.innerHTML = "";
-    for (const item of chatLog) {
-      const role = item && item.role ? item.role : "lucy";
-      const label = item && item.label ? item.label : (role === "user" ? "You" : role === "error" ? "ERROR" : "Lucy");
-      if (item && typeof item.html === "string") {
-        appendMessage(role, label, item.html, true);
-      } else if (item && typeof item.text === "string") {
-        appendMessage(role, label, item.text, false);
-      }
-    }
-  }
-
-  // touristInfoBtn などは「邪魔しない」方針：recommend.js からトグルしない
-  // ただし、送信時にパネルが閉じていたら開くだけ（控えめに補助）
-  function ensurePanelOpenSoftly() {
-    if (!recommendSection) return;
-    if (recommendSection.classList.contains("is-collapsed")) {
-      recommendSection.classList.remove("is-collapsed");
-      if (touristInfoBtn) touristInfoBtn.setAttribute("aria-expanded", "true");
-    }
-  }
-
-  // =========================================================
-  // 6) Worker呼び出し本体
-  // =========================================================
-  async function callWorker(userText) {
-    const payload = { userText: userText };
-    // 初回は state を送らない（null or 省略）
-    if (nextState && typeof nextState === "object") {
-      payload.state = nextState;
-    }
-
-    const res = await fetch(WORKER_CHAT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    // 非2xxでも body を読んでユーザーに出す
-    const rawText = await res.text().catch(() => "");
-    const parsed = safeJsonParse(rawText);
-
-    if (!res.ok) {
-      const detail =
-        parsed.ok
-          ? JSON.stringify(parsed.value, null, 2)
-          : rawText
-            ? rawText
-            : "(no response body)";
-      throw new Error(`HTTP ${res.status} ${res.statusText}\n${detail}`);
-    }
-
-    if (!parsed.ok) {
-      throw new Error(`JSONパースに失敗しました。\n${rawText || "(empty body)"}`);
-    }
-
-    return parsed.value;
-  }
-
-  // =========================================================
-  // 7) 送信ハンドラ
-  // =========================================================
-  async function onSend() {
-    const text = normalizeUserText(inputEl.value);
+// ユーザー入力処理
+function handleUserSubmit() {
+    const text = userInput.value.trim();
     if (!text) return;
 
-    ensurePanelOpenSoftly();
+    // ユーザーの吹き出しを表示
+    addMessage(text, 'user');
+    userInput.value = '';
 
-    appendUser(text);
-    inputEl.value = "";
+    // Workerへ送信
+    callWorker(text);
+}
 
-    setSending(true);
+// Worker呼び出し
+async function callWorker(text, forceStep = null) {
+    showLoading(true);
+
     try {
-      const data = await callWorker(text);
+        // もし強制ステップ指定があれば適用（初回S0用）
+        if (forceStep) {
+            currentState.step = forceStep;
+        }
 
-      // 想定：{ ok:true, reply:string, nextState:object, (debug?:object) }
-      if (!data || typeof data !== "object") {
-        appendError("Worker応答が不正です（オブジェクトではありません）", String(data));
-        return;
-      }
+        const payload = {
+            userText: text,
+            state: currentState
+        };
 
-      if (data.ok !== true) {
-        appendError("Workerが ok:true を返しませんでした", JSON.stringify(data, null, 2));
-        return;
-      }
+        const res = await fetch(WORKER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
 
-      const reply = typeof data.reply === "string" ? data.reply : "";
-      if (!reply) {
-        appendError("reply が空、または文字列ではありません", JSON.stringify(data, null, 2));
-      } else {
-        appendLucy(reply);
-      }
+        if (!res.ok) {
+            throw new Error(`Server error: ${res.status}`);
+        }
 
-      const ns = data.nextState && typeof data.nextState === "object" ? data.nextState : null;
-      if (!ns) {
-        appendError("nextState が取得できませんでした（次回以降の会話継続ができません）", JSON.stringify(data, null, 2));
-      } else {
-        nextState = ns;
-        saveState(nextState);
-      }
+        const data = await res.json();
 
-      // debug（ALLOW_DEBUG=1）対応
-      if (data.debug) {
-        try {
-          console.log("[Lucy debug]", data.debug);
-          window.__LUCY_LAST_DEBUG = data.debug;
-        } catch (_) {}
-      }
+        if (data.ok) {
+            // Lucyの返答を表示
+            if (data.reply) {
+                addMessage(data.reply, 'lucy');
+            }
+
+            // 状態を更新
+            if (data.nextState) {
+                currentState = data.nextState;
+            }
+        } else {
+            console.error("Worker error:", data.error);
+            addMessage("すみません、エラーが発生しました。", 'lucy');
+        }
+
     } catch (err) {
-      const msg = err && err.message ? err.message : String(err);
-      appendError("通信に失敗しました", msg);
-      console.error("[recommend.js] send failed:", err);
+        console.error("Fetch error:", err);
+        addMessage("通信エラーが発生しました。", 'lucy');
     } finally {
-      setSending(false);
-      inputEl.focus();
+        showLoading(false);
     }
-  }
+}
 
-  // =========================================================
-  // 8) イベント配線
-  // =========================================================
-  sendBtn.addEventListener("click", onSend);
+// メッセージを画面に追加
+function addMessage(text, sender) {
+    const div = document.createElement('div');
+    div.classList.add('message', sender);
+    
+    // HTMLタグ（リンクなど）を有効にするため innerHTML を使用
+    // ※ユーザー入力は危険回避のため textContent 推奨だが、
+    // 今回は簡易チャットなので、Lucy側はHTML許可、User側はエスケープするのが安全。
+    // ここではシンプルに innerHTML で統一していますが、本番環境ではサニタイズ推奨。
+    
+    // 改行コードを <br> に変換
+    const formattedText = text.replace(/\n/g, '<br>');
+    div.innerHTML = formattedText;
 
-  // Enter で送信
-  inputEl.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) {
-      ev.preventDefault();
-      onSend();
-    }
-  });
+    chatWindow.appendChild(div);
+    scrollToBottom();
+    
+    // 履歴に追加（Workerとの同期用）
+    // ※Worker側で履歴管理しているので、クライアント側では送受信時にstate.historyが更新されて戻ってくる
+}
 
-  // デバッグ用：コンソールから state / ログを消したい時
-  window.__LUCY_CLEAR_STATE = () => {
-    nextState = null;
-    saveState(null);
-    console.log("[Lucy] state cleared");
-  };
+// ローディング表示切り替え
+function showLoading(show) {
+    loading.style.display = show ? 'block' : 'none';
+    if (show) scrollToBottom();
+}
 
-  window.__LUCY_CLEAR_CHAT = () => {
-    chatLog = [];
-    saveChatLog([]);
-    chatEl.innerHTML = "";
-    console.log("[Lucy] chat cleared");
-  };
-
-})();
+// 最下部へスクロール
+function scrollToBottom() {
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
