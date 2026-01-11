@@ -5,6 +5,10 @@
  * - nextState は recommend.js 側で保持し、次回リクエストに同梱（ステートレス設計）。
  * - エラー（ネットワーク/JSON/HTTP非2xx）は画面に表示。
  * - debug（ALLOW_DEBUG=1 のとき）は console に出す（必要なら window にも退避）。
+ *
+ * ★修正点：
+ * - Lucyのreplyに含まれる <a href="..."> を「リンクとして」表示するため、
+ *   chat欄を textContent ではなく DOM 要素として描画（Lucyのみ安全にHTMLを許可）。
  */
 (() => {
   "use strict";
@@ -34,7 +38,6 @@
   const recommendSection = document.getElementById("recommendSection");
 
   if (!inputEl || !sendBtn || !chatEl) {
-    // 既存UIが無い場合は何もしない（今回は index.html にある前提）
     console.warn("[recommend.js] Required DOM not found. (#recommendInput/#recommendSend/#recommendChat)");
     return;
   }
@@ -43,6 +46,10 @@
   // 3) 内部状態（nextState を保持）
   // =========================================================
   let nextState = null;
+
+  // 画面ログ（復元用）
+  // 例: { role:"user"|"lucy"|"error", text:"...", html:"..." }
+  let chatLog = [];
 
   // =========================================================
   // 4) ユーティリティ
@@ -103,30 +110,143 @@
     }
   }
 
-  function appendLine(line) {
-    const current = (chatEl.textContent || "").split("\n").filter(Boolean);
-    current.push(line);
-    const clipped = current.slice(-MAX_LOG_LINES);
-    chatEl.textContent = clipped.join("\n");
+  function normalizeUserText(s) {
+    return String(s || "").replace(/\s+/g, " ").trim();
+  }
+
+  // HTMLエスケープ（ユーザー入力やエラー表示用）
+  function escapeHtml(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // Lucy返信のうち、許可するのは <a href="https?://...">text</a> のみ（それ以外はテキスト化）
+  // また、改行 \n は <br> に変換する
+  function sanitizeLucyReplyToHtml(rawText) {
+    const input = String(rawText || "");
+    const withBr = input.replace(/\r\n/g, "\n");
+
+    // DOMParserで一旦HTMLとして解釈させる（ただし許可要素は限定して再構築）
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${withBr}</div>`, "text/html");
+    const root = doc.body.firstElementChild;
+
+    function isSafeHttpUrl(url) {
+      try {
+        const u = new URL(url, window.location.href);
+        return u.protocol === "http:" || u.protocol === "https:";
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function walk(node, outParts) {
+      if (!node) return;
+
+      // テキストノード
+      if (node.nodeType === Node.TEXT_NODE) {
+        // 改行はこの段階では残っている可能性があるので後で処理せず、ここで <br> にする
+        const t = node.nodeValue || "";
+        const chunks = t.split("\n");
+        for (let i = 0; i < chunks.length; i++) {
+          outParts.push(escapeHtml(chunks[i]));
+          if (i < chunks.length - 1) outParts.push("<br>");
+        }
+        return;
+      }
+
+      // 要素ノード
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const tag = (node.tagName || "").toLowerCase();
+
+        if (tag === "br") {
+          outParts.push("<br>");
+          return;
+        }
+
+        if (tag === "a") {
+          const href = node.getAttribute("href") || "";
+          const text = node.textContent || "";
+          if (href && isSafeHttpUrl(href)) {
+            const safeHref = escapeHtml(href);
+            const safeText = escapeHtml(text);
+            outParts.push(
+              `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeText}</a>`
+            );
+          } else {
+            // 危険/不正URLはリンク化しない
+            outParts.push(escapeHtml(text));
+          }
+          return;
+        }
+
+        // それ以外のタグは「中身だけ」再帰（タグ自体は捨てる）
+        const children = Array.from(node.childNodes || []);
+        for (const c of children) walk(c, outParts);
+        return;
+      }
+
+      // その他（コメントなど）は無視
+    }
+
+    const parts = [];
+    const children = Array.from((root && root.childNodes) ? root.childNodes : []);
+    for (const c of children) walk(c, parts);
+
+    return parts.join("");
+  }
+
+  // 1行（1メッセージ）をDOMとして追加
+  function appendMessage(role, label, content, isHtml) {
+    const line = document.createElement("div");
+    line.className = `chat-line chat-${role}`;
+
+    const prefix = document.createElement("span");
+    prefix.className = "chat-prefix";
+    prefix.textContent = `${label}: `;
+
+    const body = document.createElement("span");
+    body.className = "chat-body";
+
+    if (isHtml) {
+      body.innerHTML = content; // ここは sanitizeLucyReplyToHtml の結果のみを入れる
+    } else {
+      body.textContent = content;
+    }
+
+    line.appendChild(prefix);
+    line.appendChild(body);
+    chatEl.appendChild(line);
+
+    // スクロール追従
     chatEl.scrollTop = chatEl.scrollHeight;
-    saveChatLog(clipped);
+
+    // ログ保存（復元用）
+    const entry = isHtml
+      ? { role, label, html: content }
+      : { role, label, text: content };
+
+    chatLog.push(entry);
+    chatLog = chatLog.slice(-MAX_LOG_LINES);
+    saveChatLog(chatLog);
   }
 
   function appendUser(text) {
-    appendLine(`You: ${text}`);
+    appendMessage("user", "You", String(text || ""), false);
   }
 
-  function appendLucy(text) {
-    appendLine(`Lucy: ${text}`);
+  function appendLucy(replyText) {
+    const html = sanitizeLucyReplyToHtml(replyText);
+    appendMessage("lucy", "Lucy", html, true);
   }
 
   function appendError(title, detail) {
     const msg = detail ? `${title}\n${detail}` : title;
-    appendLine(`[ERROR] ${msg}`);
-  }
-
-  function normalizeUserText(s) {
-    return String(s || "").replace(/\s+/g, " ").trim();
+    appendMessage("error", "ERROR", msg, false);
   }
 
   // =========================================================
@@ -141,17 +261,23 @@
   // state復元
   nextState = loadState();
 
-  // 画面ログ復元（任意）
-  const savedLines = loadChatLog();
-  if (savedLines.length) {
-    chatEl.textContent = savedLines.join("\n");
-    chatEl.scrollTop = chatEl.scrollHeight;
-  } else {
-    // 初回は軽い案内を入れても良いが、既存デザインを尊重して何も入れない
+  // chat復元
+  chatLog = loadChatLog();
+  if (chatLog.length) {
+    // 既存DOMをクリアして再描画
+    chatEl.innerHTML = "";
+    for (const item of chatLog) {
+      const role = item && item.role ? item.role : "lucy";
+      const label = item && item.label ? item.label : (role === "user" ? "You" : role === "error" ? "ERROR" : "Lucy");
+      if (item && typeof item.html === "string") {
+        appendMessage(role, label, item.html, true);
+      } else if (item && typeof item.text === "string") {
+        appendMessage(role, label, item.text, false);
+      }
+    }
   }
 
-  // touristInfoBtn で recommendSection を開閉している既存実装がある可能性があるので、
-  // recommend.js 側では「邪魔しない」方針：追加のトグルはしない。
+  // touristInfoBtn などは「邪魔しない」方針：recommend.js からトグルしない
   // ただし、送信時にパネルが閉じていたら開くだけ（控えめに補助）
   function ensurePanelOpenSoftly() {
     if (!recommendSection) return;
@@ -244,7 +370,6 @@
       if (data.debug) {
         try {
           console.log("[Lucy debug]", data.debug);
-          // 画面に出さず、必要時に参照できるよう退避
           window.__LUCY_LAST_DEBUG = data.debug;
         } catch (_) {}
       }
@@ -263,7 +388,7 @@
   // =========================================================
   sendBtn.addEventListener("click", onSend);
 
-  // Enter で送信（Shift+Enter は無効：入力欄は input[type=text] なので基本発生しないが保険）
+  // Enter で送信
   inputEl.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) {
       ev.preventDefault();
@@ -271,11 +396,18 @@
     }
   });
 
-  // デバッグ用：コンソールから state を消したい時
+  // デバッグ用：コンソールから state / ログを消したい時
   window.__LUCY_CLEAR_STATE = () => {
     nextState = null;
     saveState(null);
     console.log("[Lucy] state cleared");
+  };
+
+  window.__LUCY_CLEAR_CHAT = () => {
+    chatLog = [];
+    saveChatLog([]);
+    chatEl.innerHTML = "";
+    console.log("[Lucy] chat cleared");
   };
 
 })();
