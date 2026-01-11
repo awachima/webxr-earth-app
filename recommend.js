@@ -1,6 +1,6 @@
 /* recommend.js - リロードでリセット＆初回挨拶版 */
 
-const WORKER_URL = "https://lucy-worker.dokodemodoors.workers.dev/chat";
+const WORKER_URL = "https://lucy-recommend.awachima7.workers.dev/chat";
 
 // 状態管理（リロードで初期化されます）
 let state = {
