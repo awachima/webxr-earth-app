@@ -9,7 +9,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
 
-  <!-- ===== 言語の永続化を「複数キー」に同期（他のJSに上書きされにくくする） ===== -->
   <script>
     (function(){
       const LANG_KEYS = [
@@ -344,7 +343,6 @@
     <header>
       <h1 class="brand-logo-text" id="siteTitle">Dokodemo Doors Fan Site</h1>
 
-      <!-- 言語スイッチ -->
       <div class="lang-switch">
         <button id="langToggle" class="lang-switch__toggle" type="button">Language</button>
         <div id="langMenu" class="lang-switch__menu" hidden>
@@ -358,7 +356,6 @@
       </div>
     </header>
 
-    <!-- ===== About modals ===== -->
     <div id="aboutBackdrop" class="backdrop" aria-hidden="true">
       <div class="modal about-modal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
         <header>
@@ -383,13 +380,11 @@
       </div>
     </div>
 
-    <!-- ===== Tag filter modal ===== -->
     <div id="tagFilterBackdrop" class="backdrop" aria-hidden="true">
       <div class="modal tag-filter-modal" role="dialog" aria-modal="true" aria-labelledby="tagFilterTitle">
         <header>
           <div id="tagFilterTitle">絞り込み</div>
 
-          <!-- ★復元：クリア / 適用（tagfilter.js がこのIDを見て自動で配線する） -->
           <div class="tag-filter-actions">
             <button
               type="button"
@@ -415,7 +410,6 @@
     <div class="stage">
       <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
 
-      <!-- 白線の下に表示するボタン群 -->
       <div class="intro-bar">
         <button type="button" id="aboutBtn" class="intro-bar__button">
           What is Dokodemo Doors?
@@ -444,7 +438,6 @@
       </div>
     </div>
 
-    <!-- ★ ツアー提案カード（写真アイコン入り・A案レイアウト） -->
     <section
       id="recommendSection" class="lucy-panel is-collapsed"
       style="
@@ -457,7 +450,6 @@
         box-shadow: 0 4px 12px rgba(0,0,0,0.04);
       "
     >
-      <!-- 写真＋タイトル＋説明文を横並び -->
       <div style="display:flex; align-items:flex-start; gap:16px; margin-bottom:12px;">
         <img src="./assets/assistant.jpg"
              alt="Assistant"
@@ -508,18 +500,19 @@
         </button>
       </div>
 
-      <!-- ★ 追加：Lucyに質問（音声）ボタンとステータス表示（lobby.htmlの同等UI） -->
-      <div class="recommend-voice-ask" style="margin-bottom:12px;">
+      <div class="recommend-voice-ask" style="margin-bottom:12px; position: relative;">
         <button id="lucyVoiceAskBtn" class="btn ghost" type="button">
           Lucyに質問（音声）
         </button>
-        <div id="lucyVoiceAskStatus" class="status" style="margin-top:4px;"></div>
-        <div id="lucyVoiceSpeakHint" style="font-size:11px; color:#777; margin-top:4px;">
+        
+        <div id="lucyVoiceAskStatus" class="status" 
+             style="position: absolute; top: 40px; left: 0; width: 100%; pointer-events: none; font-size: 0.9em; line-height: 1.2; color: #e65100;"></div>
+        
+        <div id="lucyVoiceSpeakHint" style="font-size:11px; color:#777; margin-top:24px;">
           🎤 ゆっくり・はっきり話すと認識が安定します。
         </div>
       </div>
 
-      <!-- ★ AI の返答ログ表示エリア（最大約10行でスクロール） -->
       <div id="recommendChat" style="
         margin-bottom:12px;
         padding:10px;
@@ -534,7 +527,6 @@
       "></div>
     </section>
 
-    <!-- ===== Meetup rooms UI (復活) ===== -->
     <section class="meetups">
       <div class="meetups__head">
         <h2 class="meetups__title">Meetup Rooms</h2>
@@ -542,11 +534,9 @@
       </div>
 
       <div id="grid" class="grid">
-        <!-- cards inserted by JS -->
-      </div>
+        </div>
     </section>
 
-    <!-- ===== Modal (Create/Edit) ===== -->
     <div id="backdrop" class="backdrop" aria-hidden="true">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <header>
@@ -569,7 +559,6 @@
             <input id="mStart" type="datetime-local" />
           </div>
 
-          <!-- Quest など datetime-local 非対応用 -->
           <div class="row" id="mStartFallback" style="display:none;">
             <label id="labelStartFallback">Start</label>
             <div class="start-grid">
@@ -585,7 +574,6 @@
             <input id="mTarget" type="url" placeholder="https://..." />
           </div>
 
-          <!-- Free / Paid -->
           <div class="row">
             <label id="labelEventType">Event type</label>
             <div class="radio-row">
