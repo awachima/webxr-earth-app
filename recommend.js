@@ -10,7 +10,8 @@
  * ★追加（今回）：
  * - Meta Quest などで「Lucyに質問（音声）」を使えるようにする
  *   - #lucyVoiceAskBtn / #lucyVoiceAskStatus が存在すれば有効化
- *   - MediaRecorderで録音→/voice（推定）へ送信→文字起こし結果を /chat に流す
+ *   - 可能なら SpeechRecognition（ブラウザ内音声認識）を優先
+ *   - SpeechRecognition が無い/失敗したら MediaRecorderで録音→/voice へ送信→文字起こし→/chat へ
  *
  * 期待する index.html 側の要素（追加してください）：
  *   <button id="lucyVoiceAskBtn" ...>Lucyに質問（音声）</button>
@@ -24,17 +25,30 @@
   // =========================================================
   const WORKER_CHAT_URL = "https://lucy-recommend.awachima7.workers.dev/chat";
 
-  // 音声→テキスト用エンドポイント（推定）
-  // 例: https://.../chat なら https://.../voice を想定
+  /**
+   * 音声→テキスト用エンドポイント（推定）
+   * 例: https://.../chat なら https://.../voice を想定
+   * - 明示的に上書きしたい場合は window.__LUCY_VOICE_URL を index.html 側で設定
+   */
   const WORKER_VOICE_URL = (() => {
-    // 明示的に上書きしたい場合（必要なら index.html で window.__LUCY_VOICE_URL を設定）
     if (typeof window !== "undefined" && window.__LUCY_VOICE_URL) return String(window.__LUCY_VOICE_URL);
 
     const s = String(WORKER_CHAT_URL || "");
-    // /chat で終わっていれば /voice に差し替え
     if (/\/chat(\?.*)?$/i.test(s)) return s.replace(/\/chat(\?.*)?$/i, "/voice");
-    // それ以外は末尾に /voice を足す
     return s.replace(/\/+$/, "") + "/voice";
+  })();
+
+  /**
+   * 音声認識の優先順位
+   * - "auto": SpeechRecognition があれば優先。無ければ /voice。
+   * - "speech": SpeechRecognition のみ（/voice を使わない）
+   * - "server": /voice のみ（SpeechRecognition を使わない）
+   *
+   * 必要なら index.html で window.__LUCY_VOICE_MODE = "server" 等を設定
+   */
+  const VOICE_MODE = (() => {
+    if (typeof window !== "undefined" && window.__LUCY_VOICE_MODE) return String(window.__LUCY_VOICE_MODE);
+    return "auto";
   })();
 
   // =========================================================
@@ -61,11 +75,19 @@
   // =========================================================
   let nextState = null;
 
-  // 音声録音用
+  // 音声録音用（server /voice ルート）
   let voiceMediaStream = null;
   let voiceMediaRecorder = null;
   let voiceChunks = [];
   let voiceIsRecording = false;
+
+  // SpeechRecognition ルート
+  let speechRec = null;
+  let speechIsRunning = false;
+
+  // ボタン表示文言の保持
+  const VOICE_BTN_LABEL_IDLE = "Lucyに質問（音声）";
+  const VOICE_BTN_LABEL_STOP = "音声停止";
 
   // =========================================================
   // 4) ユーティリティ
@@ -198,6 +220,11 @@
     lucyVoiceAskStatus.textContent = String(text || "");
   }
 
+  function setLucyVoiceBtnLabel(isActive) {
+    if (!lucyVoiceAskBtn) return;
+    lucyVoiceAskBtn.textContent = isActive ? VOICE_BTN_LABEL_STOP : VOICE_BTN_LABEL_IDLE;
+  }
+
   function stopVoiceTracks() {
     if (voiceMediaStream) {
       try { voiceMediaStream.getTracks().forEach(t => t.stop()); } catch (_) {}
@@ -232,7 +259,6 @@
   }
 
   // 音声→文字起こし（/voice を想定）
-  // サーバー実装が異なる可能性があるため、いくつかの形式を吸収します。
   async function transcribeVoiceBlob(blob) {
     const formData = new FormData();
     formData.append("audio", blob, "voice.webm");
@@ -269,7 +295,7 @@
   }
 
   // =========================================================
-  // 6) 送信処理
+  // 6) 送信処理（テキスト）
   // =========================================================
   async function onSend() {
     const text = normalizeUserText(inputEl.value);
@@ -297,35 +323,136 @@
   }
 
   // =========================================================
-  // 6.5) 音声質問（録音→文字起こし→Lucyへ送信）
+  // 6.5) 音声質問（SpeechRecognition 優先 → 失敗時 /voice）
   // =========================================================
-  async function startLucyRecording() {
+  function getSpeechRecognitionCtor() {
+    const w = typeof window !== "undefined" ? window : null;
+    if (!w) return null;
+    return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+  }
+
+  async function sendRecognizedTextToLucy(text) {
+    const t = normalizeUserText(text);
+    if (!t) throw new Error("empty transcript");
+
+    ensurePanelOpenSoftly();
+    appendUser(t);
+
+    const data = await callWorker(t);
+    if (data.reply) appendLucy(data.reply);
+    if (data.nextState) nextState = data.nextState;
+    if (data.debug) console.log("[Lucy debug]", data.debug);
+  }
+
+  // ---------- SpeechRecognition ルート ----------
+  function startSpeechRecognition() {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) throw new Error("SpeechRecognition not available");
+
+    // 既存があれば止める
+    stopSpeechRecognition();
+
+    speechRec = new Ctor();
+    speechRec.lang = (typeof window !== "undefined" && window.__DD_LANG) ? String(window.__DD_LANG) : "ja-JP";
+    speechRec.interimResults = false;
+    speechRec.continuous = false;
+
+    speechIsRunning = true;
+    setLucyVoiceBtnLabel(true);
+    setLucyVoiceStatus("音声認識中です。話し終えたら自動で送信します。");
+
+    speechRec.onresult = async (ev) => {
+      try {
+        const res = ev && ev.results && ev.results[0] && ev.results[0][0] ? ev.results[0][0].transcript : "";
+        setLucyVoiceStatus(`認識：${normalizeUserText(res)}`);
+
+        setSending(true);
+        await sendRecognizedTextToLucy(res);
+        setLucyVoiceStatus("完了しました。");
+      } catch (e) {
+        console.error(e);
+        setLucyVoiceStatus("音声認識結果の送信に失敗しました。");
+        appendError("音声の処理に失敗しました", e.message);
+      } finally {
+        setSending(false);
+      }
+    };
+
+    speechRec.onerror = (ev) => {
+      // "no-speech" / "not-allowed" / "network" 等
+      const msg = (ev && ev.error) ? String(ev.error) : "unknown";
+      setLucyVoiceStatus(`音声認識エラー：${msg}`);
+    };
+
+    speechRec.onend = () => {
+      speechIsRunning = false;
+      setLucyVoiceBtnLabel(false);
+      // status は直近の文言を残す
+    };
+
+    try {
+      speechRec.start();
+    } catch (e) {
+      // start 二重呼び出し等
+      speechIsRunning = false;
+      setLucyVoiceBtnLabel(false);
+      throw e;
+    }
+  }
+
+  function stopSpeechRecognition() {
+    if (!speechRec) return;
+    try { speechRec.onresult = null; speechRec.onerror = null; speechRec.onend = null; } catch (_) {}
+    try { speechRec.stop(); } catch (_) {}
+    speechRec = null;
+    speechIsRunning = false;
+    setLucyVoiceBtnLabel(false);
+  }
+
+  // ---------- /voice（MediaRecorder）ルート ----------
+  function pickBestAudioMimeType() {
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/ogg",
+    ];
+    if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
+    for (const t of candidates) {
+      try {
+        if (MediaRecorder.isTypeSupported(t)) return t;
+      } catch (_) {}
+    }
+    return "";
+  }
+
+  async function startServerVoiceRecording() {
     if (voiceIsRecording) return;
     voiceIsRecording = true;
     voiceChunks = [];
 
     ensurePanelOpenSoftly();
+    setLucyVoiceBtnLabel(true);
     setLucyVoiceStatus("録音中です。もう一度押すと停止します。");
-
-    if (lucyVoiceAskBtn) lucyVoiceAskBtn.textContent = "録音停止";
 
     try {
       voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       setLucyVoiceStatus("マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。");
       voiceIsRecording = false;
-      if (lucyVoiceAskBtn) lucyVoiceAskBtn.textContent = "Lucyに質問（音声）";
+      setLucyVoiceBtnLabel(false);
       return;
     }
 
     try {
-      voiceMediaRecorder = new MediaRecorder(voiceMediaStream);
+      const mimeType = pickBestAudioMimeType();
+      voiceMediaRecorder = mimeType ? new MediaRecorder(voiceMediaStream, { mimeType }) : new MediaRecorder(voiceMediaStream);
     } catch (e) {
       console.error(e);
       setLucyVoiceStatus("このブラウザでは録音機能（MediaRecorder）が使えません。");
       stopVoiceTracks();
       voiceIsRecording = false;
-      if (lucyVoiceAskBtn) lucyVoiceAskBtn.textContent = "Lucyに質問（音声）";
+      setLucyVoiceBtnLabel(false);
       return;
     }
 
@@ -334,47 +461,44 @@
     };
 
     voiceMediaRecorder.onstop = async () => {
-      // stopRecording() から呼ばれる
-      const blob = new Blob(voiceChunks, { type: "audio/webm" });
+      const recordedMime = (voiceMediaRecorder && voiceMediaRecorder.mimeType) ? voiceMediaRecorder.mimeType : "audio/webm";
+      const blob = new Blob(voiceChunks, { type: recordedMime || "audio/webm" });
+
       voiceChunks = [];
       stopVoiceTracks();
 
+      // 録音状態はここで確実に解除（stop が何経路でも）
+      voiceIsRecording = false;
+      setLucyVoiceBtnLabel(false);
+
       if (!blob || blob.size === 0) {
         setLucyVoiceStatus("音声データが取得できませんでした。もう一度お試しください。");
-        if (lucyVoiceAskBtn) lucyVoiceAskBtn.textContent = "Lucyに質問（音声）";
         return;
       }
 
       setLucyVoiceStatus("音声を送信しています…");
-
       setSending(true);
       try {
         const text = normalizeUserText(await transcribeVoiceBlob(blob));
-        if (!text) throw new Error("empty transcript");
-
         setLucyVoiceStatus(`認識：${text}`);
 
-        // 既存のテキスト送信と同じルートへ
-        appendUser(text);
-
-        const data = await callWorker(text);
-
-        if (data.reply) appendLucy(data.reply);
-        if (data.nextState) nextState = data.nextState;
-
-        if (data.debug) console.log("[Lucy debug]", data.debug);
-
+        await sendRecognizedTextToLucy(text);
         setLucyVoiceStatus("完了しました。");
       } catch (e) {
         console.error(e);
-        setLucyVoiceStatus(
-          "音声の処理に失敗しました。/voice の実装（URL・レスポンス形式）をご確認ください。"
-        );
+        setLucyVoiceStatus("音声の処理に失敗しました。/voice の実装（URL・レスポンス形式）をご確認ください。");
         appendError("音声の処理に失敗しました", e.message);
       } finally {
         setSending(false);
-        if (lucyVoiceAskBtn) lucyVoiceAskBtn.textContent = "Lucyに質問（音声）";
       }
+    };
+
+    voiceMediaRecorder.onerror = (ev) => {
+      console.error(ev);
+      setLucyVoiceStatus("録音中にエラーが発生しました。");
+      try { stopVoiceTracks(); } catch (_) {}
+      voiceIsRecording = false;
+      setLucyVoiceBtnLabel(false);
     };
 
     try {
@@ -384,16 +508,14 @@
       setLucyVoiceStatus("録音の開始に失敗しました。");
       stopVoiceTracks();
       voiceIsRecording = false;
-      if (lucyVoiceAskBtn) lucyVoiceAskBtn.textContent = "Lucyに質問（音声）";
+      setLucyVoiceBtnLabel(false);
     }
   }
 
-  function stopLucyRecording() {
+  function stopServerVoiceRecording() {
     if (!voiceIsRecording) return;
-    voiceIsRecording = false;
-
+    // ここでは onstop に処理を任せる（voiceIsRecording の解除も onstop 側で確実に）
     setLucyVoiceStatus("録音を停止しました。解析中…");
-
     try {
       if (voiceMediaRecorder && voiceMediaRecorder.state !== "inactive") {
         voiceMediaRecorder.stop();
@@ -402,17 +524,83 @@
       console.error(e);
       setLucyVoiceStatus("録音停止に失敗しました。");
       stopVoiceTracks();
-      if (lucyVoiceAskBtn) lucyVoiceAskBtn.textContent = "Lucyに質問（音声）";
+      voiceIsRecording = false;
+      setLucyVoiceBtnLabel(false);
+    }
+  }
+
+  // ---------- 入口（ボタン押下） ----------
+  function isVoiceActive() {
+    return !!voiceIsRecording || !!speechIsRunning;
+  }
+
+  async function startVoiceFlow() {
+    // 既に動作中なら何もしない（二重起動防止）
+    if (isVoiceActive()) return;
+
+    // モードに応じて分岐
+    const hasSpeech = !!getSpeechRecognitionCtor();
+
+    if (VOICE_MODE === "speech") {
+      startSpeechRecognition();
+      return;
+    }
+
+    if (VOICE_MODE === "server") {
+      await startServerVoiceRecording();
+      return;
+    }
+
+    // auto
+    if (hasSpeech) {
+      try {
+        startSpeechRecognition();
+        return;
+      } catch (e) {
+        console.warn("[recommend.js] SpeechRecognition failed, fallback to /voice:", e);
+        // フォールバック
+      }
+    }
+    await startServerVoiceRecording();
+  }
+
+  function stopVoiceFlow() {
+    // SpeechRecognition が走っていれば止める
+    if (speechIsRunning) {
+      setLucyVoiceStatus("音声認識を停止しました。");
+      stopSpeechRecognition();
+      return;
+    }
+
+    // /voice 録音が走っていれば止める
+    if (voiceIsRecording) {
+      stopServerVoiceRecording();
+      return;
     }
   }
 
   if (lucyVoiceAskBtn) {
-    lucyVoiceAskBtn.addEventListener("click", () => {
+    // 初期文言を確実に整える
+    setLucyVoiceBtnLabel(false);
+
+    lucyVoiceAskBtn.addEventListener("click", async () => {
       // 送信中は何もしない（setSendingが disable しているが保険）
       if (lucyVoiceAskBtn.disabled) return;
 
-      if (!voiceIsRecording) startLucyRecording();
-      else stopLucyRecording();
+      try {
+        if (!isVoiceActive()) {
+          await startVoiceFlow();
+        } else {
+          stopVoiceFlow();
+        }
+      } catch (e) {
+        console.error(e);
+        setLucyVoiceStatus("音声機能の起動に失敗しました。");
+        appendError("音声の処理に失敗しました", e.message);
+        // 念のため停止・復帰
+        try { stopVoiceFlow(); } catch (_) {}
+        setLucyVoiceBtnLabel(false);
+      }
     });
   }
 
