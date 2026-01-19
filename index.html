@@ -609,6 +609,25 @@
 
   <script src="./main.js"></script>
   <script src="./tagfilter.js"></script>
+
+  <script>
+    (function(){
+      // Check if user agent suggests Meta Quest or other VR headsets
+      const ua = navigator.userAgent;
+      const isQuest = ua.indexOf("Quest") !== -1 || ua.indexOf("Oculus") !== -1;
+      
+      // Also potentially useful for general Android if SpeechRecognition is flaky
+      // const isAndroid = ua.indexOf("Android") !== -1;
+
+      if (isQuest) {
+        // Force recommend.js to use "server" mode (MediaRecorder -> /voice endpoint)
+        // instead of "auto" (which tries SpeechRecognition first)
+        window.__LUCY_VOICE_MODE = "server";
+        console.log("Quest browser detected: Force voice mode to 'server'");
+      }
+    })();
+  </script>
+
   <script src="./recommend.js"></script>
 </body>
 </html>
