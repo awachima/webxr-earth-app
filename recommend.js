@@ -1,21 +1,11 @@
 /**
  * recommend.js
  * - index.html の既存UI (#recommendInput / #recommendSend / #recommendChat) を使って
- *   Cloudflare Worker の /chat に POST し、reply と nextState を表示する。
+ * Cloudflare Worker の /chat に POST し、reply と nextState を表示する。
  *
- * ★方針変更（今回の修正）：
- * - state / chat の永続化は完全に廃止（リロード記憶なし）
- * - 初回アクセス時は必ず S0（挨拶）を Worker に要求する
- *
- * ★追加（今回）：
- * - Meta Quest などで「Lucyに質問（音声）」を使えるようにする
- *   - #lucyVoiceAskBtn / #lucyVoiceAskStatus が存在すれば有効化
- *   - 可能なら SpeechRecognition（ブラウザ内音声認識）を優先
- *   - SpeechRecognition が無い/失敗したら MediaRecorderで録音→/voice へ送信→文字起こし→/chat へ
- *
- * 期待する index.html 側の要素（追加してください）：
- *   <button id="lucyVoiceAskBtn" ...>Lucyに質問（音声）</button>
- *   <div id="lucyVoiceAskStatus" ...></div>
+ * ★ Quest対応修正版：
+ * - MIME Type の指定を廃止し、Lobby.js と同様にブラウザ標準（デフォルト）の録音形式を使用する。
+ * - これにより Meta Quest Browser での録音不具合を解消する。
  */
 (() => {
   "use strict";
@@ -26,9 +16,8 @@
   const WORKER_CHAT_URL = "https://lucy-recommend.awachima7.workers.dev/chat";
 
   /**
-   * 音声→テキスト用エンドポイント（推定）
+   * 音声→テキスト用エンドポイント
    * 例: https://.../chat なら https://.../voice を想定
-   * - 明示的に上書きしたい場合は window.__LUCY_VOICE_URL を index.html 側で設定
    */
   const WORKER_VOICE_URL = (() => {
     if (typeof window !== "undefined" && window.__LUCY_VOICE_URL) return String(window.__LUCY_VOICE_URL);
@@ -40,11 +29,7 @@
 
   /**
    * 音声認識の優先順位
-   * - "auto": SpeechRecognition があれば優先。無ければ /voice。
-   * - "speech": SpeechRecognition のみ（/voice を使わない）
-   * - "server": /voice のみ（SpeechRecognition を使わない）
-   *
-   * 必要なら index.html で window.__LUCY_VOICE_MODE = "server" 等を設定
+   * Questの場合は index.html 側で window.__LUCY_VOICE_MODE = "server" が指定されている想定
    */
   const VOICE_MODE = (() => {
     if (typeof window !== "undefined" && window.__LUCY_VOICE_MODE) return String(window.__LUCY_VOICE_MODE);
@@ -275,7 +260,7 @@
       throw new Error(`VOICE HTTP ${res.status}\n${raw}`);
     }
 
-    // JSONが返る想定： { text: "..."} / { transcript: "..."} / { userText: "..."} / { ok:true, text:"..." }
+    // JSONが返る想定
     if (parsed.ok && parsed.value && typeof parsed.value === "object") {
       const v = parsed.value;
       const t =
@@ -287,7 +272,7 @@
       if (t) return t;
     }
 
-    // JSONじゃない・または text が無い場合：生テキストとして扱う
+    // JSONじゃない・または text が無い場合
     const maybeText = normalizeUserText(raw);
     if (maybeText) return maybeText;
 
@@ -323,7 +308,7 @@
   }
 
   // =========================================================
-  // 6.5) 音声質問（SpeechRecognition 優先 → 失敗時 /voice）
+  // 6.5) 音声質問
   // =========================================================
   function getSpeechRecognitionCtor() {
     const w = typeof window !== "undefined" ? window : null;
@@ -349,7 +334,6 @@
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) throw new Error("SpeechRecognition not available");
 
-    // 既存があれば止める
     stopSpeechRecognition();
 
     speechRec = new Ctor();
@@ -379,7 +363,6 @@
     };
 
     speechRec.onerror = (ev) => {
-      // "no-speech" / "not-allowed" / "network" 等
       const msg = (ev && ev.error) ? String(ev.error) : "unknown";
       setLucyVoiceStatus(`音声認識エラー：${msg}`);
     };
@@ -387,13 +370,11 @@
     speechRec.onend = () => {
       speechIsRunning = false;
       setLucyVoiceBtnLabel(false);
-      // status は直近の文言を残す
     };
 
     try {
       speechRec.start();
     } catch (e) {
-      // start 二重呼び出し等
       speechIsRunning = false;
       setLucyVoiceBtnLabel(false);
       throw e;
@@ -410,22 +391,7 @@
   }
 
   // ---------- /voice（MediaRecorder）ルート ----------
-  function pickBestAudioMimeType() {
-    const candidates = [
-      "audio/webm;codecs=opus",
-      "audio/webm",
-      "audio/ogg;codecs=opus",
-      "audio/ogg",
-    ];
-    if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
-    for (const t of candidates) {
-      try {
-        if (MediaRecorder.isTypeSupported(t)) return t;
-      } catch (_) {}
-    }
-    return "";
-  }
-
+  // ★ Lobby.js と同様、MIME Type 指定を排除し、ブラウザのデフォルト挙動に任せる
   async function startServerVoiceRecording() {
     if (voiceIsRecording) return;
     voiceIsRecording = true;
@@ -445,11 +411,11 @@
     }
 
     try {
-      const mimeType = pickBestAudioMimeType();
-      voiceMediaRecorder = mimeType ? new MediaRecorder(voiceMediaStream, { mimeType }) : new MediaRecorder(voiceMediaStream);
+      // ★ 修正点: options（MIME Type）を指定せず、デフォルトを使用する
+      voiceMediaRecorder = new MediaRecorder(voiceMediaStream);
     } catch (e) {
       console.error(e);
-      setLucyVoiceStatus("このブラウザでは録音機能（MediaRecorder）が使えません。");
+      setLucyVoiceStatus("このブラウザでは録音機能が使えません。");
       stopVoiceTracks();
       voiceIsRecording = false;
       setLucyVoiceBtnLabel(false);
@@ -461,13 +427,13 @@
     };
 
     voiceMediaRecorder.onstop = async () => {
-      const recordedMime = (voiceMediaRecorder && voiceMediaRecorder.mimeType) ? voiceMediaRecorder.mimeType : "audio/webm";
-      const blob = new Blob(voiceChunks, { type: recordedMime || "audio/webm" });
+      // ★ ここも Lobby.js に合わせる。
+      // MIME Type が何であれ、Blob作成時にはブラウザが記録した形式 or audio/webm として扱う
+      // （※ Questブラウザではこれで送信しないとデータが空になることがある）
+      const blob = new Blob(voiceChunks, { type: "audio/webm" });
 
       voiceChunks = [];
       stopVoiceTracks();
-
-      // 録音状態はここで確実に解除（stop が何経路でも）
       voiceIsRecording = false;
       setLucyVoiceBtnLabel(false);
 
@@ -486,7 +452,7 @@
         setLucyVoiceStatus("完了しました。");
       } catch (e) {
         console.error(e);
-        setLucyVoiceStatus("音声の処理に失敗しました。/voice の実装（URL・レスポンス形式）をご確認ください。");
+        setLucyVoiceStatus("音声の処理に失敗しました。");
         appendError("音声の処理に失敗しました", e.message);
       } finally {
         setSending(false);
@@ -514,7 +480,6 @@
 
   function stopServerVoiceRecording() {
     if (!voiceIsRecording) return;
-    // ここでは onstop に処理を任せる（voiceIsRecording の解除も onstop 側で確実に）
     setLucyVoiceStatus("録音を停止しました。解析中…");
     try {
       if (voiceMediaRecorder && voiceMediaRecorder.state !== "inactive") {
@@ -535,10 +500,9 @@
   }
 
   async function startVoiceFlow() {
-    // 既に動作中なら何もしない（二重起動防止）
     if (isVoiceActive()) return;
 
-    // モードに応じて分岐
+    // モード判定
     const hasSpeech = !!getSpeechRecognitionCtor();
 
     if (VOICE_MODE === "speech") {
@@ -557,7 +521,6 @@
         startSpeechRecognition();
         return;
       } catch (e) {
-        console.warn("[recommend.js] SpeechRecognition failed, fallback to /voice:", e);
         // フォールバック
       }
     }
@@ -565,14 +528,11 @@
   }
 
   function stopVoiceFlow() {
-    // SpeechRecognition が走っていれば止める
     if (speechIsRunning) {
       setLucyVoiceStatus("音声認識を停止しました。");
       stopSpeechRecognition();
       return;
     }
-
-    // /voice 録音が走っていれば止める
     if (voiceIsRecording) {
       stopServerVoiceRecording();
       return;
@@ -580,13 +540,9 @@
   }
 
   if (lucyVoiceAskBtn) {
-    // 初期文言を確実に整える
     setLucyVoiceBtnLabel(false);
-
     lucyVoiceAskBtn.addEventListener("click", async () => {
-      // 送信中は何もしない（setSendingが disable しているが保険）
       if (lucyVoiceAskBtn.disabled) return;
-
       try {
         if (!isVoiceActive()) {
           await startVoiceFlow();
@@ -597,7 +553,6 @@
         console.error(e);
         setLucyVoiceStatus("音声機能の起動に失敗しました。");
         appendError("音声の処理に失敗しました", e.message);
-        // 念のため停止・復帰
         try { stopVoiceFlow(); } catch (_) {}
         setLucyVoiceBtnLabel(false);
       }
@@ -610,7 +565,7 @@
   (async () => {
     setSending(true);
     try {
-      const data = await callWorker(null); // state なし = S0
+      const data = await callWorker(null); 
       if (data.reply) appendLucy(data.reply);
       if (data.nextState) nextState = data.nextState;
     } catch (e) {
