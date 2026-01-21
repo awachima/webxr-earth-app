@@ -1149,14 +1149,25 @@ function detectLang() {
           data = null;
         }
 
-        // transcript が返る場合：自分の発言として表示（任意）
-        if (data && typeof data.transcript === "string" && data.transcript.trim()) {
-          const body = data.transcript.trim();
+        // ======== ★修正ここから：自分の発話を必ず表示する ========
+        // do-chat /voice は（構成により） transcript ではなく repairedText / raw を返すことがあるため
+        // 優先順位：repairedText → transcript → raw
+        const mySpeech =
+          (data && typeof data.repairedText === "string" && data.repairedText.trim())
+            ? data.repairedText.trim()
+            : (data && typeof data.transcript === "string" && data.transcript.trim())
+              ? data.transcript.trim()
+              : (data && typeof data.raw === "string" && data.raw.trim())
+                ? data.raw.trim()
+                : "";
+
+        if (mySpeech) {
           const line = t("lobby.chatLine", "{name}: {text}")
             .replace("{name}", user || "Guest")
-            .replace("{text}", body);
+            .replace("{text}", mySpeech);
           addMsg("me", line);
         }
+        // ======== ★修正ここまで ========
 
         // reply が返る場合：Reginald の返答として即表示
         if (data && typeof data.reply === "string" && data.reply.trim()) {
