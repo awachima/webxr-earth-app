@@ -540,7 +540,7 @@ function detectLang() {
 
   // ===== Members パネル =====
   const membersEl = $("#members");
-function renderMembers(list) {
+  function renderMembers(list) {
     membersEl.innerHTML = "";
     if (!list || list.length === 0) {
       const empty = document.createElement("div");
@@ -1118,26 +1118,65 @@ function renderMembers(list) {
         );
         return;
       }
+
+      // 送信開始（UI）
       setVoiceAskStatus("sending", "音声を送信しています…");
+      showThinking();
 
       try {
         const formData = new FormData();
-        formData.append("roomId", roomId || "default");
+        formData.append("roomId", roomId || "default"); // 後方互換用（サーバが読む場合に備える）
         formData.append("audio", blob, "voice.webm");
 
-        const res = await fetch("https://do-chat.awachima7.workers.dev/voice", {
+        // ★ 重要：roomId / lang をクエリで渡す（サーバが確実に同じ DO にルーティングできるように）
+        const voiceUrl = new URL("https://do-chat.awachima7.workers.dev/voice");
+        voiceUrl.searchParams.set("roomId", roomId || "default");
+        voiceUrl.searchParams.set("lang", currentLang || "en");
+
+        const res = await fetch(voiceUrl.toString(), {
           method: "POST",
           body: formData,
         });
         if (!res.ok) {
           throw new Error("voice api error: " + res.status);
         }
-        setVoiceAskStatus(
-          "voiceAskSent",
-          "執事に音声を送信しました。回答をお待ちください。"
-        );
+
+        // ★ 重要：HTTP レスポンスも読む（WS が届かない環境でも必ず表示できる）
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (e) {
+          data = null;
+        }
+
+        // transcript が返る場合：自分の発言として表示（任意）
+        if (data && typeof data.transcript === "string" && data.transcript.trim()) {
+          const body = data.transcript.trim();
+          const line = t("lobby.chatLine", "{name}: {text}")
+            .replace("{name}", user || "Guest")
+            .replace("{text}", body);
+          addMsg("me", line);
+        }
+
+        // reply が返る場合：Reginald の返答として即表示
+        if (data && typeof data.reply === "string" && data.reply.trim()) {
+          const body = data.reply.trim();
+          const line = t("lobby.chatLine", "{name}: {text}")
+            .replace("{name}", "Reginald")
+            .replace("{text}", body);
+          addMsg("other", line);
+          hideThinking();
+          setVoiceAskStatus("voiceAskSent", "執事が回答しました。");
+        } else {
+          // サーバが WS で返す設計の場合は、ここでは「待ち」にしておく
+          setVoiceAskStatus(
+            "voiceAskSent",
+            "執事に音声を送信しました。回答をお待ちください。"
+          );
+        }
       } catch (e) {
         console.error(e);
+        hideThinking();
         setVoiceAskStatus(
           "voiceAskError",
           "執事への音声送信に失敗しました。時間をおいて再度お試しください。"
