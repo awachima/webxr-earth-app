@@ -4,8 +4,7 @@ const S = "meetups-store";
 const O = "meetups-owners";
 const NEGATIVE_LIMIT_MS = 20 * 60 * 1000;
 
-// ★変更点: 音声認識専用WorkerのURL
-// ※ここが正しく do-stt のURLになっているか確認してください
+// ★変更点: 新しい音声認識サーバー (do-stt) のURL
 const STT_URL = "https://do-stt.awachima7.workers.dev";
 
 const readStore = () => JSON.parse(localStorage.getItem(S) || "[]");
@@ -687,7 +686,6 @@ function detectLang() {
               data.messages.forEach((line) => {
                 try {
                   const obj = JSON.parse(line);
-                  // 自分が発言した音声認識結果なども、テキストとして履歴に残っていればここで復元される
                   if (obj.name === "Reginald") {
                     hideThinking();
                   }
@@ -794,7 +792,6 @@ function detectLang() {
   }
 
   // ===== WebRTC 音声チャット（ユーザー間通話） =====
-  // 既存機能そのまま
   const voiceStatus = $("#voiceStatus");
   const voicePowerBtn = $("#voicePower");
   const micToggleBtn = $("#micToggle");
@@ -818,6 +815,25 @@ function detectLang() {
         ? t("lobby.unmute", "ミュート解除")
         : t("lobby.mute", "ミュート");
     }
+    if (voiceStatus) {
+      if (!voiceJoined) {
+        voiceStatus.textContent = t("lobby.voiceNone", "音声: 未参加");
+      } else {
+        const state = micMuted
+          ? t("lobby.mute", "ミュート")
+          : t("lobby.unmute", "ミュート解除");
+        voiceStatus.textContent = t(
+          "lobby.voiceJoined",
+          "音声: 参加中（マイク{state}）"
+        ).replace("{state}", state);
+      }
+    }
+    if (voiceHintEl) {
+      voiceHintEl.textContent = t(
+        "lobby.voiceHint",
+        "※ 音声はブラウザ同士で直接やり取りされます。"
+      );
+    }
   }
 
   updateVoiceUI();
@@ -838,6 +854,12 @@ function detectLang() {
     voiceJoined = true;
     micMuted = false;
     updateVoiceUI();
+    if (voiceStatus) {
+      voiceStatus.textContent = t(
+        "lobby.voiceJoining",
+        "音声チャンネルに参加しています…"
+      );
+    }
     if (rosterMembers.length > 0) {
       startCalls(rosterMembers);
     }
@@ -859,6 +881,12 @@ function detectLang() {
       audio.remove();
     }
     remoteAudios.clear();
+    if (voiceStatus) {
+      voiceStatus.textContent = t(
+        "lobby.voiceLeft",
+        "音声チャンネルから退出しました。"
+      );
+    }
   }
 
   if (voicePowerBtn) {
@@ -980,9 +1008,12 @@ function detectLang() {
     enableSoundBtn.addEventListener("click", () => {
       const ctx = window._audioContext;
       if (ctx && ctx.state === "suspended") {
-        ctx.resume();
+        ctx.resume().then(() => {
+          enableSoundBtn.textContent = t("lobby.enableSoundRetry", "音が出ない？もう一度有効化");
+        });
+      } else {
+        enableSoundBtn.textContent = t("lobby.enableSoundRetry", "音が出ない？もう一度有効化");
       }
-      enableSoundBtn.textContent = t("lobby.enableSoundRetry", "音が出ない？もう一度有効化");
     });
   }
 
