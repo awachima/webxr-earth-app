@@ -4,6 +4,10 @@ const S = "meetups-store";
 const O = "meetups-owners";
 const NEGATIVE_LIMIT_MS = 20 * 60 * 1000;
 
+// ★変更点: 音声認識専用WorkerのURL
+// ※ここが正しく do-stt のURLになっているか確認してください
+const STT_URL = "https://do-stt.awachima7.workers.dev";
+
 const readStore = () => JSON.parse(localStorage.getItem(S) || "[]");
 const writeStore = (arr) => localStorage.setItem(S, JSON.stringify(arr));
 const readOwners = () => JSON.parse(localStorage.getItem(O) || "{}");
@@ -81,10 +85,6 @@ function detectLang() {
   })();
 
   // ===== チャットステータスの状態管理 =====
-  // initial: 未接続 / 画面初期表示
-  // connected: WebSocket 接続中
-  // reconnecting: 切断され再接続試行中
-  // error: エラー発生時
   let chatStatusMode = "initial";
 
   // ===== i18n ヘルパー =====
@@ -195,10 +195,6 @@ function detectLang() {
     if (voicePower)
       voicePower.textContent = t("lobby.voiceOn", "音声ON");
 
-    const membersElLabel = $("#membersLabel");
-    if (membersElLabel)
-      membersElLabel.textContent = t("lobby.membersLabel", "参加者");
-
     const voiceAskBtn = $("#voiceAskBtn");
     if (voiceAskBtn)
       voiceAskBtn.textContent = t(
@@ -206,7 +202,6 @@ function detectLang() {
         "執事に質問（音声）"
       );
 
-    // 🔊 / 🤵 の注意書きも多言語化する
     const noticeSmalls = document.querySelectorAll(".notice-small");
     if (noticeSmalls[0]) {
       noticeSmalls[0].textContent = t(
@@ -258,11 +253,9 @@ function detectLang() {
       lobbyFooter.textContent = t("lobby.footer", "© DokodemoDoors");
   }
 
-  // ★ ここを多言語対応に拡張
+  // ★ 言語データ読み込み
   async function loadLangData(lang) {
     let code = lang || "en";
-
-    // 統一
     if (code === "ja") code = "ja-JP";
     if (code === "iw") code = "he";
 
@@ -291,10 +284,8 @@ function detectLang() {
     applyLobbyTexts();
   }
 
-  // 言語データ読み込み
   loadLangData(currentLang);
 
-  // 言語セレクト変更（もしロビーにもセレクタがある場合）
   const langSelect = $("#langSelect");
   if (langSelect) {
     langSelect.value = currentLang;
@@ -313,7 +304,7 @@ function detectLang() {
     });
   }
 
-  // ===== URL パラメータ =====
+  // ===== URL パラメータ読み込み =====
   const roomId = urlParams.get("roomId") || "default";
   const title = urlParams.get("title") || "";
   const start = urlParams.get("start") || "";
@@ -322,13 +313,12 @@ function detectLang() {
   const eventType = urlParams.get("eventType") || "";
   const price = urlParams.get("price") || "";
 
-  // ===== タイトル表示 =====
+  // ===== 表示更新 =====
   const titleEl = $("#title");
   if (titleEl) {
     titleEl.textContent = title || t("lobby.noTitle", "タイトル未設定");
   }
 
-  // ===== 情報表示 =====
   const metaEl = $("#meta");
   const dateValue = $("#dateValue");
   const limitValue = $("#limitValue");
@@ -336,14 +326,12 @@ function detectLang() {
   const eventTypeValue = $("#eventTypeValue");
   const priceValue = $("#priceValue");
 
-  // 上部「開始時刻：…」の表示
   if (metaEl) {
     const defaultLabel =
       currentLang && currentLang.startsWith("ja")
         ? "開始時刻："
         : "Start time: ";
     const label = t("lobby.startLabel", defaultLabel);
-
     if (start) {
       const d = new Date(start);
       if (!isNaN(d.getTime())) {
@@ -359,7 +347,6 @@ function detectLang() {
     }
   }
 
-  // 右側の詳細パネル用
   if (dateValue) {
     if (start) {
       const d = new Date(start);
@@ -397,10 +384,7 @@ function detectLang() {
     } else if (eventType === "fan") {
       eventTypeValue.textContent = t("lobby.eventTypeFan", "ファン企画");
     } else if (eventType === "private") {
-      eventTypeValue.textContent = t(
-        "lobby.eventTypePrivate",
-        "非公開イベント"
-      );
+      eventTypeValue.textContent = t("lobby.eventTypePrivate", "非公開イベント");
     } else if (eventType === "paid") {
       eventTypeValue.textContent = t("lobby.eventTypePaid", "有料イベント");
     } else {
@@ -479,7 +463,6 @@ function detectLang() {
         "イベントは終了し、待合室は無効になっています。"
       );
     }
-
     update();
   }
   setupCountdown();
@@ -529,7 +512,6 @@ function detectLang() {
     });
   }
 
-  // ===== 戻るボタン =====
   const backToIndex = $("#backToIndex");
   if (backToIndex) {
     backToIndex.addEventListener("click", (e) => {
@@ -556,7 +538,6 @@ function detectLang() {
       badge.className = "badge";
       badge.textContent = String(idx + 1);
       const label = document.createElement("div");
-      // ★ ニックネームだけを表示し、テンプレートの {id} やカッコは使わない
       label.textContent = m.name || "";
       row.appendChild(badge);
       row.appendChild(label);
@@ -564,6 +545,7 @@ function detectLang() {
     });
   }
 
+  // ===== チャットログ =====
   const chatLog = $("#chatLog");
 
   function linkify(text) {
@@ -575,19 +557,17 @@ function detectLang() {
     );
   }
 
-  // {"type":"chat","text":"…","name":"…"} 形式なら text 部分だけを取り出す
   function normalizeChatText(rawText) {
     if (!rawText) return "";
     const trimmed = String(rawText).trim();
+    // JSON形式で混ざっている場合の救済
     if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
       try {
         const inner = JSON.parse(trimmed);
         if (inner && typeof inner.text === "string") {
           return inner.text;
         }
-      } catch (e) {
-        // 失敗したらそのまま返す
-      }
+      } catch (e) {}
     }
     return rawText;
   }
@@ -622,12 +602,15 @@ function detectLang() {
 
   // 「Reginald 考え中」インジケーター
   let thinkingElem = null;
-  function showThinking() {
+  function showThinking(text) {
     if (!chatLog) return;
-    if (thinkingElem) return;
+    if (thinkingElem) {
+      thinkingElem.textContent = text || t("lobby.botThinking", "Reginald が考え中です…");
+      return;
+    }
     const div = document.createElement("div");
     div.className = "msg sys thinking";
-    div.textContent = t("lobby.botThinking", "Reginald が考え中です…");
+    div.textContent = text || t("lobby.botThinking", "Reginald が考え中です…");
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
     thinkingElem = div;
@@ -639,21 +622,18 @@ function detectLang() {
     thinkingElem = null;
   }
 
-  let ws;
-  let focused = true;
-  window.addEventListener("focus", () => (focused = true));
-  window.addEventListener("blur", () => (focused = false));
-
-  let myId = null;
-  let rosterMembers = [];
-
   // ===== WebSocket（チャット + シグナリング） =====
+  // 既存の do-chat サーバーに接続
   const WS_BASE = "wss://do-chat.awachima7.workers.dev";
   const pageParams = new URLSearchParams(location.search);
   pageParams.set("user", user);
   const CHAT_URL = `${WS_BASE}/ws/${encodeURIComponent(
     roomId
   )}?${pageParams.toString()}`;
+
+  let ws;
+  let myId = null;
+  let rosterMembers = [];
 
   function connect() {
     try {
@@ -679,10 +659,7 @@ function detectLang() {
       ws.onerror = (e) => {
         chatStatusMode = "error";
         if (chatStatusEl) {
-          chatStatusEl.textContent = t(
-            "lobby.chatError",
-            "エラーが発生しました"
-          );
+          chatStatusEl.textContent = t("lobby.chatError", "エラーが発生しました");
         }
         logDebug("WebSocket error: " + (e?.message || ""));
       };
@@ -705,13 +682,12 @@ function detectLang() {
             if (data.type === "welcome") {
               myId = data.id;
               logDebug("Welcome, myId = " + myId);
-            } else if (
-              data.type === "history" &&
-              Array.isArray(data.messages)
-            ) {
+            } else if (data.type === "history" && Array.isArray(data.messages)) {
+              // 履歴受信
               data.messages.forEach((line) => {
                 try {
                   const obj = JSON.parse(line);
+                  // 自分が発言した音声認識結果なども、テキストとして履歴に残っていればここで復元される
                   if (obj.name === "Reginald") {
                     hideThinking();
                   }
@@ -724,15 +700,10 @@ function detectLang() {
                 } catch (e2) {}
               });
               addSys(
-                t(
-                  "lobby.historyLoaded",
-                  "— 過去のメッセージを読み込みました —"
-                )
+                t("lobby.historyLoaded", "— 過去のメッセージを読み込みました —")
               );
             } else if (data.type === "roster") {
-              rosterMembers = Array.isArray(data.members)
-                ? data.members
-                : [];
+              rosterMembers = Array.isArray(data.members) ? data.members : [];
               renderMembers(rosterMembers);
               if (localStream) startCalls(rosterMembers);
             } else if (data.type === "join") {
@@ -781,10 +752,7 @@ function detectLang() {
     } catch (e) {
       chatStatusMode = "error";
       if (chatStatusEl) {
-        chatStatusEl.textContent = t(
-          "lobby.chatError",
-          "エラーが発生しました"
-        );
+        chatStatusEl.textContent = t("lobby.chatError", "エラーが発生しました");
       }
       logDebug("WebSocket init error: " + (e?.message || ""));
     }
@@ -825,15 +793,16 @@ function detectLang() {
     });
   }
 
-  // ===== WebRTC 音声チャット =====
-  const voiceStatus = $("#voiceStatus"); // HTML には無くても問題なし
+  // ===== WebRTC 音声チャット（ユーザー間通話） =====
+  // 既存機能そのまま
+  const voiceStatus = $("#voiceStatus");
   const voicePowerBtn = $("#voicePower");
   const micToggleBtn = $("#micToggle");
   const voiceHintEl = $("#voiceHint");
 
   let localStream = null;
-  const peers = new Map(); // id -> RTCPeerConnection
-  const remoteAudios = new Map(); // id -> HTMLAudioElement
+  const peers = new Map();
+  const remoteAudios = new Map();
   let voiceJoined = false;
   let micMuted = false;
 
@@ -848,25 +817,6 @@ function detectLang() {
       micToggleBtn.textContent = micMuted
         ? t("lobby.unmute", "ミュート解除")
         : t("lobby.mute", "ミュート");
-    }
-    if (voiceStatus) {
-      if (!voiceJoined) {
-        voiceStatus.textContent = t("lobby.voiceNone", "音声: 未参加");
-      } else {
-        const state = micMuted
-          ? t("lobby.mute", "ミュート")
-          : t("lobby.unmute", "ミュート解除");
-        voiceStatus.textContent = t(
-          "lobby.voiceJoined",
-          "音声: 参加中（マイク{state}）"
-        ).replace("{state}", state);
-      }
-    }
-    if (voiceHintEl) {
-      voiceHintEl.textContent = t(
-        "lobby.voiceHint",
-        "※ 音声はブラウザ同士で直接やり取りされます。"
-      );
     }
   }
 
@@ -885,18 +835,9 @@ function detectLang() {
       );
       return;
     }
-
     voiceJoined = true;
     micMuted = false;
     updateVoiceUI();
-
-    if (voiceStatus) {
-      voiceStatus.textContent = t(
-        "lobby.voiceJoining",
-        "音声チャンネルに参加しています…"
-      );
-    }
-
     if (rosterMembers.length > 0) {
       startCalls(rosterMembers);
     }
@@ -906,7 +847,6 @@ function detectLang() {
     voiceJoined = false;
     micMuted = false;
     updateVoiceUI();
-
     if (localStream) {
       localStream.getTracks().forEach((t2) => t2.stop());
       localStream = null;
@@ -919,22 +859,12 @@ function detectLang() {
       audio.remove();
     }
     remoteAudios.clear();
-
-    if (voiceStatus) {
-      voiceStatus.textContent = t(
-        "lobby.voiceLeft",
-        "音声チャンネルから退出しました。"
-      );
-    }
   }
 
   if (voicePowerBtn) {
     voicePowerBtn.addEventListener("click", () => {
-      if (!voiceJoined) {
-        joinVoice();
-      } else {
-        leaveVoice();
-      }
+      if (!voiceJoined) joinVoice();
+      else leaveVoice();
     });
   }
 
@@ -953,7 +883,6 @@ function detectLang() {
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
-
     pc.onicecandidate = (ev) => {
       if (!ev.candidate) return;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -967,7 +896,6 @@ function detectLang() {
         })
       );
     };
-
     pc.ontrack = (ev) => {
       let audio = remoteAudios.get(id);
       if (!audio) {
@@ -978,13 +906,11 @@ function detectLang() {
       }
       audio.srcObject = ev.streams[0];
     };
-
     if (localStream) {
       localStream.getTracks().forEach((track) => {
         pc.addTrack(track, localStream);
       });
     }
-
     peers.set(id, pc);
     return pc;
   }
@@ -1049,28 +975,18 @@ function detectLang() {
     }
   }
 
-  // ===== スマホで音を有効化ボタン =====
   const enableSoundBtn = $("#enableSound");
   if (enableSoundBtn) {
     enableSoundBtn.addEventListener("click", () => {
       const ctx = window._audioContext;
       if (ctx && ctx.state === "suspended") {
-        ctx.resume().then(() => {
-          enableSoundBtn.textContent = t(
-            "lobby.enableSoundRetry",
-            "音が出ない？もう一度有効化"
-          );
-        });
-      } else {
-        enableSoundBtn.textContent = t(
-          "lobby.enableSoundRetry",
-          "音が出ない？もう一度有効化"
-        );
+        ctx.resume();
       }
+      enableSoundBtn.textContent = t("lobby.enableSoundRetry", "音が出ない？もう一度有効化");
     });
   }
 
-  // ===== 執事に質問（音声）ボタン =====
+  // ===== ★変更: 執事に質問（音声入力 → STT → チャット送信） =====
   const voiceAskBtn2 = $("#voiceAskBtn");
   const voiceAskStatus = $("#voiceAskStatus");
 
@@ -1088,17 +1004,14 @@ function detectLang() {
     if (isRecording) return;
     isRecording = true;
     chunks = [];
-    setVoiceAskStatus(
-      "recording",
-      "録音中です。もう一度押すと停止します。"
-    );
+    setVoiceAskStatus("recording", "録音中です。もう一度押すと停止します。");
 
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       setVoiceAskStatus(
         "micErrorMsg",
-        "マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。"
+        "マイクへのアクセスが拒否されました。"
       );
       isRecording = false;
       return;
@@ -1108,90 +1021,77 @@ function detectLang() {
     mediaRecorder.ondataavailable = (ev) => {
       if (ev.data.size > 0) chunks.push(ev.data);
     };
+
+    // 録音停止時の処理（Gemini STTへ送信 → チャットへ送信）
     mediaRecorder.onstop = async () => {
       const blob = new Blob(chunks, { type: "audio/webm" });
       chunks = [];
+      
+      // ストリームの停止（マイク解放）
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((t2) => t2.stop());
+        mediaStream = null;
+      }
+
       if (!blob || blob.size === 0) {
-        setVoiceAskStatus(
-          "micErrorMsg",
-          "音声データが取得できませんでした。もう一度お試しください。"
-        );
+        setVoiceAskStatus("micErrorMsg", "音声データが取得できませんでした。");
         return;
       }
 
-      // 送信開始（UI）
-      setVoiceAskStatus("sending", "音声を送信しています…");
-      showThinking();
+      // UI: 送信中
+      setVoiceAskStatus("sending", "音声を認識中…");
+      // ここで「考え中」を出しておくとレスポンスが良く感じる
+      showThinking(t("lobby.sttProcessing", "音声を文字に変換中…"));
 
       try {
         const formData = new FormData();
-        formData.append("roomId", roomId || "default"); // 後方互換用（サーバが読む場合に備える）
         formData.append("audio", blob, "voice.webm");
 
-        // ★ 重要：roomId / lang をクエリで渡す（サーバが確実に同じ DO にルーティングできるように）
-        const voiceUrl = new URL("https://do-chat.awachima7.workers.dev/voice");
-        voiceUrl.searchParams.set("roomId", roomId || "default");
-        voiceUrl.searchParams.set("lang", currentLang || "en");
-
-        const res = await fetch(voiceUrl.toString(), {
+        // ★ do-stt (Gemini 1.5 Flash) へ送信
+        const res = await fetch(STT_URL, {
           method: "POST",
           body: formData,
         });
+
         if (!res.ok) {
-          throw new Error("voice api error: " + res.status);
+          throw new Error("STT API Error: " + res.status);
         }
 
-        // ★ 重要：HTTP レスポンスも読む（WS が届かない環境でも必ず表示できる）
-        let data = null;
-        try {
-          data = await res.json();
-        } catch (e) {
-          data = null;
-        }
+        const data = await res.json();
+        const recognizedText = data.text || "";
 
-        // ======== ★修正ここから：自分の発話を必ず表示する ========
-        // do-chat /voice は（構成により） transcript ではなく repairedText / raw を返すことがあるため
-        // 優先順位：repairedText → transcript → raw
-        const mySpeech =
-          (data && typeof data.repairedText === "string" && data.repairedText.trim())
-            ? data.repairedText.trim()
-            : (data && typeof data.transcript === "string" && data.transcript.trim())
-              ? data.transcript.trim()
-              : (data && typeof data.raw === "string" && data.raw.trim())
-                ? data.raw.trim()
-                : "";
-
-        if (mySpeech) {
+        // 認識完了
+        if (recognizedText) {
+          // 1. 自分のチャットとして即座に表示（レスポンス向上）
           const line = t("lobby.chatLine", "{name}: {text}")
             .replace("{name}", user || "Guest")
-            .replace("{text}", mySpeech);
+            .replace("{text}", recognizedText);
           addMsg("me", line);
-        }
-        // ======== ★修正ここまで ========
 
-        // reply が返る場合：Reginald の返答として即表示
-        if (data && typeof data.reply === "string" && data.reply.trim()) {
-          const body = data.reply.trim();
-          const line = t("lobby.chatLine", "{name}: {text}")
-            .replace("{name}", "Reginald")
-            .replace("{text}", body);
-          addMsg("other", line);
-          hideThinking();
-          setVoiceAskStatus("voiceAskSent", "執事が回答しました。");
+          // 2. WebSocket でサーバーへ送信（これでReginaldが反応し、履歴にも残る）
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: "chat",
+              text: recognizedText,
+              name: user || "Guest",
+            }));
+            
+            // Reginaldの応答待ち表示に切り替え
+            showThinking(t("lobby.botThinking", "Reginald が考え中です…"));
+            setVoiceAskStatus("voiceAskSent", "送信しました。");
+          } else {
+            setVoiceAskStatus("chatNotConnected", "チャットサーバー未接続のため送信できませんでした。");
+            hideThinking();
+          }
         } else {
-          // サーバが WS で返す設計の場合は、ここでは「待ち」にしておく
-          setVoiceAskStatus(
-            "voiceAskSent",
-            "執事に音声を送信しました。回答をお待ちください。"
-          );
+          setVoiceAskStatus("voiceAskError", "音声が認識できませんでした。");
+          hideThinking();
         }
+
       } catch (e) {
         console.error(e);
         hideThinking();
-        setVoiceAskStatus(
-          "voiceAskError",
-          "執事への音声送信に失敗しました。時間をおいて再度お試しください。"
-        );
+        setVoiceAskStatus("voiceAskError", "エラーが発生しました。");
       }
     };
 
@@ -1201,12 +1101,8 @@ function detectLang() {
   function stopRecording() {
     if (!isRecording) return;
     isRecording = false;
-
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
-    }
-    if (mediaStream) {
-      mediaStream.getTracks().forEach((t2) => t2.stop());
     }
   }
 
