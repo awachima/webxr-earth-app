@@ -540,7 +540,7 @@ function detectLang() {
 
   // ===== Members パネル =====
   const membersEl = $("#members");
-function renderMembers(list) {
+  function renderMembers(list) {
     membersEl.innerHTML = "";
     if (!list || list.length === 0) {
       const empty = document.createElement("div");
