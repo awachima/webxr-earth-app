@@ -347,11 +347,21 @@ function detectLang() {
 
   // ===== Chat Log =====
   const chatLog = $("#chatLog");
+  
+  // ★修正: URLの末尾に ) が含まれ、URL内に ( がない場合、) をリンクから除外する
   function linkify(text) {
     if (!text) return "";
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    return text.replace(urlRegex, (url) => {
+        // 末尾が ) で、かつ中に ( が含まれていない場合は、) をリンクに含めない
+        if (url.endsWith(")") && url.indexOf("(") === -1) {
+            const cleanUrl = url.slice(0, -1);
+            return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer">${cleanUrl}</a>)`;
+        }
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    });
   }
+
   function normalizeChatText(rawText) {
     if (!rawText) return "";
     const trimmed = String(rawText).trim();
@@ -683,7 +693,7 @@ function detectLang() {
       if (ev.data.size > 0) chunks.push(ev.data);
     };
 
-    // ★重要: do-stt へ送信し、結果をWSで送るロジック
+    // do-stt へ送信し、結果をWSで送るロジック
     mediaRecorder.onstop = async () => {
       const blob = new Blob(chunks, { type: "audio/webm" });
       chunks = [];
@@ -703,7 +713,6 @@ function detectLang() {
         const formData = new FormData();
         formData.append("audio", blob, "voice.webm");
 
-        // ★★★ ここが修正ポイント: do-stt を叩く！ ★★★
         const res = await fetch(STT_URL, {
           method: "POST",
           body: formData,
