@@ -348,18 +348,14 @@ function detectLang() {
   // ===== Chat Log =====
   const chatLog = $("#chatLog");
   
-  // ★修正: URLの末尾に ) が含まれ、URL内に ( がない場合、) をリンクから除外する
+  // ★修正: URLの末尾に日本語や閉じカッコがくっつく問題への決定的な対策
+  // 「半角英数」と「URLによく使う記号」以外が出現したらそこでURL終了とみなす
   function linkify(text) {
     if (!text) return "";
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, (url) => {
-        // 末尾が ) で、かつ中に ( が含まれていない場合は、) をリンクに含めない
-        if (url.endsWith(")") && url.indexOf("(") === -1) {
-            const cleanUrl = url.slice(0, -1);
-            return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer">${cleanUrl}</a>)`;
-        }
-        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-    });
+    // http(s):// で始まり、[a-zA-Z0-9.\-_/~%#?&=] のみが続く部分をURLとみなす
+    // 日本語や ) などは含まれないため、そこでマッチが切れる
+    const urlRegex = /(https?:\/\/[a-zA-Z0-9.\-_/~%#?&=]+)/g;
+    return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
   }
 
   function normalizeChatText(rawText) {
