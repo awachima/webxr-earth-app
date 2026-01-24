@@ -348,7 +348,7 @@ function detectLang() {
   // ===== Chat Log =====
   const chatLog = $("#chatLog");
   
-  // ★修正: URLの末尾に ) などが含まれる場合に、それをリンクから除外する
+  // ★修正: URLの末尾に ) が含まれ、URL内に ( がない場合、) をリンクから除外する
   function linkify(text) {
     if (!text) return "";
     const urlRegex = /(https?:\/\/[^\s]+)/g;
