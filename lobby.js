@@ -453,6 +453,14 @@ function detectLang() {
             if (data.type === "welcome") {
               myId = data.id;
               logDebug("Welcome, myId = " + myId);
+            } else if (data.type === "debug") {
+              // ★サーバー側の失敗/途切れ情報を可視化
+              try {
+                const detail = data.detail ? JSON.stringify(data.detail) : "";
+                logDebug("SERVER DEBUG: " + detail);
+              } catch (e3) {
+                logDebug("SERVER DEBUG (unserializable)");
+              }
             } else if (data.type === "history" && Array.isArray(data.messages)) {
               data.messages.forEach((line) => {
                 try {
