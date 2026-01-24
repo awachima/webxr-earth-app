@@ -722,11 +722,12 @@ function detectLang() {
         const recognizedText = data.text || "";
 
         if (recognizedText) {
-          // 1. 即座に「自分の発言」として表示
-          const line = t("lobby.chatLine", "{name}: {text}")
+          // 1. 即座に「自分の発言」として表示（削除：サーバーからの返信で表示されるため）
+          /* const line = t("lobby.chatLine", "{name}: {text}")
             .replace("{name}", user || "Guest")
             .replace("{text}", recognizedText);
           addMsg("me", line);
+          */
 
           // 2. チャットサーバに送信 (これでReginaldが反応する)
           if (ws && ws.readyState === WebSocket.OPEN) {
