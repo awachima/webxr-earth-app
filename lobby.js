@@ -447,6 +447,13 @@ function detectLang() {
       ws.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data);
+
+          // ★追加: Pingが来たらPongを返す & 処理終了
+          if (data.type === "ping") {
+            ws.send(JSON.stringify({ type: "pong" }));
+            return;
+          }
+
           // WebRTC Signaling
           if (data && data.rtc) {
             const rtc = data.rtc;
