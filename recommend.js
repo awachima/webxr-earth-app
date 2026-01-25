@@ -96,8 +96,13 @@
       sendBtn.dataset._prevText = sendBtn.textContent || "";
       sendBtn.textContent = getTerm("sendLoading", "送信中…");
     } else {
+      // ★修正: 単純に dataset._prevText を戻すのではなく、
+      // 現在の言語設定(window.i18n)から最新のラベルを取得してセットする。
+      // これにより、通信中に言語リソースがロードされた場合でも正しい翻訳が適用される。
+      const fallback = sendBtn.dataset._prevText || "質問する";
+      sendBtn.textContent = getTerm("send", fallback);
+
       if (sendBtn.dataset._prevText) {
-        sendBtn.textContent = sendBtn.dataset._prevText;
         delete sendBtn.dataset._prevText;
       }
     }
