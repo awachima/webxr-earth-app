@@ -3,9 +3,8 @@
  * - index.html の既存UI (#recommendInput / #recommendSend / #recommendChat) を使って
  * Cloudflare Worker の /chat に POST し、reply と nextState を表示する。
  *
- * ★ Quest対応修正版：
- * - MIME Type の指定を廃止し、Lobby.js と同様にブラウザ標準（デフォルト）の録音形式を使用する。
- * - これにより Meta Quest Browser での録音不具合を解消する。
+ * ★ 多言語対応版:
+ * - window.__DD_LANG (index.htmlで設定) を読み取り、Workerへのリクエストに "lang" パラメータを含める。
  */
 (() => {
   "use strict";
@@ -35,6 +34,11 @@
     if (typeof window !== "undefined" && window.__LUCY_VOICE_MODE) return String(window.__LUCY_VOICE_MODE);
     return "auto";
   })();
+
+  // 現在の言語設定を取得するヘルパー
+  const getCurrentLang = () => {
+    return (typeof window !== "undefined" && window.__DD_LANG) ? String(window.__DD_LANG) : "ja";
+  };
 
   // =========================================================
   // 2) DOM取得
@@ -225,6 +229,9 @@
     if (userText) payload.userText = userText;
     if (nextState) payload.state = nextState;
 
+    // ★追加: 現在の言語設定を送信 (index.htmlでセットされた window.__DD_LANG を使用)
+    payload.lang = getCurrentLang();
+
     const res = await fetch(WORKER_CHAT_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -247,6 +254,9 @@
   async function transcribeVoiceBlob(blob) {
     const formData = new FormData();
     formData.append("audio", blob, "voice.webm");
+
+    // ★追加: 言語設定をFormDataにも追加 (STTのプロンプト切り替え用)
+    formData.append("lang", getCurrentLang());
 
     const res = await fetch(WORKER_VOICE_URL, {
       method: "POST",
@@ -337,7 +347,8 @@
     stopSpeechRecognition();
 
     speechRec = new Ctor();
-    speechRec.lang = (typeof window !== "undefined" && window.__DD_LANG) ? String(window.__DD_LANG) : "ja-JP";
+    // ブラウザのSpeechRecognitionにも現在の言語を適用
+    speechRec.lang = getCurrentLang(); 
     speechRec.interimResults = false;
     speechRec.continuous = false;
 
@@ -411,7 +422,7 @@
     }
 
     try {
-      // ★ 修正点: options（MIME Type）を指定せず、デフォルトを使用する
+      // MIME Typeを指定せず、デフォルトを使用する（Quest等の不具合回避）
       voiceMediaRecorder = new MediaRecorder(voiceMediaStream);
     } catch (e) {
       console.error(e);
@@ -427,8 +438,7 @@
     };
 
     voiceMediaRecorder.onstop = async () => {
-      // ★ 修正: ブラウザが実際に使用した mimeType を取得して使う
-      // iOS (Safari) は audio/mp4、PC/Android は audio/webm などになる
+      // ブラウザが実際に使用した mimeType を取得して使う
       const actualMimeType = voiceMediaRecorder.mimeType || "audio/webm";
       const blob = new Blob(voiceChunks, { type: actualMimeType });
 
