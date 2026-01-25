@@ -821,7 +821,7 @@ AFRAME.registerComponent('marker-placer',{
     let sourceList = this.applyTagFilter(this.allLocations || []);
 
     // ★ ②前段階：視点側半球に絞る（0件なら①の結果を維持する）
-    sourceList = this.filterLocationsForCurrentView(sourceList);
+    // sourceList = this.filterLocationsForCurrentView(sourceList);
 
     var th=this.computeThreshold();
     var unclustered=sourceList.slice();
