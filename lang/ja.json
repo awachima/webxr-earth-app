@@ -135,4 +135,19 @@
     "hour": "時",
     "minute": "分"
   }
+
+,
+  "recommend": {
+    "title": "ツアーインフォメーション",
+    "intro": "ご覧になりたいツアーのイメージをお聞かせください。いくつか選んでご提案いたします。",
+    "placeholder": "例：ツアーを探してます",
+    "send": "質問する",
+    "sendLoading": "送信中…",
+    "voiceBtnIdle": "Lucyに質問（音声）",
+    "voiceBtnStop": "音声停止",
+    "voiceHint": "🎤 ゆっくり・はっきり話すと認識が安定します。",
+    "statusRecording": "録音中です。もう一度押すと停止します。",
+    "statusSending": "音声を送信しています…"
+  }
+
 }

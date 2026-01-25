@@ -135,4 +135,18 @@
     "hour": "时",
     "minute": "分"
   }
+,
+  "recommend": {
+    "title": "旅游咨询",
+    "intro": "请告诉我们要寻找什么样的旅游行程。我们将为您精选几个推荐。",
+    "placeholder": "例：我想找个历史相关的行程",
+    "send": "提问",
+    "sendLoading": "发送中…",
+    "voiceBtnIdle": "向Lucy提问（语音）",
+    "voiceBtnStop": "停止录音",
+    "voiceHint": "🎤 慢慢且清晰地说话有助于提高识别准确度。",
+    "statusRecording": "正在录音。再次点击停止。",
+    "statusSending": "正在发送语音…"
+  }
+
 }

@@ -135,4 +135,19 @@
     "hour": "Hour",
     "minute": "Minute"
   }
+
+,
+  "recommend": {
+    "title": "Tour Information",
+    "intro": "Please tell us what kind of tour you are looking for. I'll pick a few recommendations for you.",
+    "placeholder": "e.g. I'm looking for a history tour",
+    "send": "Ask",
+    "sendLoading": "Sending...",
+    "voiceBtnIdle": "Ask Lucy (Voice)",
+    "voiceBtnStop": "Stop Voice",
+    "voiceHint": "🎤 Speaking slowly and clearly improves recognition.",
+    "statusRecording": "Recording. Press again to stop.",
+    "statusSending": "Sending audio..."
+  }
+
 }
