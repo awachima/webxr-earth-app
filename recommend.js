@@ -3,8 +3,8 @@
  * - index.html の既存UI (#recommendInput / #recommendSend / #recommendChat) を使って
  * Cloudflare Worker の /chat に POST し、reply と nextState を表示する。
  *
- * ★ 多言語対応版:
- * - window.__DD_LANG (index.htmlで設定) を読み取り、Workerへのリクエストに "lang" パラメータを含める。
+ * ★ 多言語対応・修正版:
+ * - 言語切り替え (window.currentLang) に動的に追従するように修正。
  */
 (() => {
   "use strict";
@@ -14,30 +14,36 @@
   // =========================================================
   const WORKER_CHAT_URL = "https://lucy-recommend.awachima7.workers.dev/chat";
 
-  /**
-   * 音声→テキスト用エンドポイント
-   * 例: https://.../chat なら https://.../voice を想定
-   */
   const WORKER_VOICE_URL = (() => {
     if (typeof window !== "undefined" && window.__LUCY_VOICE_URL) return String(window.__LUCY_VOICE_URL);
-
     const s = String(WORKER_CHAT_URL || "");
     if (/\/chat(\?.*)?$/i.test(s)) return s.replace(/\/chat(\?.*)?$/i, "/voice");
     return s.replace(/\/+$/, "") + "/voice";
   })();
 
-  /**
-   * 音声認識の優先順位
-   * Questの場合は index.html 側で window.__LUCY_VOICE_MODE = "server" が指定されている想定
-   */
   const VOICE_MODE = (() => {
     if (typeof window !== "undefined" && window.__LUCY_VOICE_MODE) return String(window.__LUCY_VOICE_MODE);
     return "auto";
   })();
 
-  // 現在の言語設定を取得するヘルパー
+  // ★修正: 現在の言語設定を取得するヘルパー (優先順位を見直し)
   const getCurrentLang = () => {
-    return (typeof window !== "undefined" && window.__DD_LANG) ? String(window.__DD_LANG) : "ja";
+    // 1. main.js で動的に更新される window.currentLang を最優先
+    if (typeof window !== "undefined" && window.currentLang) return String(window.currentLang);
+    
+    // 2. index.html で初期設定される window.__DD_LANG
+    if (typeof window !== "undefined" && window.__DD_LANG) return String(window.__DD_LANG);
+    
+    // 3. localStorage の設定
+    try {
+      const stored = localStorage.getItem("lang");
+      if (stored) return stored;
+    } catch(e){}
+
+    // 4. HTMLタグのlang属性
+    if (document.documentElement.lang) return document.documentElement.lang;
+
+    return "ja";
   };
 
   // =========================================================
@@ -50,7 +56,6 @@
   const touristInfoBtn = document.getElementById("touristInfoBtn");
   const recommendSection = document.getElementById("recommendSection");
 
-  // 追加：音声質問
   const lucyVoiceAskBtn = document.getElementById("lucyVoiceAskBtn");
   const lucyVoiceAskStatus = document.getElementById("lucyVoiceAskStatus");
 
@@ -60,21 +65,20 @@
   }
 
   // =========================================================
-  // 3) 内部状態（メモリ上のみ）
+  // 3) 内部状態
   // =========================================================
   let nextState = null;
 
-  // 音声録音用（server /voice ルート）
+  // 音声録音用
   let voiceMediaStream = null;
   let voiceMediaRecorder = null;
   let voiceChunks = [];
   let voiceIsRecording = false;
 
-  // SpeechRecognition ルート
+  // SpeechRecognition
   let speechRec = null;
   let speechIsRunning = false;
 
-  // ボタン表示文言の保持
   const VOICE_BTN_LABEL_IDLE = "Lucyに質問（音声）";
   const VOICE_BTN_LABEL_STOP = "音声停止";
 
@@ -117,7 +121,6 @@
 
   function sanitizeLucyReplyToHtml(rawText) {
     const input = String(rawText || "").replace(/\r\n/g, "\n");
-
     const parser = new DOMParser();
     const doc = parser.parseFromString(`<div>${input}</div>`, "text/html");
     const root = doc.body.firstElementChild;
@@ -133,7 +136,6 @@
 
     function walk(node, out) {
       if (!node) return;
-
       if (node.nodeType === Node.TEXT_NODE) {
         const parts = node.nodeValue.split("\n");
         parts.forEach((p, i) => {
@@ -142,32 +144,25 @@
         });
         return;
       }
-
       if (node.nodeType === Node.ELEMENT_NODE) {
         const tag = node.tagName.toLowerCase();
-
         if (tag === "br") {
           out.push("<br>");
           return;
         }
-
         if (tag === "a") {
           const href = node.getAttribute("href") || "";
           const text = node.textContent || "";
           if (isSafeHttpUrl(href)) {
-            out.push(
-              `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`
-            );
+            out.push(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`);
           } else {
             out.push(escapeHtml(text));
           }
           return;
         }
-
         Array.from(node.childNodes).forEach(c => walk(c, out));
       }
     }
-
     const out = [];
     Array.from(root.childNodes).forEach(n => walk(n, out));
     return out.join("");
@@ -176,16 +171,12 @@
   function appendMessage(role, label, content, isHtml) {
     const line = document.createElement("div");
     line.className = `chat-line chat-${role}`;
-
     const prefix = document.createElement("span");
     prefix.className = "chat-prefix";
     prefix.textContent = `${label}: `;
-
     const body = document.createElement("span");
     body.className = "chat-body";
-    if (isHtml) body.innerHTML = content;
-    else body.textContent = content;
-
+    if (isHtml) body.innerHTML = content; else body.textContent = content;
     line.append(prefix, body);
     chatEl.appendChild(line);
     chatEl.scrollTop = chatEl.scrollHeight;
@@ -193,8 +184,7 @@
 
   const appendUser = t => appendMessage("user", "You", t, false);
   const appendLucy = t => appendMessage("lucy", "Lucy", sanitizeLucyReplyToHtml(t), true);
-  const appendError = (t, d) =>
-    appendMessage("error", "ERROR", d ? `${t}\n${d}` : t, false);
+  const appendError = (t, d) => appendMessage("error", "ERROR", d ? `${t}\n${d}` : t, false);
 
   function ensurePanelOpenSoftly() {
     if (!recommendSection) return;
@@ -229,8 +219,10 @@
     if (userText) payload.userText = userText;
     if (nextState) payload.state = nextState;
 
-    // ★追加: 現在の言語設定を送信 (index.htmlでセットされた window.__DD_LANG を使用)
-    payload.lang = getCurrentLang();
+    // 現在の言語設定を送信
+    const lang = getCurrentLang();
+    payload.lang = lang;
+    console.log("[recommend.js] sending lang:", lang); // デバッグ用ログ
 
     const res = await fetch(WORKER_CHAT_URL, {
       method: "POST",
@@ -250,13 +242,14 @@
     return parsed.value;
   }
 
-  // 音声→文字起こし（/voice を想定）
+  // 音声→文字起こし
   async function transcribeVoiceBlob(blob) {
     const formData = new FormData();
     formData.append("audio", blob, "voice.webm");
-
-    // ★追加: 言語設定をFormDataにも追加 (STTのプロンプト切り替え用)
-    formData.append("lang", getCurrentLang());
+    
+    // 音声認識用にも言語情報を送信
+    const lang = getCurrentLang();
+    formData.append("lang", lang);
 
     const res = await fetch(WORKER_VOICE_URL, {
       method: "POST",
@@ -270,7 +263,6 @@
       throw new Error(`VOICE HTTP ${res.status}\n${raw}`);
     }
 
-    // JSONが返る想定
     if (parsed.ok && parsed.value && typeof parsed.value === "object") {
       const v = parsed.value;
       const t =
@@ -281,8 +273,6 @@
         "";
       if (t) return t;
     }
-
-    // JSONじゃない・または text が無い場合
     const maybeText = normalizeUserText(raw);
     if (maybeText) return maybeText;
 
@@ -290,7 +280,7 @@
   }
 
   // =========================================================
-  // 6) 送信処理（テキスト）
+  // 6) 送信処理
   // =========================================================
   async function onSend() {
     const text = normalizeUserText(inputEl.value);
@@ -303,10 +293,8 @@
     setSending(true);
     try {
       const data = await callWorker(text);
-
       if (data.reply) appendLucy(data.reply);
       if (data.nextState) nextState = data.nextState;
-
       if (data.debug) console.log("[Lucy debug]", data.debug);
     } catch (e) {
       appendError("通信に失敗しました", e.message);
@@ -339,7 +327,6 @@
     if (data.debug) console.log("[Lucy debug]", data.debug);
   }
 
-  // ---------- SpeechRecognition ルート ----------
   function startSpeechRecognition() {
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) throw new Error("SpeechRecognition not available");
@@ -347,8 +334,7 @@
     stopSpeechRecognition();
 
     speechRec = new Ctor();
-    // ブラウザのSpeechRecognitionにも現在の言語を適用
-    speechRec.lang = getCurrentLang(); 
+    speechRec.lang = getCurrentLang(); // ブラウザ標準の認識言語も合わせる
     speechRec.interimResults = false;
     speechRec.continuous = false;
 
@@ -360,7 +346,6 @@
       try {
         const res = ev && ev.results && ev.results[0] && ev.results[0][0] ? ev.results[0][0].transcript : "";
         setLucyVoiceStatus(`認識：${normalizeUserText(res)}`);
-
         setSending(true);
         await sendRecognizedTextToLucy(res);
         setLucyVoiceStatus("完了しました。");
@@ -372,17 +357,14 @@
         setSending(false);
       }
     };
-
     speechRec.onerror = (ev) => {
       const msg = (ev && ev.error) ? String(ev.error) : "unknown";
       setLucyVoiceStatus(`音声認識エラー：${msg}`);
     };
-
     speechRec.onend = () => {
       speechIsRunning = false;
       setLucyVoiceBtnLabel(false);
     };
-
     try {
       speechRec.start();
     } catch (e) {
@@ -401,8 +383,6 @@
     setLucyVoiceBtnLabel(false);
   }
 
-  // ---------- /voice（MediaRecorder）ルート ----------
-  // ★ Lobby.js と同様、MIME Type 指定を排除し、ブラウザのデフォルト挙動に任せる
   async function startServerVoiceRecording() {
     if (voiceIsRecording) return;
     voiceIsRecording = true;
@@ -415,14 +395,13 @@
     try {
       voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
-      setLucyVoiceStatus("マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。");
+      setLucyVoiceStatus("マイクへのアクセスが拒否されました。");
       voiceIsRecording = false;
       setLucyVoiceBtnLabel(false);
       return;
     }
 
     try {
-      // MIME Typeを指定せず、デフォルトを使用する（Quest等の不具合回避）
       voiceMediaRecorder = new MediaRecorder(voiceMediaStream);
     } catch (e) {
       console.error(e);
@@ -438,26 +417,22 @@
     };
 
     voiceMediaRecorder.onstop = async () => {
-      // ブラウザが実際に使用した mimeType を取得して使う
       const actualMimeType = voiceMediaRecorder.mimeType || "audio/webm";
       const blob = new Blob(voiceChunks, { type: actualMimeType });
-
       voiceChunks = [];
       stopVoiceTracks();
       voiceIsRecording = false;
       setLucyVoiceBtnLabel(false);
 
       if (!blob || blob.size === 0) {
-        setLucyVoiceStatus("音声データが取得できませんでした。もう一度お試しください。");
+        setLucyVoiceStatus("音声データが取得できませんでした。");
         return;
       }
-
       setLucyVoiceStatus("音声を送信しています…");
       setSending(true);
       try {
         const text = normalizeUserText(await transcribeVoiceBlob(blob));
         setLucyVoiceStatus(`認識：${text}`);
-
         await sendRecognizedTextToLucy(text);
         setLucyVoiceStatus("完了しました。");
       } catch (e) {
@@ -468,19 +443,15 @@
         setSending(false);
       }
     };
-
     voiceMediaRecorder.onerror = (ev) => {
-      console.error(ev);
       setLucyVoiceStatus("録音中にエラーが発生しました。");
       try { stopVoiceTracks(); } catch (_) {}
       voiceIsRecording = false;
       setLucyVoiceBtnLabel(false);
     };
-
     try {
       voiceMediaRecorder.start();
     } catch (e) {
-      console.error(e);
       setLucyVoiceStatus("録音の開始に失敗しました。");
       stopVoiceTracks();
       voiceIsRecording = false;
@@ -496,7 +467,6 @@
         voiceMediaRecorder.stop();
       }
     } catch (e) {
-      console.error(e);
       setLucyVoiceStatus("録音停止に失敗しました。");
       stopVoiceTracks();
       voiceIsRecording = false;
@@ -504,35 +474,26 @@
     }
   }
 
-  // ---------- 入口（ボタン押下） ----------
   function isVoiceActive() {
     return !!voiceIsRecording || !!speechIsRunning;
   }
 
   async function startVoiceFlow() {
     if (isVoiceActive()) return;
-
-    // モード判定
     const hasSpeech = !!getSpeechRecognitionCtor();
-
     if (VOICE_MODE === "speech") {
       startSpeechRecognition();
       return;
     }
-
     if (VOICE_MODE === "server") {
       await startServerVoiceRecording();
       return;
     }
-
-    // auto
     if (hasSpeech) {
       try {
         startSpeechRecognition();
         return;
-      } catch (e) {
-        // フォールバック
-      }
+      } catch (e) {}
     }
     await startServerVoiceRecording();
   }
@@ -560,7 +521,6 @@
           stopVoiceFlow();
         }
       } catch (e) {
-        console.error(e);
         setLucyVoiceStatus("音声機能の起動に失敗しました。");
         appendError("音声の処理に失敗しました", e.message);
         try { stopVoiceFlow(); } catch (_) {}
@@ -570,7 +530,7 @@
   }
 
   // =========================================================
-  // 7) 初回アクセス：必ず S0（挨拶）
+  // 7) 初期化
   // =========================================================
   (async () => {
     setSending(true);
@@ -586,11 +546,7 @@
     }
   })();
 
-  // =========================================================
-  // 8) イベント
-  // =========================================================
   sendBtn.addEventListener("click", onSend);
-
   inputEl.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) {
       ev.preventDefault();
