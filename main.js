@@ -1071,10 +1071,17 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
   }
 
   setupLangMenu();
+
+  // ★ 修正箇所: index.html で解決済みの window.__DD_LANG があれば優先する
   let initialLang = 'en';
-  try{
-    const stored = localStorage.getItem('lang');
-    if (stored) initialLang = stored;
-  }catch(e){}
+  if (window.__DD_LANG) {
+    initialLang = window.__DD_LANG;
+  } else {
+    try {
+      const stored = localStorage.getItem('lang');
+      if (stored) initialLang = stored;
+    } catch(e){}
+  }
+
   loadLanguage(initialLang);
 })();
