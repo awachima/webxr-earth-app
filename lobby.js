@@ -729,13 +729,6 @@ function detectLang() {
         const recognizedText = data.text || "";
 
         if (recognizedText) {
-          // 1. 即座に「自分の発言」として表示（削除：サーバーからの返信で表示されるため）
-          /* const line = t("lobby.chatLine", "{name}: {text}")
-            .replace("{name}", user || "Guest")
-            .replace("{text}", recognizedText);
-          addMsg("me", line);
-          */
-
           // 2. チャットサーバに送信 (これでReginaldが反応する)
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
@@ -750,13 +743,15 @@ function detectLang() {
             hideThinking();
           }
         } else {
-          setVoiceAskStatus("voiceAskError", "音声が認識できませんでした。");
+          // ★修正: 無音時は「エラー」ではなく「音声が検出されませんでした」と表示
+          setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした。");
           hideThinking();
         }
 
       } catch (e) {
         console.error(e);
         hideThinking();
+        // ここは本当の通信エラーなどなので「エラーが発生しました」のままでOK
         setVoiceAskStatus("voiceAskError", "エラーが発生しました。");
       }
     };
