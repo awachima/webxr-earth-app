@@ -160,11 +160,9 @@ function upsertCard(item){
   card.dataset.start=item.start;
   card.dataset.url=item.target;
   card.dataset.limit=item.limit;
-  // イベント種別と金額も data-* に保存
   card.dataset.eventType = item.eventType || 'free';
   card.dataset.price     = (item.price ?? '').toString();
 
-  // ★ イベント種別表示文言（多言語対応）
   const etEl = card.querySelector('[data-event-type]');
   if (etEl){
     const type  = item.eventType || 'free';
@@ -212,12 +210,10 @@ const mMonth = $('#mMonth'), mDay = $('#mDay'), mHour = $('#mHour'), mMinute = $
 const statusMsg=$('#statusMsg');
 const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
 
-// Free/Paid ラジオ＋金額入力
 const mEventTypeRadios = document.querySelectorAll("input[name='mEventType']");
 const mPrice = $('#mPrice');
 const priceWrapper = $('#priceWrapper');
 
-// Quest / datetime-local 非対応検出
 const isQuest = /\b(OculusBrowser|Meta Quest Browser|MetaQuestBrowser|Quest)\b/i.test(navigator.userAgent);
 function supportsDateTimeLocal(){
   const i=document.createElement('input');
@@ -226,11 +222,9 @@ function supportsDateTimeLocal(){
 }
 const useFallback = isQuest || !supportsDateTimeLocal();
 
-// フォールバック用（セレクト）の年情報
 let fallbackYear = new Date().getFullYear();
 
 function daysInMonth(year, month){
-  // month: 1〜12
   return new Date(year, month, 0).getDate();
 }
 
@@ -289,7 +283,6 @@ function initStartInput(){
   const hh=pad(now.getHours()), mi=pad(now.getMinutes());
 
   if (useFallback){
-    // Quest 等: 月/日/時/分 セレクトを使用
     mStart.style.display='none';
     mStartFallback.style.display='grid';
 
@@ -308,14 +301,12 @@ function initStartInput(){
     mHour.value = String(hourNum);
     mMinute.value = String(minuteNum);
   }else{
-    // PC など: datetime-local を使用
     mStart.style.display='';
     mStartFallback.style.display='none';
     mStart.value=`${yyyy}-${mm}-${dd}T${hh}:${mi}`;
   }
 }
 
-// EventType + Price UI
 function setEventTypeInModal(type, price){
   const val = (type === 'paid') ? 'paid' : 'free';
   if (mEventTypeRadios && mEventTypeRadios.length){
@@ -342,7 +333,7 @@ let editingTarget=null;
 
 function openModal(m='create', payload=null){
   mode=m;
-  window.mode = m; // 言語適用時のボタン文言切り替え用
+  window.mode = m; 
   statusMsg.style.display='none';
   statusMsg.textContent='';
 
@@ -363,7 +354,6 @@ function openModal(m='create', payload=null){
     editingRoomId=null;
     editingTarget=null;
     initStartInput();
-    // 新規作成時は無料扱い＆Price 非表示
     setEventTypeInModal('free', '');
   }else{
     const owners=readOwners();
@@ -390,7 +380,6 @@ function openModal(m='create', payload=null){
 
     const d = new Date(payload.start||Date.now());
     if (useFallback){
-      // セレクト版
       mStart.style.display='none';
       mStartFallback.style.display='grid';
 
@@ -409,14 +398,12 @@ function openModal(m='create', payload=null){
       mHour.value = String(hourNum);
       mMinute.value = String(minuteNum);
     }else{
-      // datetime-local 版
       mStart.style.display='';
       mStartFallback.style.display='none';
       mStart.value=(payload.start||'').slice(0,16);
     }
     mTarget.value=payload.target||'';
 
-    // 既存データの種別・金額を反映（無ければ free）
     const existingType  = payload.eventType || 'free';
     const existingPrice = payload.price || '';
     setEventTypeInModal(existingType, existingPrice);
@@ -425,7 +412,6 @@ function openModal(m='create', payload=null){
 }
 function closeModal(){ backdrop.style.display='none'; }
 
-// ===== カスタムアラート =====
 const alertBackdrop = $('#alertBackdrop');
 const alertClose = $('#alertClose');
 const alertOk = $('#alertOk');
@@ -438,7 +424,6 @@ function hideUrlAlert(){
 if(alertClose) alertClose.onclick = hideUrlAlert;
 if(alertOk) alertOk.onclick = hideUrlAlert;
 
-// ===== サイト説明モーダル =====
 const aboutBackdrop = $('#aboutBackdrop');
 const aboutBtn = $('#aboutBtn');
 const aboutClose = $('#aboutClose');
@@ -453,7 +438,6 @@ if (aboutBtn)   aboutBtn.onclick   = openAbout;
 if (aboutClose) aboutClose.onclick = closeAboutModal;
 if (aboutOk)    aboutOk.onclick    = closeAboutModal;
 
-// ===== Meetup Rooms の使い方モーダル =====
 const guideBackdrop = $('#guideBackdrop');
 const guideBtn = $('#guideBtn');
 const guideClose = $('#guideClose');
@@ -490,28 +474,16 @@ async function postRegistry(item){
   }catch(e){ console.warn('[registry]', e); }
 }
 
-/**
- * 日時の組み立て
- * - PC: datetime-local の値をそのまま使う
- * - Quest 等: 年 + セレクト（月/日/時/分）から組み立てる
- * さらに、
- * - 「現在より過去」の日時の場合は、自動的に「翌年の同じ月日・時刻」に繰り上げる
- */
 function composeStartISO(){
   const now = new Date();
 
   if (!useFallback){
     if (!mStart.value) return '';
-
-    // mStart.value は "YYYY-MM-DDTHH:mm"
     const base = new Date(mStart.value);
     if (isNaN(base.getTime())) return '';
-
-    // 過去なら翌年に繰り上げ
     if (base < now){
       base.setFullYear(base.getFullYear() + 1);
     }
-
     const y  = base.getFullYear();
     const mo = pad(base.getMonth() + 1);
     const d  = pad(base.getDate());
@@ -521,22 +493,18 @@ function composeStartISO(){
     return toISO(localFixed);
   }
 
-  // フォールバック（Quest 等）の場合：
-  // fallbackYear + セレクトから Date を作り、過去なら翌年に繰り上げ
   const baseYear = fallbackYear || now.getFullYear();
   let month = parseInt(mMonth.value || '0', 10) || 1;
   let day   = parseInt(mDay.value   || '0', 10) || 1;
   let hour  = parseInt(mHour.value  || '0', 10) || 0;
   let min   = parseInt(mMinute.value|| '0', 10) || 0;
 
-  // 月・日を一応 1〜12 / 1〜31 の範囲にクリップしてから Date を作成
   month = Math.min(Math.max(month, 1), 12);
   day   = Math.min(Math.max(day,   1), 31);
 
   let dObj = new Date(baseYear, month - 1, day, hour, min);
   if (isNaN(dObj.getTime())) return '';
 
-  // 過去なら翌年に繰り上げ
   if (dObj < now){
     dObj.setFullYear(dObj.getFullYear() + 1);
   }
@@ -563,7 +531,6 @@ async function onSubmit(){
     return;
   }
 
-  // イベント種別と金額取得
   let eventType = 'free';
   if (mEventTypeRadios && mEventTypeRadios.length){
     const checked = Array.from(mEventTypeRadios).find(r=>r.checked);
@@ -576,13 +543,10 @@ async function onSubmit(){
 
   if(mode==='create'){
     target=(mTarget.value||'').trim();
-
-    /* dokodemodoors 以外は不可 → ポップアップ表示して中断 */
     if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
       showUrlAlert();
       return;
     }
-
     roomId=uuid();
     const ownersMap=readOwners();
     ownersMap[roomId]=randKey();
@@ -627,7 +591,6 @@ function onDuplicate(){
   const startISO = composeStartISO() || new Date().toISOString();
   const nowIso = new Date().toISOString();
 
-  // 現在モーダルに入っている種別と金額を取得して複製にも反映
   let eventType = 'free';
   if (mEventTypeRadios && mEventTypeRadios.length){
     const checked = Array.from(mEventTypeRadios).find(r=>r.checked);
@@ -690,7 +653,6 @@ async function onDelete(){
   closeModal();
 }
 
-// 共有部屋一覧の読み込み
 async function loadShared(){
   try{
     const res = await fetch(REGISTRY_API);
@@ -708,11 +670,9 @@ async function loadShared(){
   }
 }
 
-// ===== 初期化（言語読み込み後に startApp() から呼び出す） =====
 function startApp(){
   restore();
 
-  // 月変更時に日付の上限を月に合わせてクランプ
   if (mMonth && mDay){
     mMonth.addEventListener('change', ()=>{
       const year = fallbackYear || new Date().getFullYear();
@@ -722,7 +682,6 @@ function startApp(){
     });
   }
 
-  // EventType ラジオの挙動（paid で Price 表示）
   if (mEventTypeRadios && mEventTypeRadios.length){
     mEventTypeRadios.forEach(r=>{
       r.addEventListener('change', ()=>{
@@ -731,24 +690,16 @@ function startApp(){
         setEventTypeInModal(newType, mPrice ? mPrice.value : '');
       });
     });
-    // 起動時は free
     setEventTypeInModal('free', '');
   }
 
-  // タイトル右の作成ボタン
   const oc = document.getElementById('openCreate');
   if (oc) oc.onclick = () => openModal('create');
 
-  // 読み込み直後は確実に非表示（チラ見え対策）
   closeModal();
-
-  // タグ絞り込みモーダル（iframe上 左上ボタン）
   setupTagFilterModal();
-
-  // ツアー提案（Lucy）パネル：tourist-information ボタンで開閉
   setupRecommendPanelToggle();
 
-  // ★ここが今回の本丸：存在しない要素で例外停止しないようにガード
   const closeBtn  = document.getElementById('close');
   if (closeBtn) closeBtn.onclick = closeModal;
   const closeBtn2 = document.getElementById('close2');
@@ -765,8 +716,6 @@ function startApp(){
   setInterval(loadShared, 30000);
 }
 
-
-// ===== タグ絞り込みモーダル（#tagFilterBtn → #tagFilterBackdrop） =====
 function setupTagFilterModal(){
   const btn = document.getElementById('tagFilterBtn');
   const backdrop = document.getElementById('tagFilterBackdrop');
@@ -785,39 +734,32 @@ function setupTagFilterModal(){
     btn.setAttribute('aria-expanded', 'false');
   };
 
-  // ボタンで開く
   btn.addEventListener('click', (ev)=>{
     ev.preventDefault();
     ev.stopPropagation();
     open();
   });
 
-  // ×で閉じる
   closeBtn.addEventListener('click', (ev)=>{
     ev.preventDefault();
     close();
   });
 
-  // 背景クリックで閉じる（中身クリックでは閉じない）
   backdrop.addEventListener('click', (ev)=>{
     if (ev.target === backdrop){
       close();
     }
   });
 
-  // ESC で閉じる
   document.addEventListener('keydown', (ev)=>{
     if (ev.key === 'Escape'){
-      // 他モーダルの ESC と競合しても「閉じる」だけなので安全
       close();
     }
   });
 
-  // もし初期状態が表示されてしまう環境があれば、確実に閉じる
   close();
 }
 
-// ===== ツアー提案（Lucy）パネル：表示/非表示トグル =====
 function setupRecommendPanelToggle(){
   const btn = document.getElementById('touristInfoBtn');
   const panel = document.getElementById('recommendSection');
@@ -837,7 +779,6 @@ function setupRecommendPanelToggle(){
     }
   };
 
-  // 初期状態：HTML側に is-collapsed が付いていれば尊重、無ければ閉じる
   const initiallyOpen = panel.classList.contains('is-open') && !panel.classList.contains('is-collapsed');
   setOpen(initiallyOpen);
 
@@ -846,7 +787,6 @@ function setupRecommendPanelToggle(){
     setOpen(!open);
   });
 
-  // ESC で閉じる
   document.addEventListener('keydown', (ev)=>{
     if (ev.key === 'Escape'){
       setOpen(false);
@@ -854,7 +794,6 @@ function setupRecommendPanelToggle(){
   });
 }
 
-// （将来用）管理者パスワード関連
 const ADMIN_HASH="27362e4fcff362576da78138fe5383a75fe64f66dcfd1e7b9e850504b845a5f4";
 function toHex(buf){return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");}
 async function sha256(s){
@@ -863,7 +802,6 @@ async function sha256(s){
 }
 function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=0;i<a.length;i++)r|=a.charCodeAt(i)^b.charCodeAt(i);return r===0;}
 
-// ===== iframe ホバー時のスクロールロック =====
 (function(){
   var iframe = document.getElementById('webxr-iframe');
   if(!iframe) return;
@@ -908,7 +846,6 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       data = await res.json();
     }catch(e){
       console.error(e);
-      // 読み込み失敗時は既存の window.i18n をそのまま使う
       data = window.i18n || {};
     }
     window.i18n = data || {};
@@ -972,14 +909,12 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       if (meetupsTitle && t.meetups.title) meetupsTitle.textContent = t.meetups.title;
       if (createBtn && t.meetups.createButton) createBtn.textContent = t.meetups.createButton;
 
-      // カード内の Enter Lobby ボタン
       if (t.meetups.enterLobby){
         document.querySelectorAll('#grid .card [data-enter]').forEach(btn=>{
           btn.textContent = t.meetups.enterLobby;
         });
       }
 
-      // カウントダウン表示のラベル部分だけ差し替え
       if (t.meetups.cardStartsLabel){
         document.querySelectorAll('#grid .card [data-countdown]').forEach(span=>{
           const txt = span.textContent || '';
@@ -989,7 +924,6 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
         });
       }
 
-      // カード内のイベント種別表示（多言語更新）
       document.querySelectorAll('#grid .card').forEach(card=>{
         const etEl = card.querySelector('[data-event-type]');
         if (!etEl) return;
@@ -1008,7 +942,7 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       });
     }
 
-    // 作成/編集モーダル（ラベル類）
+    // 作成/編集モーダル
     if (t.modal && t.modal.form){
       const lblTitle = document.querySelector("label[for='mTitle']");
       const lblLimit = document.querySelector("label[for='mLimit']");
@@ -1021,13 +955,11 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       const note = document.querySelector('.note');
       if (note && t.modal.form.targetNote) note.textContent = t.modal.form.targetNote;
 
-      // モーダル説明文（HTML）
       const desc = document.getElementById('modalDescription');
       if (desc && t.modal.form.descriptionHtml){
         desc.innerHTML = t.modal.form.descriptionHtml;
       }
 
-      // Free/Paid/Price ラベル
       const evTypeLabel = document.getElementById('mEventTypeLabel');
       const freeSpan    = document.getElementById('mEventTypeFreeLabel');
       const paidSpan    = document.getElementById('mEventTypePaidLabel');
@@ -1041,9 +973,7 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       }
     }
 
-    // 作成/編集モーダル（ボタン類）
     if (t.modal){
-      // モードに応じて submit 文言を切り替え
       const submitBtn = document.getElementById('submit');
       if (submitBtn){
         if (window.mode === 'edit'){
@@ -1054,11 +984,34 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       }
       const dupBtn = document.getElementById('duplicate');
       const delBtn = document.getElementById('delete');
-      if (dupBtn && t.modal.duplicate) dupBtn.textContent = t.modal.duplicate;
-      if (delBtn && t.modal.delete) delBtn.textContent = t.modal.delete;
+      if (dupBtn && t.modal.duplicateButton) dupBtn.textContent = t.modal.duplicateButton;
+      if (delBtn && t.modal.deleteButton) delBtn.textContent = t.modal.deleteButton;
     }
 
-    // 言語メニュー
+    // ★ ツアー案内（Lucy）パネルの言語切り替えを追加
+    if (t.recommend){
+      const recTitle = document.getElementById('recommendTitle');
+      const recIntro = document.getElementById('recommendIntro');
+      const recInput = document.getElementById('recommendInput');
+      const recSend  = document.getElementById('recommendSend');
+      const recVoiceBtn = document.getElementById('lucyVoiceAskBtn');
+      const recVoiceHint = document.getElementById('lucyVoiceSpeakHint');
+
+      if (recTitle && t.recommend.title) recTitle.textContent = t.recommend.title;
+      if (recIntro && t.recommend.intro) recIntro.textContent = t.recommend.intro;
+      if (recInput && t.recommend.placeholder) recInput.placeholder = t.recommend.placeholder;
+      if (recSend  && t.recommend.send)  recSend.textContent  = t.recommend.send;
+      if (recVoiceHint && t.recommend.voiceHint) recVoiceHint.textContent = t.recommend.voiceHint;
+      
+      // 音声ボタン：録音中でない場合のみラベルを更新
+      if (recVoiceBtn && t.recommend.voiceBtnIdle){
+        // ボタンが「停止」状態でないことを確認（厳密ではないがUI更新には十分）
+        if (!recVoiceBtn.textContent.includes('Stop') && !recVoiceBtn.textContent.includes('停止')){
+           recVoiceBtn.textContent = t.recommend.voiceBtnIdle;
+        }
+      }
+    }
+
     const toggle = document.getElementById('langToggle');
     if (toggle){
       toggle.textContent = LANGUAGE_LABELS[current] || current;
@@ -1071,7 +1024,6 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
       });
     }
 
-    // 言語適用後に startApp を一度だけ起動
     if (!appStarted){
       appStarted = true;
       startApp();
@@ -1118,7 +1070,6 @@ function subtleEqual(a,b){if(a.length!==b.length)return false;let r=0;for(let i=
     close();
   }
 
-  // 初期化：メニューをセットし、保存言語を読み込み
   setupLangMenu();
   let initialLang = 'en';
   try{

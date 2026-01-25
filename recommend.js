@@ -4,7 +4,8 @@
  * Cloudflare Worker の /chat に POST し、reply と nextState を表示する。
  *
  * ★ 多言語対応・修正版:
- * - 言語切り替え (window.currentLang) に動的に追従するように修正。
+ * - 言語切り替え (window.currentLang) に動的に追従。
+ * - UIテキストを window.i18n.recommend から取得。
  */
 (() => {
   "use strict";
@@ -26,24 +27,23 @@
     return "auto";
   })();
 
-  // ★修正: 現在の言語設定を取得するヘルパー (優先順位を見直し)
   const getCurrentLang = () => {
-    // 1. main.js で動的に更新される window.currentLang を最優先
     if (typeof window !== "undefined" && window.currentLang) return String(window.currentLang);
-    
-    // 2. index.html で初期設定される window.__DD_LANG
     if (typeof window !== "undefined" && window.__DD_LANG) return String(window.__DD_LANG);
-    
-    // 3. localStorage の設定
     try {
       const stored = localStorage.getItem("lang");
       if (stored) return stored;
     } catch(e){}
-
-    // 4. HTMLタグのlang属性
     if (document.documentElement.lang) return document.documentElement.lang;
-
     return "ja";
+  };
+
+  // 翻訳ヘルパー
+  const getTerm = (key, def) => {
+    if (window.i18n && window.i18n.recommend && window.i18n.recommend[key]) {
+      return window.i18n.recommend[key];
+    }
+    return def;
   };
 
   // =========================================================
@@ -79,9 +79,6 @@
   let speechRec = null;
   let speechIsRunning = false;
 
-  const VOICE_BTN_LABEL_IDLE = "Lucyに質問（音声）";
-  const VOICE_BTN_LABEL_STOP = "音声停止";
-
   // =========================================================
   // 4) ユーティリティ
   // =========================================================
@@ -97,7 +94,7 @@
 
     if (isSending) {
       sendBtn.dataset._prevText = sendBtn.textContent || "";
-      sendBtn.textContent = "送信中…";
+      sendBtn.textContent = getTerm("sendLoading", "送信中…");
     } else {
       if (sendBtn.dataset._prevText) {
         sendBtn.textContent = sendBtn.dataset._prevText;
@@ -201,7 +198,11 @@
 
   function setLucyVoiceBtnLabel(isActive) {
     if (!lucyVoiceAskBtn) return;
-    lucyVoiceAskBtn.textContent = isActive ? VOICE_BTN_LABEL_STOP : VOICE_BTN_LABEL_IDLE;
+    if (isActive) {
+      lucyVoiceAskBtn.textContent = getTerm("voiceBtnStop", "音声停止");
+    } else {
+      lucyVoiceAskBtn.textContent = getTerm("voiceBtnIdle", "Lucyに質問（音声）");
+    }
   }
 
   function stopVoiceTracks() {
@@ -219,10 +220,8 @@
     if (userText) payload.userText = userText;
     if (nextState) payload.state = nextState;
 
-    // 現在の言語設定を送信
     const lang = getCurrentLang();
     payload.lang = lang;
-    console.log("[recommend.js] sending lang:", lang); // デバッグ用ログ
 
     const res = await fetch(WORKER_CHAT_URL, {
       method: "POST",
@@ -242,12 +241,10 @@
     return parsed.value;
   }
 
-  // 音声→文字起こし
   async function transcribeVoiceBlob(blob) {
     const formData = new FormData();
     formData.append("audio", blob, "voice.webm");
     
-    // 音声認識用にも言語情報を送信
     const lang = getCurrentLang();
     formData.append("lang", lang);
 
@@ -334,13 +331,13 @@
     stopSpeechRecognition();
 
     speechRec = new Ctor();
-    speechRec.lang = getCurrentLang(); // ブラウザ標準の認識言語も合わせる
+    speechRec.lang = getCurrentLang();
     speechRec.interimResults = false;
     speechRec.continuous = false;
 
     speechIsRunning = true;
     setLucyVoiceBtnLabel(true);
-    setLucyVoiceStatus("音声認識中です。話し終えたら自動で送信します。");
+    setLucyVoiceStatus(getTerm("statusRecording", "音声認識中です。話し終えたら自動で送信します。"));
 
     speechRec.onresult = async (ev) => {
       try {
@@ -390,7 +387,7 @@
 
     ensurePanelOpenSoftly();
     setLucyVoiceBtnLabel(true);
-    setLucyVoiceStatus("録音中です。もう一度押すと停止します。");
+    setLucyVoiceStatus(getTerm("statusRecording", "録音中です。もう一度押すと停止します。"));
 
     try {
       voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -428,7 +425,7 @@
         setLucyVoiceStatus("音声データが取得できませんでした。");
         return;
       }
-      setLucyVoiceStatus("音声を送信しています…");
+      setLucyVoiceStatus(getTerm("statusSending", "音声を送信しています…"));
       setSending(true);
       try {
         const text = normalizeUserText(await transcribeVoiceBlob(blob));
