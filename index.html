@@ -619,11 +619,13 @@
       // Also potentially useful for general Android if SpeechRecognition is flaky
       // const isAndroid = ua.indexOf("Android") !== -1;
 
-      if (isQuest) {
+      const isAndroid = ua.indexOf("Android") !== -1;
+
+      if (isQuest || isAndroid) {
         // Force recommend.js to use "server" mode (MediaRecorder -> /voice endpoint)
         // instead of "auto" (which tries SpeechRecognition first)
         window.__LUCY_VOICE_MODE = "server";
-        console.log("Quest browser detected: Force voice mode to 'server'");
+        console.log("Quest/Android detected: Force voice mode to 'server'");
       }
     })();
   </script>

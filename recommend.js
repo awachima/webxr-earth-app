@@ -427,10 +427,10 @@
     };
 
     voiceMediaRecorder.onstop = async () => {
-      // ★ ここも Lobby.js に合わせる。
-      // MIME Type が何であれ、Blob作成時にはブラウザが記録した形式 or audio/webm として扱う
-      // （※ Questブラウザではこれで送信しないとデータが空になることがある）
-      const blob = new Blob(voiceChunks, { type: "audio/webm" });
+      // ★ 修正: ブラウザが実際に使用した mimeType を取得して使う
+      // iOS (Safari) は audio/mp4、PC/Android は audio/webm などになる
+      const actualMimeType = voiceMediaRecorder.mimeType || "audio/webm";
+      const blob = new Blob(voiceChunks, { type: actualMimeType });
 
       voiceChunks = [];
       stopVoiceTracks();
