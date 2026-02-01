@@ -133,7 +133,6 @@ function detectLang() {
     const voiceAskBtn = $("#voiceAskBtn");
     if (voiceAskBtn) voiceAskBtn.textContent = t("lobby.voiceAskBtn", "執事に質問（音声）");
 
-    // ★修正: HTMLのIDに合わせて個別に適用
     const voiceOnOffHint = $("#voiceOnOffHint");
     if (voiceOnOffHint) voiceOnOffHint.textContent = t("lobby.voiceOnOffNotice", "🔊 音声はON/OFFで改善することがあります。");
     const voiceSpeakHint = $("#voiceSpeakHint");
@@ -181,19 +180,6 @@ function detectLang() {
   }
 
   loadLangData(currentLang);
-
-  const langSelect = $("#langSelect");
-  if (langSelect) {
-    langSelect.value = currentLang;
-    langSelect.addEventListener("change", (e) => {
-      const value = e.target.value;
-      currentLang = value;
-      try { localStorage.setItem("lang", value); } catch (e2) {}
-      if (value === "fa" || value === "he") document.documentElement.dir = "rtl";
-      else document.documentElement.dir = "ltr";
-      loadLangData(value);
-    });
-  }
 
   // ===== URL パラメータ =====
   const roomId = urlParams.get("roomId") || "default";
@@ -650,13 +636,13 @@ function detectLang() {
     });
   }
 
-  // ===== 執事に質問（音声） =====
+  // ===== 執事に質問（音声）：Lucy互換設計 =====
   const voiceAskBtn2 = $("#voiceAskBtn");
   const voiceAskStatus = $("#voiceAskStatus");
-  let mediaStream = null;
-  let mediaRecorder = null;
-  let chunks = [];
-  let isRecording = false;
+  let voiceMediaStream = null;
+  let voiceMediaRecorder = null;
+  let voiceChunks = [];
+  let voiceIsRecording = false;
 
   function setVoiceAskStatus(key, fallback) {
     if (!voiceAskStatus) return;
@@ -664,44 +650,50 @@ function detectLang() {
   }
 
   async function startRecording() {
-    if (isRecording) return;
-    isRecording = true;
-    chunks = [];
+    if (voiceIsRecording) return;
+    voiceIsRecording = true;
+    voiceChunks = [];
     setVoiceAskStatus("recording", "録音中です。もう一度押すと停止します。");
+    
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // WebRTC用のlocalStreamとは別に、音声認識専用にマイクを取得
+      voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       setVoiceAskStatus("micErrorMsg", "マイクへのアクセスが拒否されました。");
-      isRecording = false;
+      voiceIsRecording = false;
       return;
     }
 
-    mediaRecorder = new MediaRecorder(mediaStream);
-    mediaRecorder.ondataavailable = (ev) => {
-      if (ev.data.size > 0) chunks.push(ev.data);
+    try {
+      voiceMediaRecorder = new MediaRecorder(voiceMediaStream);
+    } catch (e) {
+      setVoiceAskStatus("micErrorMsg", "録音機能が使えません。");
+      voiceIsRecording = false;
+      return;
+    }
+
+    voiceMediaRecorder.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size > 0) voiceChunks.push(ev.data);
     };
 
-    mediaRecorder.onstop = async () => {
-      // ★修正: 録音停止時にデータが蓄積されるのをわずかに待ち、サイズを確認する
-      if (chunks.length === 0) {
-        setVoiceAskStatus("micErrorMsg", "音声データが取得できませんでした。");
-        hideThinking();
-        return;
-      }
+    voiceMediaRecorder.onstop = async () => {
+      // Lucyの設計: ブラウザが生成したmimeTypeをそのままBlobに使用
+      const actualMimeType = voiceMediaRecorder.mimeType || "audio/webm";
+      const blob = new Blob(voiceChunks, { type: actualMimeType });
+      voiceChunks = [];
 
-      const blob = new Blob(chunks, { type: "audio/webm" });
-      chunks = [];
-      
+      // 録音用ストリームを停止
+      if (voiceMediaStream) {
+        voiceMediaStream.getTracks().forEach((track) => track.stop());
+        voiceMediaStream = null;
+      }
+      voiceIsRecording = false;
+
       // デバッグ用サイズ確認
       console.log("Recorded Blob size:", blob.size, "bytes");
 
-      if (mediaStream) {
-        mediaStream.getTracks().forEach((t2) => t2.stop());
-        mediaStream = null;
-      }
-
-      if (blob.size < 200) {
-        setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした（短すぎます）。");
+      if (!blob || blob.size < 500) {
+        setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした。");
         hideThinking();
         return;
       }
@@ -743,19 +735,20 @@ function detectLang() {
       }
     };
     
-    // 修正: データを1秒ごとに細かく受け取るように指定
-    mediaRecorder.start(1000);
+    // データを100msごとに細かく受け取る (Lucyの安定化ロジック)
+    voiceMediaRecorder.start(100);
   }
 
   function stopRecording() {
-    if (!isRecording) return;
-    isRecording = false;
-    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    if (!voiceIsRecording) return;
+    if (voiceMediaRecorder && voiceMediaRecorder.state !== "inactive") {
+      voiceMediaRecorder.stop();
+    }
   }
 
   if (voiceAskBtn2) {
     voiceAskBtn2.addEventListener("click", () => {
-      if (!isRecording) startRecording();
+      if (!voiceIsRecording) startRecording();
       else stopRecording();
     });
   }
