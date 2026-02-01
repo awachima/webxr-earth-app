@@ -1,13 +1,12 @@
-// lobby.js - 真の完全版: テキスト出力正常化・履歴復旧・物理排他マイク制御
 (function () {
-  // ===== 共通ヘルパー・定数 =====
   const $ = (s) => document.querySelector(s);
   const S = "meetups-store";
   const O = "meetups-owners";
   const NEGATIVE_LIMIT_MS = 20 * 60 * 1000;
 
-  // 正しい STT エンドポイント (lucy-recommend は使用しない)
-  const STT_URL = "https://do-stt.awachima7.workers.dev";
+  // エンドポイント設定（do-chat WorkerのURL）
+  const API_BASE = "https://do-chat.awachima7.workers.dev";
+  const WS_BASE = "wss://do-chat.awachima7.workers.dev";
 
   const readStore = () => JSON.parse(localStorage.getItem(S) || "[]");
   const writeStore = (arr) => localStorage.setItem(S, JSON.stringify(arr));
@@ -16,14 +15,10 @@
 
   function pad(n) { return String(n).padStart(2, "0"); }
 
-  // ===== 言語推定 =====
   function detectLang() {
-    if (typeof navigator === "undefined") return "en";
-    const navLang = navigator.languages && navigator.languages.length ? navigator.languages[0] : navigator.language || "en";
-    const lower = (navLang || "en").toLowerCase();
-    if (lower.startsWith("ja")) return "ja-JP";
-    if (lower.startsWith("en")) return "en";
-    return "en";
+    if (typeof navigator === "undefined") return "ja-JP";
+    const navLang = navigator.languages ? navigator.languages[0] : (navigator.language || "ja-JP");
+    return navLang.toLowerCase().startsWith("ja") ? "ja-JP" : "en";
   }
 
   const urlParams = new URLSearchParams(location.search);
@@ -41,7 +36,7 @@
 
   (function () {
     const root = document.documentElement;
-    root.lang = currentLang || "en";
+    root.lang = currentLang || "ja-JP";
     root.dir = (currentLang === "fa" || currentLang === "he") ? "rtl" : "ltr";
   })();
 
@@ -65,18 +60,16 @@
   }
 
   async function loadLangData(lang) {
-    let code = lang || "en";
-    if (code === "ja") code = "ja-JP";
-    let url = `./lang/${code.startsWith("ja") ? "ja" : "en"}.json`;
+    let code = lang.startsWith("ja") ? "ja" : "en";
     try {
-      const res = await fetch(url, { cache: "no-cache" });
+      const res = await fetch(`./lang/${code}.json`, { cache: "no-cache" });
       window.i18n = res.ok ? await res.json() : {};
     } catch (e) { window.i18n = {}; }
     applyLobbyTexts();
   }
   loadLangData(currentLang);
 
-  // ===== URL メタ情報 =====
+  // ===== ルームメタ情報 =====
   const roomId = urlParams.get("roomId") || "default";
   const title = urlParams.get("title") || "";
   const start = urlParams.get("start") || "";
@@ -112,12 +105,7 @@
   }
   setupCountdown();
 
-  $("#enterBtn") && $("#enterBtn").addEventListener("click", () => {
-    if (!target) return alert("URLがありません");
-    window.open(target, "_blank", "noopener,noreferrer");
-  });
-
-  // ===== チャット表示正規化ヘルパー =====
+  // ===== チャット表示正規化 (JSON混入防止) =====
   function normalizeChatText(rawText) {
     if (!rawText) return "";
     const trimmed = String(rawText).trim();
@@ -130,14 +118,12 @@
     return rawText;
   }
 
-  // ===== Chat & WebSocket =====
-  let user = localStorage.getItem("nickname") || "Guest";
   const chatLog = $("#chatLog");
   function addMsg(kind, text) {
     if (!chatLog) return;
     const div = document.createElement("div");
     div.className = "msg " + kind;
-    const body = normalizeChatText(text); // JSON混入を防ぐ
+    const body = normalizeChatText(text);
     div.innerHTML = body.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
@@ -154,7 +140,8 @@
   }
   function hideThinking() { if (thinkingElem) { thinkingElem.remove(); thinkingElem = null; } }
 
-  const WS_BASE = "wss://do-chat.awachima7.workers.dev";
+  // ===== WebSocket 接続 =====
+  let user = localStorage.getItem("nickname") || "Guest";
   const CHAT_URL = `${WS_BASE}/ws/${encodeURIComponent(roomId)}?user=${encodeURIComponent(user)}`;
   let ws;
   let myId = null, rosterMembers = [];
@@ -197,31 +184,30 @@
   $("#chatSend") && $("#chatSend").addEventListener("click", () => {
     const val = $("#chatInput").value.trim();
     if (val && ws.readyState === 1) { 
-      // ★デバッグJSONを付加せず、純粋なテキストのみを送信
       ws.send(JSON.stringify({ type: "chat", text: val, name: user })); 
       $("#chatInput").value = ""; 
     }
   });
 
-  // ===== WebRTC (Voice Chat) =====
+  // ===== WebRTC ボイスチャット =====
   let localStream = null, voiceJoined = false;
   const peers = new Map(), remoteAudios = new Map();
-
-  function updateVoiceUI() {
-    $("#voicePower") && ($("#voicePower").textContent = voiceJoined ? "音声OFF" : "音声ON");
-  }
 
   async function joinVoice() {
     if (voiceJoined) return;
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      voiceJoined = true; updateVoiceUI();
+      voiceJoined = true;
+      $("#voicePower") && ($("#voicePower").textContent = "音声OFF");
+      $("#micToggle") && ($("#micToggle").style.display = "inline-block");
       if (rosterMembers.length > 0) startCalls(rosterMembers);
-    } catch (e) { alert("マイクが使えません"); }
+    } catch (e) { alert("マイクへのアクセスが拒否されました。"); }
   }
 
   function leaveVoice() {
-    voiceJoined = false; updateVoiceUI();
+    voiceJoined = false;
+    $("#voicePower") && ($("#voicePower").textContent = "音声ON");
+    $("#micToggle") && ($("#micToggle").style.display = "none");
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
     peers.forEach(pc => pc.close()); peers.clear();
     remoteAudios.forEach(a => a.remove()); remoteAudios.clear();
@@ -248,47 +234,43 @@
     else if (rtc.type === "candidate") pc.addIceCandidate(new RTCIceCandidate(rtc.candidate));
   }
 
-  // ===== 執事に質問（音声）=====
-  let vRec = null, vChunks = [], vIsRec = false, vWasOn = false, vStream = null;
+  // ===== 執事に質問（音声入力）=====
+  let vRec = null, vIsRec = false, vWasOn = false, vStream = null;
 
   async function startAsk() {
     if (vIsRec) return;
     vWasOn = voiceJoined;
-    if (voiceJoined) leaveVoice();
-    vIsRec = true; vChunks = [];
-    $("#voiceAskStatus") && ($("#voiceAskStatus").textContent = "準備中...");
+    if (voiceJoined) leaveVoice(); // デバイス解放
+
+    vIsRec = true;
+    let chunks = [];
+    $("#voiceAskStatus").textContent = "準備中...";
     try {
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 600)); // 安定待ち
       vStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       vRec = new MediaRecorder(vStream);
-      vRec.ondataavailable = (e) => { if (e.data.size > 0) vChunks.push(e.data); };
+      vRec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
       vRec.onstop = async () => {
-        const blob = new Blob(vChunks, { type: vRec.mimeType || "audio/webm" });
-        if (vStream) { vStream.getTracks().forEach(t => t.stop()); vStream = null; }
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        vStream.getTracks().forEach(t => t.stop());
         vIsRec = false;
-        if (vWasOn) joinVoice();
-        
-        // ★閾値を 2000 バイトに維持（実データが 30KB あるならここを通る）
-        if (blob.size < 2000) { 
-          $("#voiceAskStatus").textContent = "音声が短すぎます (Size: " + blob.size + ")"; 
-          return; 
-        }
+        if (vWasOn) joinVoice(); // 復帰
 
-        $("#voiceAskStatus").textContent = "送信中...";
+        if (blob.size < 2000) { $("#voiceAskStatus").textContent = "音声が短すぎます"; return; }
+
+        $("#voiceAskStatus").textContent = "解析中...";
         try {
           const fd = new FormData();
           fd.append("audio", blob, "voice.webm");
-          fd.append("lang", currentLang);
-          // ★正しいエンドポイントへ送信
-          const res = await fetch(STT_URL, { method: "POST", body: fd });
+          // do-chatの /voice エンドポイントへ送信
+          const res = await fetch(`${API_BASE}/voice?lang=${currentLang}`, { method: "POST", body: fd });
           const data = await res.json();
-          if (data.text) {
-            ws.send(JSON.stringify({ type: "chat", text: data.text, name: user }));
-            $("#voiceAskStatus").textContent = "送信しました";
+          if (data.ok) {
+            $("#voiceAskStatus").textContent = "認識しました";
           } else {
-            $("#voiceAskStatus").textContent = "認識できませんでした";
+            $("#voiceAskStatus").textContent = "認識に失敗しました";
           }
-        } catch (e) { $("#voiceAskStatus").textContent = "通信エラー"; }
+        } catch (e) { $("#voiceAskStatus").textContent = "エラー"; }
       };
       vRec.start(100);
       $("#voiceAskStatus").textContent = "録音中...";
@@ -296,4 +278,5 @@
   }
 
   $("#voiceAskBtn") && $("#voiceAskBtn").addEventListener("click", () => vIsRec ? vRec.stop() : startAsk());
+
 })();
