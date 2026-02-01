@@ -1,3 +1,4 @@
+// lobby.js - 修正版: WebRTCとの排他制御・物理マイク解放・Lucy互換ロジック統合
 // ===== 共通ヘルパー・定数 =====
 const $ = (s) => document.querySelector(s);
 const S = "meetups-store";
@@ -649,13 +650,16 @@ function detectLang() {
     });
   }
 
-  // ===== 執事に質問（音声）：Lucy互換・物理マイク競合回避設計 =====
+  // ===== 執事に質問（音声）：Lucy互換・物理マイク競合回避・排他制御設計 =====
   const voiceAskBtn2 = $("#voiceAskBtn");
   const voiceAskStatus = $("#voiceAskStatus");
   let voiceAskMediaStream = null;
   let voiceAskMediaRecorder = null;
   let voiceAskChunks = [];
   let voiceAskIsRecording = false;
+
+  // WebRTCの状態を録音中にバックアップするための変数
+  let wasMicEnabledBeforeAsk = false;
 
   function setVoiceAskStatus(key, fallback) {
     if (!voiceAskStatus) return;
@@ -676,29 +680,47 @@ function detectLang() {
     voiceAskMediaStream = null;
   }
 
+  // ★重要：WebRTCのマイクを一時的に無効化/復元するヘルパー
+  function setWebRTCMicEnabled(enabled) {
+    if (localStream) {
+      localStream.getAudioTracks().forEach(track => {
+        track.enabled = enabled;
+      });
+    }
+  }
+
   async function startRecording() {
     if (voiceAskIsRecording) return;
+    
+    // 1. WebRTC側のマイク状態を保存し、一時的にミュートする (排他制御)
+    wasMicEnabledBeforeAsk = !micMuted; 
+    if (voiceJoined) {
+        setWebRTCMicEnabled(false);
+        logDebug("WebRTC Mic temporarily disabled for recording");
+    }
+
     voiceAskIsRecording = true;
     voiceAskChunks = [];
     setVoiceAskStatus("recording", "録音中です。もう一度押すと停止します。");
     
     try {
-      // 1. 録音のたびに新しくマイクを取得 (Lucyと同じ方式)
-      // WebRTC用の localStream とは変数レベルで完全に分離
+      // 2. 録音のたびに新しくマイクを取得
       voiceAskMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       setVoiceAskStatus("micErrorMsg", "マイクへのアクセスが拒否されました。");
       voiceAskIsRecording = false;
+      // エラー時はWebRTCマイクを復元
+      if (voiceJoined) setWebRTCMicEnabled(wasMicEnabledBeforeAsk);
       return;
     }
 
     try {
-      // 2. ブラウザが推奨するデフォルト形式で MediaRecorder を初期化
       voiceAskMediaRecorder = new MediaRecorder(voiceAskMediaStream);
     } catch (e) {
       setVoiceAskStatus("micErrorMsg", "録音機能が使えません。");
       stopVoiceAskTracks();
       voiceAskIsRecording = false;
+      if (voiceJoined) setWebRTCMicEnabled(wasMicEnabledBeforeAsk);
       return;
     }
 
@@ -706,10 +728,7 @@ function detectLang() {
       if (ev.data && ev.data.size > 0) voiceAskChunks.push(ev.data);
     };
 
-    voiceAskRecorderOnStop(); // 終了イベントの登録
-    
-    // 3. データを100msごとに細かく受け取る (Lucyの安定化ロジック)
-    // これにより、停止ボタンを押した瞬間の「データ空っぽ」状態を回避
+    voiceAskRecorderOnStop(); 
     voiceAskMediaRecorder.start(100);
   }
 
@@ -717,19 +736,22 @@ function detectLang() {
     if (!voiceAskMediaRecorder) return;
 
     voiceAskMediaRecorder.onstop = async () => {
-      // 4. ブラウザが実際に生成したmimeTypeをそのままBlobに使用
       const actualMimeType = voiceAskMediaRecorder.mimeType || "audio/webm";
       const blob = new Blob(voiceAskChunks, { type: actualMimeType });
       voiceAskChunks = [];
 
-      // 5. 録音終了時にストリームを即座に破棄してマイクを解放
+      // 3. 録音終了時にストリームを即座に破棄してマイクを解放
       stopVoiceAskTracks();
       voiceAskIsRecording = false;
 
-      // デバッグ用サイズ確認
+      // 4. WebRTCのマイクを元の状態に戻す
+      if (voiceJoined) {
+          setWebRTCMicEnabled(wasMicEnabledBeforeAsk);
+          logDebug("WebRTC Mic restored to: " + (wasMicEnabledBeforeAsk ? "ON" : "OFF"));
+      }
+
       console.log("Recorded Blob Created:", blob.size, "bytes", "Type:", actualMimeType);
 
-      // 0.4KB（400バイト程度）はデータ不足としてガード
       if (!blob || blob.size < 1000) {
         setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした。");
         hideThinking();
@@ -789,7 +811,7 @@ function detectLang() {
     });
   }
 
-  // 音声コンテキスト初期化（ユーザーの明示的なクリック操作で行う）
+  // 音声コンテキスト初期化
   (function initAudioContextOnce() {
     const handler = () => {
       if (!window._audioContext) {
