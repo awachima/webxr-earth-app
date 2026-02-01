@@ -109,21 +109,28 @@
   function normalizeChatText(rawText) {
     if (!rawText) return "";
     const trimmed = String(rawText).trim();
-    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    // JSONが含まれている場合は、textプロパティのみを抽出する
+    if (trimmed.includes('"text":')) {
       try {
-        const inner = JSON.parse(trimmed);
-        if (inner && typeof inner.text === "string") return inner.text;
+        // 文字列全体がJSONでなくても、JSON部分を探して解析
+        const match = trimmed.match(/\{.*\}/);
+        if (match) {
+          const inner = JSON.parse(match[0]);
+          if (inner && typeof inner.text === "string") return inner.text;
+        }
       } catch (e) {}
     }
     return rawText;
   }
 
   const chatLog = $("#chatLog");
-  function addMsg(kind, text) {
+  function addMsg(kind, name, text) {
     if (!chatLog) return;
     const div = document.createElement("div");
     div.className = "msg " + kind;
-    const body = normalizeChatText(text);
+    const cleanText = normalizeChatText(text);
+    // ユーザー名を表示に含める
+    const body = name ? `<strong>${name}:</strong> ${cleanText}` : cleanText;
     div.innerHTML = body.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
@@ -151,7 +158,11 @@
     ws.onopen = () => { console.log("WS Connected"); };
     ws.onclose = () => { setTimeout(connectWS, 2000); };
     ws.onmessage = (ev) => {
-      const data = JSON.parse(ev.data);
+      let data;
+      try {
+        data = JSON.parse(ev.data);
+      } catch(e) { return; }
+
       if (data.type === "ping") return ws.send(JSON.stringify({ type: "pong" }));
       if (data.rtc) return handleRTC(data.rtc.from, data.rtc);
       
@@ -161,10 +172,10 @@
           data.messages.forEach(mStr => {
             try {
               const m = JSON.parse(mStr);
-              addMsg(m.name === user ? "me" : "other", `${m.name}: ${m.text}`);
+              addMsg(m.name === user ? "me" : "other", m.name, m.text);
             } catch(e) {}
           });
-          addMsg("sys", "— 過去のメッセージを読み込みました —");
+          addMsg("sys", null, "— 過去のメッセージを読み込みました —");
         }
         if (data.type === "roster") { 
           rosterMembers = data.members; 
@@ -175,7 +186,7 @@
         if (data.type === "bot-done") hideThinking();
       } else {
         hideThinking();
-        addMsg(data.name === user ? "me" : "other", `${data.name}: ${data.text}`);
+        addMsg(data.name === user ? "me" : "other", data.name, data.text);
       }
     };
   }
@@ -184,9 +195,15 @@
   $("#chatSend") && $("#chatSend").addEventListener("click", () => {
     const val = $("#chatInput").value.trim();
     if (val && ws.readyState === 1) { 
-      ws.send(JSON.stringify({ type: "chat", text: val, name: user })); 
+      // 送信時はテキストだけを送る（Worker側で名前が付与されるため）
+      ws.send(val); 
       $("#chatInput").value = ""; 
     }
+  });
+
+  // Enterキーでも送信可能にする
+  $("#chatInput") && $("#chatInput").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") $("#chatSend").click();
   });
 
   // ===== WebRTC ボイスチャット =====
@@ -240,41 +257,57 @@
   async function startAsk() {
     if (vIsRec) return;
     vWasOn = voiceJoined;
-    if (voiceJoined) leaveVoice(); // デバイス解放
+    if (voiceJoined) leaveVoice(); 
 
     vIsRec = true;
     let chunks = [];
     $("#voiceAskStatus").textContent = "準備中...";
     try {
-      await new Promise(r => setTimeout(r, 600)); // 安定待ち
       vStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      vRec = new MediaRecorder(vStream);
+      // ブラウザ互換性を考慮したMIMEタイプ設定
+      const options = { mimeType: 'audio/webm;codecs=opus' };
+      vRec = new MediaRecorder(vStream, MediaRecorder.isTypeSupported(options.mimeType) ? options : {});
+      
       vRec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
       vRec.onstop = async () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
+        const blob = new Blob(chunks, { type: vRec.mimeType || "audio/webm" });
         vStream.getTracks().forEach(t => t.stop());
         vIsRec = false;
-        if (vWasOn) joinVoice(); // 復帰
+        if (vWasOn) joinVoice(); 
 
-        if (blob.size < 2000) { $("#voiceAskStatus").textContent = "音声が短すぎます"; return; }
+        if (blob.size < 1000) { $("#voiceAskStatus").textContent = "音声が短すぎます"; return; }
 
         $("#voiceAskStatus").textContent = "解析中...";
         try {
           const fd = new FormData();
+          // do-sttが期待するフィールド名 "audio" で送信
           fd.append("audio", blob, "voice.webm");
-          // do-chatの /voice エンドポイントへ送信
-          const res = await fetch(`${API_BASE}/voice?lang=${currentLang}`, { method: "POST", body: fd });
+          
+          const res = await fetch(`${API_BASE}/voice?lang=${currentLang}`, { 
+            method: "POST", 
+            body: fd 
+          });
+          
+          if (!res.ok) throw new Error("Server Error");
+          
           const data = await res.json();
           if (data.ok) {
             $("#voiceAskStatus").textContent = "認識しました";
           } else {
             $("#voiceAskStatus").textContent = "認識に失敗しました";
           }
-        } catch (e) { $("#voiceAskStatus").textContent = "エラー"; }
+        } catch (e) { 
+          console.error(e);
+          $("#voiceAskStatus").textContent = "接続エラー"; 
+        }
       };
-      vRec.start(100);
+      vRec.start();
       $("#voiceAskStatus").textContent = "録音中...";
-    } catch (e) { vIsRec = false; if (vWasOn) joinVoice(); }
+    } catch (e) { 
+      console.error(e);
+      vIsRec = false; 
+      if (vWasOn) joinVoice(); 
+    }
   }
 
   $("#voiceAskBtn") && $("#voiceAskBtn").addEventListener("click", () => vIsRec ? vRec.stop() : startAsk());
