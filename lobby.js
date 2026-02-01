@@ -133,9 +133,11 @@ function detectLang() {
     const voiceAskBtn = $("#voiceAskBtn");
     if (voiceAskBtn) voiceAskBtn.textContent = t("lobby.voiceAskBtn", "執事に質問（音声）");
 
-    const noticeSmalls = document.querySelectorAll(".notice-small");
-    if (noticeSmalls[0]) noticeSmalls[0].textContent = t("lobby.voiceOnOffNotice", "🔊 音声はON/OFFで改善することがあります。");
-    if (noticeSmalls[1]) noticeSmalls[1].textContent = t("lobby.voiceAskNotice", "🤵 ゆっくり・はっきり話すと認識が安定します。");
+    // 注意書きの多言語化
+    const voiceOnOffHint = $("#voiceOnOffHint");
+    if (voiceOnOffHint) voiceOnOffHint.textContent = t("lobby.voiceOnOffNotice", "🔊 音声はON/OFFで改善することがあります。");
+    const voiceSpeakHint = $("#voiceSpeakHint");
+    if (voiceSpeakHint) voiceSpeakHint.textContent = t("lobby.voiceAskNotice", "🤵 ゆっくり・はっきり話すと認識が安定します。");
 
     const dateLabel = $("#dateLabel");
     if (dateLabel) dateLabel.textContent = t("lobby.dateLabel", (currentLang && currentLang.startsWith("ja") ? "開始日時" : "Start date & time"));
@@ -347,8 +349,7 @@ function detectLang() {
 
   // ===== Chat Log =====
   const chatLog = $("#chatLog");
-
-  // ★修正: URLの末尾に日本語や閉じカッコがくっつく問題への対策
+  
   function linkify(text) {
     if (!text) return "";
     const urlRegex = /(https?:\/\/[a-zA-Z0-9.\-_/~%#?&=]+)/g;
@@ -366,7 +367,6 @@ function detectLang() {
     }
     return rawText;
   }
-
   function addSys(text) {
     if (!chatLog) return;
     const div = document.createElement("div");
@@ -375,7 +375,6 @@ function detectLang() {
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
   }
-
   function addMsg(kind, text) {
     if (!chatLog) return;
     const div = document.createElement("div");
@@ -399,8 +398,8 @@ function detectLang() {
   function showThinking(text) {
     if (!chatLog) return;
     if (thinkingElem) {
-      thinkingElem.textContent = text || t("lobby.botThinking", "Reginald が考え中です…");
-      return;
+        thinkingElem.textContent = text || t("lobby.botThinking", "Reginald が考え中です…");
+        return;
     }
     const div = document.createElement("div");
     div.className = "msg sys thinking";
@@ -409,7 +408,6 @@ function detectLang() {
     chatLog.scrollTop = chatLog.scrollHeight;
     thinkingElem = div;
   }
-
   function hideThinking() {
     if (thinkingElem && thinkingElem.parentNode) thinkingElem.parentNode.removeChild(thinkingElem);
     thinkingElem = null;
@@ -447,19 +445,16 @@ function detectLang() {
       ws.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data);
-
           if (data.type === "ping") {
             ws.send(JSON.stringify({ type: "pong" }));
             return;
           }
-
           if (data && data.rtc) {
             const rtc = data.rtc;
             const from = rtc.from;
             if (from && from !== myId) handleRTC(from, rtc);
             return;
           }
-
           if (data.sys) {
             if (data.type === "welcome") {
               myId = data.id;
@@ -478,9 +473,7 @@ function detectLang() {
                   if (obj.name === "Reginald") hideThinking();
                   const klass = obj.name === user ? "me" : "other";
                   const body = normalizeChatText(obj.text || "");
-                  const text = t("lobby.chatLine", "{name}: {text}")
-                    .replace("{name}", obj.name || "")
-                    .replace("{text}", body);
+                  const text = t("lobby.chatLine", "{name}: {text}").replace("{name}", obj.name || "").replace("{text}", body);
                   addMsg(klass, text);
                 } catch (e2) {}
               });
@@ -502,14 +495,11 @@ function detectLang() {
             }
             return;
           }
-
           const obj = data;
           if (obj.name === "Reginald") hideThinking();
           const klass = obj.name === user ? "me" : "other";
           const body = normalizeChatText(obj.text || "");
-          const label = t("lobby.chatLine", "{name}: {text}")
-            .replace("{name}", obj.name || "")
-            .replace("{text}", body);
+          const label = t("lobby.chatLine", "{name}: {text}").replace("{name}", obj.name || "").replace("{text}", body);
           addMsg(klass, label);
         } catch (e) {}
       };
@@ -566,7 +556,6 @@ function detectLang() {
         voiceStatus.textContent = t("lobby.voiceJoined", "音声: 参加中（マイク{state}）").replace("{state}", state);
       }
     }
-    if (voiceHintEl) voiceHintEl.textContent = t("lobby.voiceHint", "※ 音声はブラウザ同士で直接やり取りされます。");
   }
   updateVoiceUI();
 
@@ -581,10 +570,8 @@ function detectLang() {
     voiceJoined = true;
     micMuted = false;
     updateVoiceUI();
-    if (voiceStatus) voiceStatus.textContent = t("lobby.voiceJoining", "音声チャンネルに参加しています…");
     if (rosterMembers.length > 0) startCalls(rosterMembers);
   }
-
   function leaveVoice() {
     voiceJoined = false;
     micMuted = false;
@@ -597,11 +584,8 @@ function detectLang() {
     peers.clear();
     for (const audio of remoteAudios.values()) audio.remove();
     remoteAudios.clear();
-    if (voiceStatus) voiceStatus.textContent = t("lobby.voiceLeft", "音声チャンネルから退出しました。");
   }
-
   if (voicePowerBtn) voicePowerBtn.addEventListener("click", () => { if (!voiceJoined) joinVoice(); else leaveVoice(); });
-
   if (micToggleBtn) micToggleBtn.addEventListener("click", () => {
     if (!voiceJoined || !localStream) return;
     micMuted = !micMuted;
@@ -630,7 +614,6 @@ function detectLang() {
     peers.set(id, pc);
     return pc;
   }
-
   async function startCalls(members) {
     if (!voiceJoined || !localStream) return;
     for (const m of members) {
@@ -642,7 +625,6 @@ function detectLang() {
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ rtc: { type: "offer", to: m.id, sdp: offer.sdp } }));
     }
   }
-
   async function handleRTC(from, rtc) {
     const { type } = rtc;
     if (type === "offer") {
@@ -665,11 +647,7 @@ function detectLang() {
   if (enableSoundBtn) {
     enableSoundBtn.addEventListener("click", () => {
       const ctx = window._audioContext;
-      if (ctx && ctx.state === "suspended") {
-        ctx.resume().then(() => { enableSoundBtn.textContent = t("lobby.enableSoundRetry", "音が出ない？もう一度有効化"); });
-      } else {
-        enableSoundBtn.textContent = t("lobby.enableSoundRetry", "音が出ない？もう一度有効化");
-      }
+      if (ctx && ctx.state === "suspended") ctx.resume();
     });
   }
 
@@ -680,34 +658,6 @@ function detectLang() {
   let mediaRecorder = null;
   let chunks = [];
   let isRecording = false;
-  let recordStartedAt = 0;
-  let lastToggleAt = 0;
-  const TOGGLE_DEBOUNCE_MS = 400;
-  const MIN_RECORD_MS = 900;
-
-  // ===== 音声録音フォーマット選択（Lucy方式） =====
-  function pickSupportedAudioMimeType() {
-    const candidates = [
-      "audio/webm;codecs=opus",
-      "audio/webm",
-      "audio/ogg;codecs=opus",
-      "audio/ogg",
-    ];
-    try {
-      if (typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function") {
-        for (const t2 of candidates) {
-          if (MediaRecorder.isTypeSupported(t2)) return t2;
-        }
-      }
-    } catch (e) {}
-    return "";
-  }
-
-  function mimeTypeToExtension(mime) {
-    const m = (mime || "").toLowerCase();
-    if (m.includes("ogg")) return "ogg";
-    return "webm";
-  }
 
   function setVoiceAskStatus(key, fallback) {
     if (!voiceAskStatus) return;
@@ -717,10 +667,8 @@ function detectLang() {
   async function startRecording() {
     if (isRecording) return;
     isRecording = true;
-    recordStartedAt = Date.now();
     chunks = [];
     setVoiceAskStatus("recording", "録音中です。もう一度押すと停止します。");
-
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
@@ -729,34 +677,21 @@ function detectLang() {
       return;
     }
 
-    const preferredMimeType = pickSupportedAudioMimeType();
-    try {
-      if (preferredMimeType) mediaRecorder = new MediaRecorder(mediaStream, { mimeType: preferredMimeType });
-      else mediaRecorder = new MediaRecorder(mediaStream);
-    } catch (e) {
-      mediaRecorder = new MediaRecorder(mediaStream);
-    }
-
-    const actualMimeType = mediaRecorder.mimeType || preferredMimeType || "audio/webm";
-    logDebug(`VoiceAsk recorder: mime=${actualMimeType}`);
-
+    mediaRecorder = new MediaRecorder(mediaStream);
     mediaRecorder.ondataavailable = (ev) => {
       if (ev.data.size > 0) chunks.push(ev.data);
     };
 
     mediaRecorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: actualMimeType });
-      logDebug(`VoiceAsk blob: type=${actualMimeType} size=${blob.size}`);
+      // ★修正: Blob作成時に明示的に audio/webm を指定して認識精度を向上
+      const blob = new Blob(chunks, { type: "audio/webm" });
       chunks = [];
-
       if (mediaStream) {
         mediaStream.getTracks().forEach((t2) => t2.stop());
         mediaStream = null;
       }
-
       if (!blob || blob.size === 0) {
         setVoiceAskStatus("micErrorMsg", "音声データが取得できませんでした。");
-        isRecording = false;
         return;
       }
 
@@ -765,29 +700,21 @@ function detectLang() {
 
       try {
         const formData = new FormData();
-        formData.append("audio", blob, `voice.${mimeTypeToExtension(actualMimeType)}`);
-        // ★lang を送る（Lucy側と揃える）
-        formData.append("lang", currentLang || "ja-JP");
+        formData.append("audio", blob, "voice.webm");
 
         const res = await fetch(STT_URL, {
           method: "POST",
           body: formData,
         });
 
-        if (!res.ok) {
-          throw new Error("STT API Error: " + res.status);
-        }
+        if (!res.ok) throw new Error("STT API Error: " + res.status);
 
         const data = await res.json();
-        const recognizedText = (data.text || "").trim();
+        const recognizedText = data.text || "";
 
         if (recognizedText) {
           if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: "chat",
-              text: recognizedText,
-              name: user || "Guest",
-            }));
+            ws.send(JSON.stringify({ type: "chat", text: recognizedText, name: user || "Guest" }));
             showThinking(t("lobby.botThinking", "Reginald が考え中です…"));
             setVoiceAskStatus("voiceAskSent", "送信しました。");
           } else {
@@ -802,65 +729,21 @@ function detectLang() {
         console.error(e);
         hideThinking();
         setVoiceAskStatus("voiceAskError", "エラーが発生しました。");
-      } finally {
-        isRecording = false;
       }
     };
-
     mediaRecorder.start();
   }
 
   function stopRecording() {
     if (!isRecording) return;
-    try {
-      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-    } catch (e) {
-      console.error(e);
-      isRecording = false;
-      hideThinking();
-      setVoiceAskStatus("voiceAskError", "エラーが発生しました。");
-    }
-  }
-
-  function handleVoiceAskToggle(ev) {
-    try {
-      ev && ev.preventDefault && ev.preventDefault();
-      ev && ev.stopPropagation && ev.stopPropagation();
-    } catch (e) {}
-
-    const now = Date.now();
-    // 二重発火（pointer/click、タップ→ゴーストクリック等）対策
-    if (now - lastToggleAt < TOGGLE_DEBOUNCE_MS) {
-      return;
-    }
-    lastToggleAt = now;
-
-    if (!isRecording) {
-      startRecording();
-      return;
-    }
-
-    // 録音開始直後に stop が走るとデータがほぼ空になり「検出なし」になりやすい
-    const elapsed = now - recordStartedAt;
-    if (elapsed < MIN_RECORD_MS) {
-      const waitMs = MIN_RECORD_MS - elapsed;
-      setVoiceAskStatus("recordTooShort", `まだ短いです（${Math.ceil(waitMs / 1000)}秒）。もう少し話してから停止します…`);
-      setTimeout(() => {
-        if (isRecording) stopRecording();
-      }, waitMs);
-      return;
-    }
-
-    stopRecording();
+    isRecording = false;
+    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
   }
 
   if (voiceAskBtn2) {
-    // pointerdown のみでトグル（クリックはゴーストになりやすい）
-    voiceAskBtn2.addEventListener("pointerdown", handleVoiceAskToggle, { passive: false });
-    // 念のため click は無効化
-    voiceAskBtn2.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    voiceAskBtn2.addEventListener("click", () => {
+      if (!isRecording) startRecording();
+      else stopRecording();
     });
   }
 
@@ -869,13 +752,6 @@ function detectLang() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       window._audioContext = ctx;
-      const resume = () => {
-        if (ctx.state === "suspended") ctx.resume();
-        window.removeEventListener("touchstart", resume);
-        window.removeEventListener("click", resume);
-      };
-      window.addEventListener("touchstart", resume);
-      window.addEventListener("click", resume);
     } catch (e) {}
   })();
 })();
