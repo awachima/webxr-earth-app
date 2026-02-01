@@ -649,6 +649,13 @@ function detectLang() {
     voiceAskStatus.textContent = t(`lobby.${key}`, fallback);
   }
 
+  function stopVoiceTracks() {
+    if (voiceMediaStream) {
+      try { voiceMediaStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+    }
+    voiceMediaStream = null;
+  }
+
   async function startRecording() {
     if (voiceIsRecording) return;
     voiceIsRecording = true;
@@ -656,7 +663,7 @@ function detectLang() {
     setVoiceAskStatus("recording", "録音中です。もう一度押すと停止します。");
     
     try {
-      // WebRTC用のlocalStreamとは別に、音声認識専用にマイクを取得
+      // Lucyの設計: WebRTC用(localStream)とは別に、音声認識専用にマイクを取得
       voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       setVoiceAskStatus("micErrorMsg", "マイクへのアクセスが拒否されました。");
@@ -665,9 +672,11 @@ function detectLang() {
     }
 
     try {
+      // 既存のMediaRecorder初期化 (Lucyと同一)
       voiceMediaRecorder = new MediaRecorder(voiceMediaStream);
     } catch (e) {
       setVoiceAskStatus("micErrorMsg", "録音機能が使えません。");
+      stopVoiceTracks();
       voiceIsRecording = false;
       return;
     }
@@ -677,21 +686,19 @@ function detectLang() {
     };
 
     voiceMediaRecorder.onstop = async () => {
-      // Lucyの設計: ブラウザが生成したmimeTypeをそのままBlobに使用
+      // Lucyのロジック: ブラウザから報告されたmimeTypeをそのままBlobに使用して互換性を確保
       const actualMimeType = voiceMediaRecorder.mimeType || "audio/webm";
       const blob = new Blob(voiceChunks, { type: actualMimeType });
       voiceChunks = [];
 
-      // 録音用ストリームを停止
-      if (voiceMediaStream) {
-        voiceMediaStream.getTracks().forEach((track) => track.stop());
-        voiceMediaStream = null;
-      }
+      // 録音用トラックのみを停止 (WebRTCには干渉しない)
+      stopVoiceTracks();
       voiceIsRecording = false;
 
       // デバッグ用サイズ確認
       console.log("Recorded Blob size:", blob.size, "bytes");
 
+      // 500バイト未満はデータ不足としてガード (Lucyのガードに近い)
       if (!blob || blob.size < 500) {
         setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした。");
         hideThinking();
@@ -704,6 +711,8 @@ function detectLang() {
       try {
         const formData = new FormData();
         formData.append("audio", blob, "voice.webm");
+        // 言語情報もLucy同様に渡す
+        formData.append("lang", currentLang || "ja-JP");
 
         const res = await fetch(STT_URL, {
           method: "POST",
@@ -758,6 +767,10 @@ function detectLang() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       window._audioContext = ctx;
+      const resume = () => {
+        if (ctx.state === "suspended") ctx.resume();
+      };
+      window.addEventListener("click", resume, { once: true });
     } catch (e) {}
   })();
 })();
