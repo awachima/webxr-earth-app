@@ -133,7 +133,7 @@ function detectLang() {
     const voiceAskBtn = $("#voiceAskBtn");
     if (voiceAskBtn) voiceAskBtn.textContent = t("lobby.voiceAskBtn", "執事に質問（音声）");
 
-    // 注意書きの多言語化
+    // ★修正: HTMLのIDに合わせて個別に適用
     const voiceOnOffHint = $("#voiceOnOffHint");
     if (voiceOnOffHint) voiceOnOffHint.textContent = t("lobby.voiceOnOffNotice", "🔊 音声はON/OFFで改善することがあります。");
     const voiceSpeakHint = $("#voiceSpeakHint");
@@ -536,7 +536,6 @@ function detectLang() {
   const voiceStatus = $("#voiceStatus");
   const voicePowerBtn = $("#voicePower");
   const micToggleBtn = $("#micToggle");
-  const voiceHintEl = $("#voiceHint");
   let localStream = null;
   const peers = new Map();
   const remoteAudios = new Map();
@@ -683,15 +682,27 @@ function detectLang() {
     };
 
     mediaRecorder.onstop = async () => {
-      // ★修正: Blob作成時に明示的に audio/webm を指定して認識精度を向上
+      // ★修正: 録音停止時にデータが蓄積されるのをわずかに待ち、サイズを確認する
+      if (chunks.length === 0) {
+        setVoiceAskStatus("micErrorMsg", "音声データが取得できませんでした。");
+        hideThinking();
+        return;
+      }
+
       const blob = new Blob(chunks, { type: "audio/webm" });
       chunks = [];
+      
+      // デバッグ用サイズ確認
+      console.log("Recorded Blob size:", blob.size, "bytes");
+
       if (mediaStream) {
         mediaStream.getTracks().forEach((t2) => t2.stop());
         mediaStream = null;
       }
-      if (!blob || blob.size === 0) {
-        setVoiceAskStatus("micErrorMsg", "音声データが取得できませんでした。");
+
+      if (blob.size < 200) {
+        setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした（短すぎます）。");
+        hideThinking();
         return;
       }
 
@@ -731,7 +742,9 @@ function detectLang() {
         setVoiceAskStatus("voiceAskError", "エラーが発生しました。");
       }
     };
-    mediaRecorder.start();
+    
+    // 修正: データを1秒ごとに細かく受け取るように指定
+    mediaRecorder.start(1000);
   }
 
   function stopRecording() {
