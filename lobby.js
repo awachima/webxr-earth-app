@@ -673,6 +673,33 @@ function detectLang() {
   let chunks = [];
   let isRecording = false;
 
+
+  // ===== 音声録音フォーマット選択（Lucy方式） =====
+  function pickSupportedAudioMimeType() {
+    // 優先順（環境により webm/ogg が変わるため）
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus",
+      "audio/ogg",
+    ];
+    try {
+      if (typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function") {
+        for (const t2 of candidates) {
+          if (MediaRecorder.isTypeSupported(t2)) return t2;
+        }
+      }
+    } catch (e) {}
+    return ""; // 未指定で作成（ブラウザ既定に任せる）
+  }
+
+  function mimeTypeToExtension(mime) {
+    const m = (mime || "").toLowerCase();
+    if (m.includes("ogg")) return "ogg";
+    return "webm";
+  }
+
+
   function setVoiceAskStatus(key, fallback) {
     if (!voiceAskStatus) return;
     voiceAskStatus.textContent = t(`lobby.${key}`, fallback);
@@ -691,14 +718,22 @@ function detectLang() {
       return;
     }
 
-    mediaRecorder = new MediaRecorder(mediaStream);
+    const preferredMimeType = pickSupportedAudioMimeType();
+    try {
+      if (preferredMimeType) mediaRecorder = new MediaRecorder(mediaStream, { mimeType: preferredMimeType });
+      else mediaRecorder = new MediaRecorder(mediaStream);
+    } catch (e) {
+      // mimeType 指定で失敗したらフォールバック
+      mediaRecorder = new MediaRecorder(mediaStream);
+    }
+    const actualMimeType = mediaRecorder.mimeType || preferredMimeType || "audio/webm";
     mediaRecorder.ondataavailable = (ev) => {
       if (ev.data.size > 0) chunks.push(ev.data);
     };
 
     // do-stt へ送信し、結果をWSで送るロジック
     mediaRecorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: "audio/webm" });
+      const blob = new Blob(chunks, { type: actualMimeType });
       chunks = [];
       if (mediaStream) {
         mediaStream.getTracks().forEach((t2) => t2.stop());
@@ -714,7 +749,7 @@ function detectLang() {
 
       try {
         const formData = new FormData();
-        formData.append("audio", blob, "voice.webm");
+        formData.append("audio", blob, `voice.${mimeTypeToExtension(actualMimeType)}`);
 
         const res = await fetch(STT_URL, {
           method: "POST",
