@@ -181,6 +181,19 @@ function detectLang() {
 
   loadLangData(currentLang);
 
+  const langSelect = $("#langSelect");
+  if (langSelect) {
+    langSelect.value = currentLang;
+    langSelect.addEventListener("change", (e) => {
+      const value = e.target.value;
+      currentLang = value;
+      try { localStorage.setItem("lang", value); } catch (e2) {}
+      if (value === "fa" || value === "he") document.documentElement.dir = "rtl";
+      else document.documentElement.dir = "ltr";
+      loadLangData(value);
+    });
+  }
+
   // ===== URL パラメータ =====
   const roomId = urlParams.get("roomId") || "default";
   const title = urlParams.get("title") || "";
@@ -518,7 +531,7 @@ function detectLang() {
     });
   }
 
-  // ===== WebRTC Voice =====
+  // ===== WebRTC Voice (ボイスチャット用常時ストリーム) =====
   const voiceStatus = $("#voiceStatus");
   const voicePowerBtn = $("#voicePower");
   const micToggleBtn = $("#micToggle");
@@ -636,7 +649,7 @@ function detectLang() {
     });
   }
 
-  // ===== 執事に質問（音声）：Lucy互換設計 =====
+  // ===== 執事に質問（音声）：Lucy互換・独立録音ロジック =====
   const voiceAskBtn2 = $("#voiceAskBtn");
   const voiceAskStatus = $("#voiceAskStatus");
   let voiceMediaStream = null;
@@ -649,7 +662,7 @@ function detectLang() {
     voiceAskStatus.textContent = t(`lobby.${key}`, fallback);
   }
 
-  function stopVoiceTracks() {
+  function stopVoiceAskTracks() {
     if (voiceMediaStream) {
       try { voiceMediaStream.getTracks().forEach(t => t.stop()); } catch (_) {}
     }
@@ -663,7 +676,7 @@ function detectLang() {
     setVoiceAskStatus("recording", "録音中です。もう一度押すと停止します。");
     
     try {
-      // Lucyの設計: WebRTC用(localStream)とは別に、音声認識専用にマイクを取得
+      // Lucyの設計: 常時通信用のlocalStreamとは別に、音声認識専用にマイクを取得
       voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       setVoiceAskStatus("micErrorMsg", "マイクへのアクセスが拒否されました。");
@@ -672,11 +685,10 @@ function detectLang() {
     }
 
     try {
-      // 既存のMediaRecorder初期化 (Lucyと同一)
       voiceMediaRecorder = new MediaRecorder(voiceMediaStream);
     } catch (e) {
       setVoiceAskStatus("micErrorMsg", "録音機能が使えません。");
-      stopVoiceTracks();
+      stopVoiceAskTracks();
       voiceIsRecording = false;
       return;
     }
@@ -686,19 +698,17 @@ function detectLang() {
     };
 
     voiceMediaRecorder.onstop = async () => {
-      // Lucyのロジック: ブラウザから報告されたmimeTypeをそのままBlobに使用して互換性を確保
+      // Lucyのロジック: ブラウザが生成したmimeTypeをそのまま使用
       const actualMimeType = voiceMediaRecorder.mimeType || "audio/webm";
       const blob = new Blob(voiceChunks, { type: actualMimeType });
       voiceChunks = [];
 
-      // 録音用トラックのみを停止 (WebRTCには干渉しない)
-      stopVoiceTracks();
+      // 録音終了時にトラックを停止（常時通信側には影響しない独立したストリーム）
+      stopVoiceAskTracks();
       voiceIsRecording = false;
 
-      // デバッグ用サイズ確認
       console.log("Recorded Blob size:", blob.size, "bytes");
 
-      // 500バイト未満はデータ不足としてガード (Lucyのガードに近い)
       if (!blob || blob.size < 500) {
         setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした。");
         hideThinking();
@@ -711,7 +721,6 @@ function detectLang() {
       try {
         const formData = new FormData();
         formData.append("audio", blob, "voice.webm");
-        // 言語情報もLucy同様に渡す
         formData.append("lang", currentLang || "ja-JP");
 
         const res = await fetch(STT_URL, {
