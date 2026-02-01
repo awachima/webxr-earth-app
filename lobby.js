@@ -105,11 +105,11 @@
   }
   setupCountdown();
 
-  // ===== チャット表示正規化 (JSON混入防止) =====
+  // ===== チャット表示正規化 (JSON混入防止修正) =====
   function normalizeChatText(rawText) {
     if (!rawText) return "";
     const trimmed = String(rawText).trim();
-    // {"type":"chat",...} という文字列が含まれている場合に中身だけ出す
+    // {"type":"chat","text":"..."} 形式が来たら text だけ取り出す
     if (trimmed.startsWith("{") && trimmed.includes('"text":')) {
       try {
         const inner = JSON.parse(trimmed);
@@ -124,7 +124,7 @@
     if (!chatLog) return;
     const div = document.createElement("div");
     div.className = "msg " + kind;
-    const body = normalizeChatText(text);
+    const body = normalizeChatText(text); // ここでJSONをクリーンにする
     div.innerHTML = body.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
@@ -143,7 +143,8 @@
 
   // ===== WebSocket 接続 =====
   let user = localStorage.getItem("nickname") || "Guest";
-  const CHAT_URL = `${WS_BASE}/ws/${encodeURIComponent(roomId)}?user=${encodeURIComponent(user)}`;
+  // クエリパラメータを維持
+  const CHAT_URL = `${WS_BASE}/ws/${encodeURIComponent(roomId)}?user=${encodeURIComponent(user)}&title=${encodeURIComponent(title)}&start=${encodeURIComponent(start)}&target=${encodeURIComponent(target)}`;
   let ws;
   let myId = null, rosterMembers = [];
 
@@ -182,16 +183,21 @@
   }
   connectWS();
 
-  $("#chatSend") && $("#chatSend").addEventListener("click", () => {
+  const sendText = () => {
     const val = $("#chatInput").value.trim();
     if (val && ws.readyState === 1) { 
-      // 既存の通信形式 {"type":"chat",...} を維持
+      // 元の通信形式を維持
       ws.send(JSON.stringify({ type: "chat", text: val, name: user })); 
       $("#chatInput").value = ""; 
     }
+  };
+
+  $("#chatSend") && $("#chatSend").addEventListener("click", sendText);
+  $("#chatInput") && $("#chatInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendText();
   });
 
-  // ===== WebRTC / 音声入力 (省略なし・既存ロジック維持) =====
+  // ===== WebRTC (既存機能維持) =====
   let localStream = null, voiceJoined = false;
   const peers = new Map(), remoteAudios = new Map();
 
@@ -236,6 +242,7 @@
     else if (rtc.type === "candidate") pc.addIceCandidate(new RTCIceCandidate(rtc.candidate));
   }
 
+  // ===== 音声入力 (修正) =====
   let vRec = null, vIsRec = false, vWasOn = false, vStream = null;
   async function startAsk() {
     if (vIsRec) return;
@@ -259,6 +266,7 @@
         try {
           const fd = new FormData();
           fd.append("audio", blob, "voice.webm");
+          // API_BASE/voice へ送信
           const res = await fetch(`${API_BASE}/voice?lang=${currentLang}`, { method: "POST", body: fd });
           const data = await res.json();
           if (data.ok) { $("#voiceAskStatus").textContent = "認識しました"; } 
@@ -270,5 +278,10 @@
     } catch (e) { vIsRec = false; if (vWasOn) joinVoice(); }
   }
   $("#voiceAskBtn") && $("#voiceAskBtn").addEventListener("click", () => vIsRec ? vRec.stop() : startAsk());
+
+  // URLコピー機能
+  $("#copyRoomUrl") && $("#copyRoomUrl").addEventListener("click", () => {
+    navigator.clipboard.writeText(location.href).then(() => alert("URLをコピーしました"));
+  });
 
 })();
