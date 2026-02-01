@@ -1,4 +1,4 @@
-// lobby.js - 最終完全版（履歴復旧・エンドポイント正常化・排他制御統合）
+// lobby.js - 真の完全版: テキスト出力正常化・履歴復旧・物理排他マイク制御
 (function () {
   // ===== 共通ヘルパー・定数 =====
   const $ = (s) => document.querySelector(s);
@@ -6,7 +6,7 @@
   const O = "meetups-owners";
   const NEGATIVE_LIMIT_MS = 20 * 60 * 1000;
 
-  // 正しい STT エンドポイント
+  // 正しい STT エンドポイント (lucy-recommend は使用しない)
   const STT_URL = "https://do-stt.awachima7.workers.dev";
 
   const readStore = () => JSON.parse(localStorage.getItem(S) || "[]");
@@ -23,10 +23,6 @@
     const lower = (navLang || "en").toLowerCase();
     if (lower.startsWith("ja")) return "ja-JP";
     if (lower.startsWith("en")) return "en";
-    if (lower.startsWith("zh")) return "zh";
-    if (lower.startsWith("fa")) return "fa";
-    if (lower.startsWith("hi")) return "hi";
-    if (lower.startsWith("he") || lower.startsWith("iw")) return "he";
     return "en";
   }
 
@@ -36,9 +32,9 @@
   let currentLang = (function () {
     try {
       const urlLang = urlParams.get("lang");
-      if (urlLang) return urlLang === "ja" ? "ja-JP" : (urlLang === "iw" ? "he" : urlLang);
+      if (urlLang) return urlLang === "ja" ? "ja-JP" : urlLang;
       const saved = localStorage.getItem("lang");
-      if (saved) return saved === "ja" ? "ja-JP" : (saved === "iw" ? "he" : saved);
+      if (saved) return saved === "ja" ? "ja-JP" : saved;
     } catch (e) {}
     return detectLang();
   })();
@@ -48,8 +44,6 @@
     root.lang = currentLang || "en";
     root.dir = (currentLang === "fa" || currentLang === "he") ? "rtl" : "ltr";
   })();
-
-  let chatStatusMode = "initial";
 
   function t(path, fallback) {
     const root = window.i18n || {};
@@ -68,32 +62,21 @@
       const el = $(`#${id}`);
       if (el) el.textContent = t(`lobby.${id}`, el.textContent);
     });
-
-    const chatStatus = $("#chatStatus");
-    if (chatStatus) {
-      if (chatStatusMode === "initial") chatStatus.textContent = t("lobby.chatInitial", "接続していません");
-      else if (chatStatusMode === "connected") chatStatus.textContent = t("lobby.chatConnected", "接続しました");
-      else if (chatStatusMode === "reconnecting") chatStatus.textContent = t("lobby.chatReconnecting", "再接続中…");
-      else if (chatStatusMode === "error") chatStatus.textContent = t("lobby.chatError", "エラー");
-    }
-    if ($("#chatInput")) $("#chatInput").placeholder = t("lobby.chatPlaceholder", "メッセージを入力…");
   }
 
   async function loadLangData(lang) {
     let code = lang || "en";
     if (code === "ja") code = "ja-JP";
-    if (code === "iw") code = "he";
-    let url = `./lang/${code.startsWith("ja") ? "ja" : (code.startsWith("zh") ? "zh" : (code === "fa" ? "fa" : (code === "hi" ? "hi" : (code === "he" ? "he" : "en"))))}.json`;
+    let url = `./lang/${code.startsWith("ja") ? "ja" : "en"}.json`;
     try {
       const res = await fetch(url, { cache: "no-cache" });
       window.i18n = res.ok ? await res.json() : {};
     } catch (e) { window.i18n = {}; }
     applyLobbyTexts();
   }
-
   loadLangData(currentLang);
 
-  // ===== メタ情報 =====
+  // ===== URL メタ情報 =====
   const roomId = urlParams.get("roomId") || "default";
   const title = urlParams.get("title") || "";
   const start = urlParams.get("start") || "";
@@ -134,6 +117,19 @@
     window.open(target, "_blank", "noopener,noreferrer");
   });
 
+  // ===== チャット表示正規化ヘルパー =====
+  function normalizeChatText(rawText) {
+    if (!rawText) return "";
+    const trimmed = String(rawText).trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        const inner = JSON.parse(trimmed);
+        if (inner && typeof inner.text === "string") return inner.text;
+      } catch (e) {}
+    }
+    return rawText;
+  }
+
   // ===== Chat & WebSocket =====
   let user = localStorage.getItem("nickname") || "Guest";
   const chatLog = $("#chatLog");
@@ -141,7 +137,8 @@
     if (!chatLog) return;
     const div = document.createElement("div");
     div.className = "msg " + kind;
-    div.innerHTML = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
+    const body = normalizeChatText(text); // JSON混入を防ぐ
+    div.innerHTML = body.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
     chatLog.appendChild(div);
     chatLog.scrollTop = chatLog.scrollHeight;
   }
@@ -164,14 +161,13 @@
 
   function connectWS() {
     ws = new WebSocket(CHAT_URL);
-    ws.onopen = () => { chatStatusMode = "connected"; applyLobbyTexts(); };
-    ws.onclose = () => { chatStatusMode = "reconnecting"; applyLobbyTexts(); setTimeout(connectWS, 2000); };
+    ws.onopen = () => { console.log("WS Connected"); };
+    ws.onclose = () => { setTimeout(connectWS, 2000); };
     ws.onmessage = (ev) => {
       const data = JSON.parse(ev.data);
       if (data.type === "ping") return ws.send(JSON.stringify({ type: "pong" }));
       if (data.rtc) return handleRTC(data.rtc.from, data.rtc);
       
-      // ★履歴読み込み処理の復旧
       if (data.sys) {
         if (data.type === "welcome") myId = data.id;
         if (data.type === "history" && Array.isArray(data.messages)) {
@@ -200,7 +196,11 @@
 
   $("#chatSend") && $("#chatSend").addEventListener("click", () => {
     const val = $("#chatInput").value.trim();
-    if (val && ws.readyState === 1) { ws.send(JSON.stringify({ type: "chat", text: val, name: user })); $("#chatInput").value = ""; }
+    if (val && ws.readyState === 1) { 
+      // ★デバッグJSONを付加せず、純粋なテキストのみを送信
+      ws.send(JSON.stringify({ type: "chat", text: val, name: user })); 
+      $("#chatInput").value = ""; 
+    }
   });
 
   // ===== WebRTC (Voice Chat) =====
@@ -267,19 +267,27 @@
         if (vStream) { vStream.getTracks().forEach(t => t.stop()); vStream = null; }
         vIsRec = false;
         if (vWasOn) joinVoice();
+        
+        // ★閾値を 2000 バイトに維持（実データが 30KB あるならここを通る）
         if (blob.size < 2000) { 
-          $("#voiceAskStatus").textContent = "認識できませんでした (Size: " + blob.size + ")"; 
+          $("#voiceAskStatus").textContent = "音声が短すぎます (Size: " + blob.size + ")"; 
           return; 
         }
+
         $("#voiceAskStatus").textContent = "送信中...";
         try {
           const fd = new FormData();
           fd.append("audio", blob, "voice.webm");
           fd.append("lang", currentLang);
+          // ★正しいエンドポイントへ送信
           const res = await fetch(STT_URL, { method: "POST", body: fd });
           const data = await res.json();
-          if (data.text) ws.send(JSON.stringify({ type: "chat", text: data.text, name: user }));
-          else $("#voiceAskStatus").textContent = "認識に失敗しました";
+          if (data.text) {
+            ws.send(JSON.stringify({ type: "chat", text: data.text, name: user }));
+            $("#voiceAskStatus").textContent = "送信しました";
+          } else {
+            $("#voiceAskStatus").textContent = "認識できませんでした";
+          }
         } catch (e) { $("#voiceAskStatus").textContent = "通信エラー"; }
       };
       vRec.start(100);
