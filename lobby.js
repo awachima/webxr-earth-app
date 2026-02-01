@@ -531,7 +531,7 @@ function detectLang() {
     });
   }
 
-  // ===== WebRTC Voice =====
+  // ===== WebRTC Voice (ボイスチャット用常時ストリーム) =====
   const voiceStatus = $("#voiceStatus");
   const voicePowerBtn = $("#voicePower");
   const micToggleBtn = $("#micToggle");
@@ -649,11 +649,11 @@ function detectLang() {
     });
   }
 
-  // ===== 執事に質問（音声）：Lucy方式・競合回避版 =====
+  // ===== 執事に質問（音声）：Lucy互換・物理マイク競合回避設計 =====
   const voiceAskBtn2 = $("#voiceAskBtn");
   const voiceAskStatus = $("#voiceAskStatus");
-  let voiceAskStream = null;
-  let voiceAskRecorder = null;
+  let voiceAskMediaStream = null;
+  let voiceAskMediaRecorder = null;
   let voiceAskChunks = [];
   let voiceAskIsRecording = false;
 
@@ -662,14 +662,18 @@ function detectLang() {
     voiceAskStatus.textContent = t(`lobby.${key}`, fallback);
   }
 
-  // 重要: マイクを物理的にOFFにするためのクリーンアップ関数
+  // 録音用ストリームを物理的に遮断してマイクを完全に解放する関数
   function stopVoiceAskTracks() {
-    if (voiceAskStream) {
+    if (voiceAskMediaStream) {
       try {
-        voiceAskStream.getTracks().forEach(t => t.stop());
-      } catch (_) {}
+        voiceAskMediaStream.getTracks().forEach(track => {
+          track.stop(); // 物理的にマイクをOFFにする
+        });
+      } catch (e) {
+        console.warn("Track stop error:", e);
+      }
     }
-    voiceAskStream = null;
+    voiceAskMediaStream = null;
   }
 
   async function startRecording() {
@@ -679,8 +683,9 @@ function detectLang() {
     setVoiceAskStatus("recording", "録音中です。もう一度押すと停止します。");
     
     try {
-      // 1. 録音のたびに新しくマイクを取得し、独立させる (Lucyと同じ)
-      voiceAskStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // 1. 録音のたびに新しくマイクを取得 (Lucyと同じ方式)
+      // WebRTC用の localStream とは変数レベルで完全に分離
+      voiceAskMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       setVoiceAskStatus("micErrorMsg", "マイクへのアクセスが拒否されました。");
       voiceAskIsRecording = false;
@@ -688,8 +693,8 @@ function detectLang() {
     }
 
     try {
-      // 2. ブラウザがサポートするデフォルトのMediaRecorderを使用
-      voiceAskRecorder = new MediaRecorder(voiceAskStream);
+      // 2. ブラウザが推奨するデフォルト形式で MediaRecorder を初期化
+      voiceAskMediaRecorder = new MediaRecorder(voiceAskMediaStream);
     } catch (e) {
       setVoiceAskStatus("micErrorMsg", "録音機能が使えません。");
       stopVoiceAskTracks();
@@ -697,24 +702,34 @@ function detectLang() {
       return;
     }
 
-    voiceAskRecorder.ondataavailable = (ev) => {
+    voiceAskMediaRecorder.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) voiceAskChunks.push(ev.data);
     };
 
-    voiceAskRecorder.onstop = async () => {
-      // 3. ブラウザが実際に生成したmimeTypeをそのまま使ってデコードエラーを防ぐ (Lucyと同じ)
-      const actualMimeType = voiceAskRecorder.mimeType || "audio/webm";
+    voiceAskRecorderOnStop(); // 終了イベントの登録
+    
+    // 3. データを100msごとに細かく受け取る (Lucyの安定化ロジック)
+    // これにより、停止ボタンを押した瞬間の「データ空っぽ」状態を回避
+    voiceAskMediaRecorder.start(100);
+  }
+
+  function voiceAskRecorderOnStop() {
+    if (!voiceAskMediaRecorder) return;
+
+    voiceAskMediaRecorder.onstop = async () => {
+      // 4. ブラウザが実際に生成したmimeTypeをそのままBlobに使用
+      const actualMimeType = voiceAskMediaRecorder.mimeType || "audio/webm";
       const blob = new Blob(voiceAskChunks, { type: actualMimeType });
       voiceAskChunks = [];
 
-      // 重要: 録音用ストリームのみを停止してマイクを解放する
+      // 5. 録音終了時にストリームを即座に破棄してマイクを解放
       stopVoiceAskTracks();
       voiceAskIsRecording = false;
 
-      // デバッグログ: ブラウザ側でバイナリが作られているか確認用
-      console.log("Recorded Blob:", blob.size, "bytes", "Type:", actualMimeType);
+      // デバッグ用サイズ確認
+      console.log("Recorded Blob Created:", blob.size, "bytes", "Type:", actualMimeType);
 
-      // 1000バイト以下はデータ不足（ヘッダーのみ等）としてガード
+      // 0.4KB（400バイト程度）はデータ不足としてガード
       if (!blob || blob.size < 1000) {
         setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした。");
         hideThinking();
@@ -758,15 +773,12 @@ function detectLang() {
         setVoiceAskStatus("voiceAskError", "エラーが発生しました。");
       }
     };
-    
-    // 4. Lucyと同じく100msごとにデータを強制的に収集して安定させる
-    voiceAskRecorder.start(100);
   }
 
   function stopRecording() {
     if (!voiceAskIsRecording) return;
-    if (voiceAskRecorder && voiceAskRecorder.state !== "inactive") {
-      voiceAskRecorder.stop();
+    if (voiceAskMediaRecorder && voiceAskMediaRecorder.state !== "inactive") {
+      voiceAskMediaRecorder.stop();
     }
   }
 
@@ -777,15 +789,17 @@ function detectLang() {
     });
   }
 
-  // 音声コンテキストの初期化（Lucy方式: ユーザーの明示的なクリック操作をトリガーにする）
+  // 音声コンテキスト初期化（ユーザーの明示的なクリック操作で行う）
   (function initAudioContextOnce() {
     const handler = () => {
       if (!window._audioContext) {
         try {
           const ctx = new (window.AudioContext || window.webkitAudioContext)();
           window._audioContext = ctx;
-          if (ctx.state === "suspended") ctx.resume();
         } catch (e) {}
+      }
+      if (window._audioContext && window._audioContext.state === "suspended") {
+        window._audioContext.resume();
       }
       window.removeEventListener("click", handler);
     };
