@@ -5,7 +5,7 @@ const O = "meetups-owners";
 const NEGATIVE_LIMIT_MS = 20 * 60 * 1000;
 
 // ★重要: 送信先を新サーバー (do-stt) に変更
-const STT_URL = "https://do-stt.awachima7.workers.dev";
+const STT_URL = "https://do-stt.awachima7.workers.dev?debug=1";
 
 const readStore = () => JSON.parse(localStorage.getItem(S) || "[]");
 const writeStore = (arr) => localStorage.setItem(S, JSON.stringify(arr));
