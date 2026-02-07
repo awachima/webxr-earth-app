@@ -132,15 +132,15 @@
       border: 1px solid rgba(0,0,0,0.10);
       background: rgba(255,255,255,0.65);
     }
-.tag-filter-col{
-  flex: 1 1 0;            /* ← 3列で横幅を分け合う */
-  min-width: 0;           /* ← 長い文字で崩れない保険 */
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.08);
-  background: rgba(255,255,255,0.85);
-  padding: 10px;
-  overflow: auto;
-}
+    .tag-filter-col{
+      flex: 1 1 0;            /* ← 3列で横幅を分け合う */
+      min-width: 0;           /* ← 長い文字で崩れない保険 */
+      border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(255,255,255,0.85);
+      padding: 10px;
+      overflow: auto;
+    }
     .tag-filter-col-title{
       font-weight: 700;
       font-size: 13px;
@@ -247,20 +247,21 @@
       padding: 12px 14px 14px;
       gap: 14px;
     }
-    .column{
-      flex: 0 0 260px;
-      width: 260px;
-      border: 1px solid rgba(0,0,0,0.08);
-      border-radius: 12px;
-      padding: 10px 10px;
-      background: rgba(255,255,255,0.96);
+.column{
+  flex: 1 1 0;     /* ← 3列で幅を分け合う */
+  min-width: 0;    /* ← 長文でも崩れない保険 */
 
-      /* ★ 枠の高さ不足対策（元: min-height:300px） */
-      min-height: 360px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 12px;
+  padding: 10px 10px;
+  background: rgba(255,255,255,0.96);
 
-      /* ★ 枠内で縦スクロールできるように（はみ出し防止） */
-      overflow: auto;
-    }
+  /* ★ 枠の高さ不足対策（元: min-height:300px） */
+  min-height: 360px;
+
+  /* ★ 枠内で縦スクロールできるように（はみ出し防止） */
+  overflow: auto;
+}
     .column h3{
       margin: 0 0 8px 0;
       font-size: 14px;
