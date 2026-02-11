@@ -33,25 +33,20 @@
         if(!v) return null;
         const s = String(v).trim();
         if(!s) return null;
-        // 想定外の値が入っても壊れないよう軽く正規化
         const low = s.toLowerCase();
-        // このプロジェクトで使っている候補に合わせる
         const allow = ["ja","en","zh","fa","hi","he"];
         if(allow.includes(low)) return low;
-        // 例: en-US -> en / zh-CN -> zh
         const base = low.split("-")[0];
         if(allow.includes(base)) return base;
-        return low; // それ以外はそのまま
+        return low;
       }
 
-      // 既に保存されている言語を優先して拾う（どのキーでもOK）
       let picked = null;
       for(const k of LANG_KEYS){
         const v = normalizeLang(safeGet(k));
         if(v){ picked = v; break; }
       }
 
-      // 何もなければ HTML の lang / ブラウザ言語から決める
       if(!picked){
         const htmlLang = normalizeLang(document.documentElement.getAttribute("lang"));
         if(htmlLang) picked = htmlLang;
@@ -61,15 +56,11 @@
         picked = nav || "ja";
       }
 
-      // ★ ここが重要：起動直後に全部のキーを同じ言語で揃える（後続JSが参照するキーを問わない）
       for(const k of LANG_KEYS){
         safeSet(k, picked);
       }
 
-      // HTML属性も同期
       document.documentElement.setAttribute("lang", picked);
-
-      // 参照用にグローバルにも置く（必要なら他JSが使える）
       window.__DD_LANG = picked;
     })();
   </script>
@@ -78,13 +69,13 @@
 
     /* ===== Earth frame: rounded corners cleanup ===== */
     #earthFrameWrap{
-      border-radius: 22px;   /* 既存の角丸と同じ値に調整してOK */
-      overflow: hidden;      /* ← これが本命：中身(iframe/canvas)を角丸で切り抜く */
-      background: #fff;      /* ← 縁の混色(汚れ)を安定させる */
+      border-radius: 22px;
+      overflow: hidden;
+      background: #fff;
     }
 
     #webxr-iframe{
-      display: block;        /* ← 余計な隙間/にじみ防止 */
+      display: block;
       width: 100%;
       height: 100%;
       border: 0;
@@ -111,11 +102,6 @@
     }
     .tag-filter-count{ opacity: 0.8; }
 
-    /* ★ PCで横スクロールが最初から出ないように、少し横幅を広げる
-       - 列幅固定(260px×3)は維持
-       - 画面が狭い場合は calc(100vw - 32px) で自動縮小
-       - スマホでは必要に応じて横スクロールが出る（機能は残す）
-    */
     .tag-filter-modal{
       width: min(920px, calc(100vw - 32px));
       min-width: 780px;
@@ -130,27 +116,21 @@
     }
     .tag-filter-spacer{ flex: 1; }
 
-    /* ★ 左寄せで列を詰めて並べる（均等割りしない）
-       ★ 高さを増やして、項目が枠からはみ出しにくくする
-    */
     .tag-filter-columns{
       display: flex;
       align-items: stretch;
-      justify-content: flex-start; /* ← 常に左寄せ */
+      justify-content: flex-start;
       gap: 10px;
-
-      /* ここを増量（元: min(60vh, 520px)） */
       height: min(70vh, 620px);
-
-      overflow: auto; /* ← 横/縦スクロール機能は維持（スマホで必要） */
+      overflow: auto;
       padding: 8px;
       border-radius: 14px;
       border: 1px solid rgba(0,0,0,0.10);
       background: rgba(255,255,255,0.65);
     }
     .tag-filter-col{
-      flex: 1 1 0;            /* ← 3列で横幅を分け合う */
-      min-width: 0;           /* ← 長い文字で崩れない保険 */
+      flex: 1 1 0;
+      min-width: 0;
       border-radius: 12px;
       border: 1px solid rgba(0,0,0,0.08);
       background: rgba(255,255,255,0.85);
@@ -185,10 +165,8 @@
       cursor: pointer;
     }
 
-    /* make backdrop/modal appear above iframe reliably */
     #tagFilterBackdrop{ z-index: 10000; }
 
-    /* ===== Tag Filter Modal (multi-column) ===== */
     .backdrop{
       position: fixed;
       inset: 0;
@@ -207,7 +185,7 @@
     .backdrop.open{ display:block; }
 
     .tag-filter-modal{
-      position: absolute;   /* ★ fixedだとbackdrop側の横スクロールが効きにくいので absolute */
+      position: absolute;
       top: 0;
       left: 0;
       margin: 0;
@@ -216,9 +194,9 @@
       box-shadow: 0 10px 28px rgba(0,0,0,0.18);
       border-radius: 14px;
 
-      width: 920px;         /* ★通常幅 */
-      min-width: 780px;     /* ★最低幅 */
-      max-width: none;      /* ★画面幅に縛らない（はみ出しは横スクロールで見せる） */
+      width: 920px;
+      min-width: 780px;
+      max-width: none;
 
       min-height: 440px;
       display: flex;
@@ -271,18 +249,15 @@
       gap: 14px;
     }
     .column{
-      flex: 1 1 0;     /* ← 3列で幅を分け合う */
-      min-width: 0;    /* ← 長文でも崩れない保険 */
+      flex: 1 1 0;
+      min-width: 0;
 
       border: 1px solid rgba(0,0,0,0.08);
       border-radius: 12px;
       padding: 10px 10px;
       background: rgba(255,255,255,0.96);
 
-      /* ★ 枠の高さ不足対策（元: min-height:300px） */
       min-height: 360px;
-
-      /* ★ 枠内で縦スクロールできるように（はみ出し防止） */
       overflow: auto;
     }
     .column h3{
@@ -316,7 +291,6 @@
       gap:10px;
     }
 
-    /* ===== Modal header/body (match your markup) ===== */
     .modal.tag-filter-modal > header{
       display:flex;
       align-items:center;
@@ -344,7 +318,6 @@
       padding: 12px 14px 14px;
     }
 
-    /* ===== toolbar buttons ===== */
     .modal.tag-filter-modal .btn{
       border: 1px solid rgba(0,0,0,0.14);
       background: #fff;
@@ -386,8 +359,8 @@
       padding: 10px 12px;
       border-radius: 14px;
       line-height: 1.55;
-      white-space: pre-wrap;     /* 改行維持 */
-      word-break: break-word;    /* 長いURL/単語対策 */
+      white-space: pre-wrap;
+      word-break: break-word;
       box-shadow: 0 1px 2px rgba(0,0,0,0.06);
       border: 1px solid rgba(0,0,0,0.06);
       background: #fff;
@@ -548,12 +521,7 @@
         </div>
       </div>
 
-      <div
-        class="recommend-input-row"
-        style="display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; margin-bottom:12px;"
-      >
-
-      <!-- ★ バブルUIの土台：recommend.js側を次に差し替えると、この中がバブルで描画されます -->
+      <!-- ✅ 会話ログは「入力行の外」に置く（これが崩れ防止の本命） -->
       <div
         id="recommendChat"
         class="chat-log"
@@ -562,12 +530,17 @@
         aria-relevant="additions"
       ></div>
 
+      <!-- ✅ 入力欄＋送信ボタンはこの行だけにする -->
+      <div
+        class="recommend-input-row"
+        style="display:flex; flex-wrap:nowrap; gap:8px; align-items:center; margin-bottom:12px;"
+      >
         <input
           id="recommendInput"
           type="text"
           placeholder="例：ツアーを探してます"
           style="
-            flex:1 1 240px;
+            flex:1 1 auto;
             min-width:0;
             padding:8px 10px;
             border-radius:8px;
@@ -585,17 +558,19 @@
         </button>
       </div>
 
-      <div class="recommend-voice-ask" style="margin-bottom:12px; position: relative;">
+      <!-- ✅ 音声 -->
+      <div class="recommend-voice-ask" style="margin-bottom:12px;">
         <button id="lucyVoiceAskBtn" class="btn ghost" type="button">
           Lucyに質問（音声）
         </button>
 
-        <div id="lucyVoiceAskStatus" class="status"
-             style="position: absolute; top: 40px; left: 0; width: 100%; pointer-events: none; font-size: 0.9em; line-height: 1.2; color: #e65100;"></div>
+        <!-- ステータス表示用（必要なら recommend.js がここに文言を入れる） -->
+        <div
+          id="lucyVoiceAskStatus"
+          class="status"
+          style="margin-top:6px; font-size:0.9em; line-height:1.2; color:#e65100;"
+        ></div>
       </div>
-
-
-
 
     </section>
 
@@ -684,15 +659,11 @@
 
   <script>
     (function(){
-      // Check if user agent suggests Meta Quest or other VR headsets
       const ua = navigator.userAgent;
       const isQuest = ua.indexOf("Quest") !== -1 || ua.indexOf("Oculus") !== -1;
-
       const isAndroid = ua.indexOf("Android") !== -1;
 
       if (isQuest || isAndroid) {
-        // Force recommend.js to use "server" mode (MediaRecorder -> /voice endpoint)
-        // instead of "auto" (which tries SpeechRecognition first)
         window.__LUCY_VOICE_MODE = "server";
         console.log("Quest/Android detected: Force voice mode to 'server'");
       }
