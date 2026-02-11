@@ -5,7 +5,7 @@ const O = "meetups-owners";
 const NEGATIVE_LIMIT_MS = 20 * 60 * 1000;
 
 // ★重要: 送信先を新サーバー (do-stt) に変更
-const STT_URL = "https://do-stt.awachima7.workers.dev?debug=1";
+const STT_URL = "https://do-stt.awachima7.workers.dev";
 
 const readStore = () => JSON.parse(localStorage.getItem(S) || "[]");
 const writeStore = (arr) => localStorage.setItem(S, JSON.stringify(arr));
@@ -673,9 +673,58 @@ function detectLang() {
   let chunks = [];
   let isRecording = false;
 
+  // ★無音判定用（RMS）
+  // 目安: -45dB〜-50dBくらいを無音扱いにしたい → RMSでだいたい 0.003〜0.005 前後
+  // 実機で微調整しやすいように定数化
+  const SILENCE_RMS_THRESHOLD = 0.004;   // 小さめの声は拾う / 無音は落とす
+  const MIN_AUDIO_MS = 350;             // 極短すぎる録音は無音扱い（誤爆防止）
+
   function setVoiceAskStatus(key, fallback) {
     if (!voiceAskStatus) return;
     voiceAskStatus.textContent = t(`lobby.${key}`, fallback);
+  }
+
+  function setVoiceAskBtnLabelRecording(on) {
+    if (!voiceAskBtn2) return;
+    if (on) voiceAskBtn2.textContent = t("lobby.voiceAskStop", "録音停止");
+    else voiceAskBtn2.textContent = t("lobby.voiceAskBtn", "執事に質問（音声）");
+  }
+
+  async function computeRmsFromWebmBlob(blob) {
+    // decodeAudioDataはwebmでもだいたい通るが、環境によって失敗することがある
+    // 失敗時は null を返して上位でフォールバックする
+    try {
+      const ab = await blob.arrayBuffer();
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return null;
+      const ctx = new AudioCtx();
+      const audioBuffer = await ctx.decodeAudioData(ab.slice(0));
+      // すぐ閉じる（リーク防止）
+      try { await ctx.close(); } catch (e) {}
+
+      const sr = audioBuffer.sampleRate || 48000;
+      const len = audioBuffer.length || 0;
+      const durationMs = sr && len ? (len / sr) * 1000 : 0;
+
+      // 1chでRMS（複数chなら平均）
+      let sumSq = 0;
+      let count = 0;
+
+      const channels = audioBuffer.numberOfChannels || 1;
+      for (let ch = 0; ch < channels; ch++) {
+        const data = audioBuffer.getChannelData(ch);
+        for (let i = 0; i < data.length; i++) {
+          const v = data[i];
+          sumSq += v * v;
+        }
+        count += data.length;
+      }
+      const rms = count ? Math.sqrt(sumSq / count) : 0;
+
+      return { rms, durationMs };
+    } catch (e) {
+      return null;
+    }
   }
 
   async function startRecording() {
@@ -683,11 +732,14 @@ function detectLang() {
     isRecording = true;
     chunks = [];
     setVoiceAskStatus("recording", "録音中です。もう一度押すと停止します。");
+    setVoiceAskBtnLabelRecording(true);
+
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       setVoiceAskStatus("micErrorMsg", "マイクへのアクセスが拒否されました。");
       isRecording = false;
+      setVoiceAskBtnLabelRecording(false);
       return;
     }
 
@@ -700,13 +752,44 @@ function detectLang() {
     mediaRecorder.onstop = async () => {
       const blob = new Blob(chunks, { type: "audio/webm" });
       chunks = [];
+      setVoiceAskBtnLabelRecording(false);
+
       if (mediaStream) {
         mediaStream.getTracks().forEach((t2) => t2.stop());
         mediaStream = null;
       }
+
       if (!blob || blob.size === 0) {
         setVoiceAskStatus("micErrorMsg", "音声データが取得できませんでした。");
         return;
+      }
+
+      // ★ここが本題：送信前に“無音ゲート”
+      // decodeに成功したらRMSで判定。失敗したら「極短 or かなり小さいsize」で保険判定。
+      const rmsInfo = await computeRmsFromWebmBlob(blob);
+
+      if (rmsInfo) {
+        const { rms, durationMs } = rmsInfo;
+        // 極短い録音は無音扱い（押し間違い等）
+        if (durationMs && durationMs < MIN_AUDIO_MS) {
+          setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした。");
+          hideThinking();
+          return;
+        }
+        // RMSが閾値未満なら送らない（これで“えっと…”生成が止まる）
+        if (rms < SILENCE_RMS_THRESHOLD) {
+          setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした。");
+          hideThinking();
+          return;
+        }
+      } else {
+        // decodeできない環境向けの最低限フォールバック（完全には守れないが誤爆は大きく減る）
+        // 無音webmでもそこそこサイズが出ることがあるので、短すぎ・小さすぎだけ弾く
+        if (blob.size < 7000) {
+          setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした。");
+          hideThinking();
+          return;
+        }
       }
 
       setVoiceAskStatus("sending", "音声を認識中…");
@@ -715,6 +798,8 @@ function detectLang() {
       try {
         const formData = new FormData();
         formData.append("audio", blob, "voice.webm");
+        // ★do-stt は lang を受け取れるので渡す（ヒント）
+        formData.append("lang", currentLang || "en");
 
         const res = await fetch(STT_URL, {
           method: "POST",
@@ -726,7 +811,7 @@ function detectLang() {
         }
 
         const data = await res.json();
-        const recognizedText = data.text || "";
+        const recognizedText = (data && typeof data.text === "string") ? data.text.trim() : "";
 
         if (recognizedText) {
           // 2. チャットサーバに送信 (これでReginaldが反応する)
@@ -743,7 +828,7 @@ function detectLang() {
             hideThinking();
           }
         } else {
-          // ★修正: 無音時は「エラー」ではなく「音声が検出されませんでした」と表示
+          // 無音や認識失敗時
           setVoiceAskStatus("voiceAskNoSpeech", "音声が検出されませんでした。");
           hideThinking();
         }
@@ -755,12 +840,14 @@ function detectLang() {
         setVoiceAskStatus("voiceAskError", "エラーが発生しました。");
       }
     };
+
     mediaRecorder.start();
   }
 
   function stopRecording() {
     if (!isRecording) return;
     isRecording = false;
+    setVoiceAskStatus("stopping", "停止中…");
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
   }
 
