@@ -209,6 +209,8 @@ const mStartFallback = $('#mStartFallback');
 const mMonth = $('#mMonth'), mDay = $('#mDay'), mHour = $('#mHour'), mMinute = $('#mMinute');
 const statusMsg=$('#statusMsg');
 const submit=$('#submit'), duplicate=$('#duplicate'), delBtn=$('#delete');
+let isSubmitting = false; // 二重送信防止
+
 
 const mEventTypeRadios = document.querySelectorAll("input[name='mEventType']");
 const mPrice = $('#mPrice');
@@ -519,6 +521,9 @@ function composeStartISO(){
 }
 
 async function onSubmit(){
+  // 二重送信防止（作成ボタン連打で複数作成されるのを防ぐ）
+  if (isSubmitting) return;
+
   let roomId=editingRoomId, target=editingTarget;
   const title=(mTitle.value||'Meetup').trim();
   const limit=parseInt(mLimit.value,10)||10;
@@ -541,45 +546,65 @@ async function onSubmit(){
     price = mPrice.value.trim();
   }
 
-  if(mode==='create'){
-    target=(mTarget.value||'').trim();
-    if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
-      showUrlAlert();
-      return;
+  // ここから送信処理（ボタン無効化）
+  isSubmitting = true;
+  const prevSubmitText = submit ? submit.textContent : '';
+  try{
+    if (submit){
+      submit.disabled = true;
+      submit.setAttribute('aria-busy', 'true');
+      submit.textContent = (mode==='create') ? (prevSubmitText + '...') : (prevSubmitText + '...');
     }
-    roomId=uuid();
-    const ownersMap=readOwners();
-    ownersMap[roomId]=randKey();
-    writeOwners(ownersMap);
+    if (duplicate) duplicate.disabled = true;
+    if (delBtn) delBtn.disabled = true;
+
+    if(mode==='create'){
+      target=(mTarget.value||'').trim();
+      if (!target.toLowerCase().startsWith('https://dokodemodoors.com/')) {
+        // URLが不正なら送信解除して戻す
+        showUrlAlert();
+        return;
+      }
+      roomId=uuid();
+      const ownersMap=readOwners();
+      ownersMap[roomId]=randKey();
+      writeOwners(ownersMap);
+    }
+
+    const prev = readStore().find(x=>x.roomId===roomId);
+    const nowIso = new Date().toISOString();
+    const item={
+      roomId,
+      title,
+      start: startISO,
+      limit: String(limit),
+      target,
+      updatedAt: nowIso,
+      createdAt: prev?.createdAt || nowIso,
+      eventType,
+      price
+    };
+
+    upsertCard(item);
+    persist(item);
+    await postRegistry(item);
+
+    // 作成／更新が完了したらモーダルを閉じる
+    closeModal();
+
+  }finally{
+    // 送信状態の解除（次に開いた時のために戻す）
+    isSubmitting = false;
+    if (submit){
+      submit.disabled = false;
+      submit.removeAttribute('aria-busy');
+      submit.textContent = prevSubmitText || submit.textContent;
+    }
+    if (duplicate) duplicate.disabled = false;
+    if (delBtn) delBtn.disabled = false;
   }
-
-  const prev = readStore().find(x=>x.roomId===roomId);
-  const nowIso = new Date().toISOString();
-  const item={
-    roomId,
-    title,
-    start: startISO,
-    limit: String(limit),
-    target,
-    updatedAt: nowIso,
-    createdAt: prev?.createdAt || nowIso,
-    eventType,
-    price
-  };
-
-  upsertCard(item);
-  persist(item);
-  postRegistry(item);
-
-  if (window.i18n && window.i18n.modal && window.i18n.modal.validation){
-    statusMsg.textContent = (mode==='create')
-      ? (window.i18n.modal.statusCreated || 'Created')
-      : (window.i18n.modal.statusUpdated || 'Updated');
-  }else{
-    statusMsg.textContent = (mode==='create') ? 'Created' : 'Updated';
-  }
-  statusMsg.style.display = 'block';
 }
+
 
 function onDuplicate(){
   if(!editingRoomId) return;
