@@ -552,6 +552,16 @@
         class="recommend-input-row"
         style="display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; margin-bottom:12px;"
       >
+
+      <!-- ★ バブルUIの土台：recommend.js側を次に差し替えると、この中がバブルで描画されます -->
+      <div
+        id="recommendChat"
+        class="chat-log"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+      ></div>
+
         <input
           id="recommendInput"
           type="text"
@@ -582,20 +592,11 @@
 
         <div id="lucyVoiceAskStatus" class="status"
              style="position: absolute; top: 40px; left: 0; width: 100%; pointer-events: none; font-size: 0.9em; line-height: 1.2; color: #e65100;"></div>
-
-        <div id="lucyVoiceSpeakHint" style="font-size:11px; color:#777; margin-top:24px;">
-          🎤 ゆっくり・はっきり話すと認識が安定します。
-        </div>
       </div>
 
-      <!-- ★ バブルUIの土台：recommend.js側を次に差し替えると、この中がバブルで描画されます -->
-      <div
-        id="recommendChat"
-        class="chat-log"
-        role="log"
-        aria-live="polite"
-        aria-relevant="additions"
-      ></div>
+
+
+
     </section>
 
     <section class="meetups">
