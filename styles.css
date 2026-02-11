@@ -946,3 +946,13 @@ header *{
   opacity: 1;
   transform: translateY(0);
 }
+
+/* 音声ステータスが空なら消して、ボタン下の余白を作らない */
+#lucyVoiceAskStatus:empty{
+  display: none;
+}
+
+/* 音声ブロックの下余白を詰める（お好みで 0〜6px） */
+.recommend-voice-ask{
+  margin-bottom: 6px !important;
+}
