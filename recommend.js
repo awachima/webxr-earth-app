@@ -10,6 +10,10 @@
  * ★ チャットバブルUI化:
  * - #recommendChat に「msg-row / msg-bubble / msg-meta」DOMを追加して表示する
  * - Lucy(assistant)=左 / You(user)=右
+ *
+ * ★ 2択クリック対応（今回追加）:
+ * - Lucyの返答に「以下でしたらどちらの気分ですか？」＋「・選択肢×2」が含まれる場合、
+ *   バブルの下に2つのボタンを表示し、クリックでその選択肢を送信する。
  */
 (() => {
   "use strict";
@@ -37,7 +41,7 @@
     try {
       const stored = localStorage.getItem("lang");
       if (stored) return stored;
-    } catch(e){}
+    } catch (e) {}
     if (document.documentElement.lang) return document.documentElement.lang;
     return "ja";
   };
@@ -55,7 +59,7 @@
   // =========================================================
   const inputEl = document.getElementById("recommendInput");
   const sendBtn = document.getElementById("recommendSend");
-  const chatEl  = document.getElementById("recommendChat");
+  const chatEl = document.getElementById("recommendChat");
 
   const touristInfoBtn = document.getElementById("touristInfoBtn");
   const recommendSection = document.getElementById("recommendSection");
@@ -87,8 +91,11 @@
   // 4) ユーティリティ
   // =========================================================
   function safeJsonParse(text) {
-    try { return { ok: true, value: JSON.parse(text) }; }
-    catch (e) { return { ok: false, error: e }; }
+    try {
+      return { ok: true, value: JSON.parse(text) };
+    } catch (e) {
+      return { ok: false, error: e };
+    }
   }
 
   function setSending(isSending) {
@@ -158,19 +165,58 @@
           const href = node.getAttribute("href") || "";
           const text = node.textContent || "";
           if (isSafeHttpUrl(href)) {
-            out.push(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`);
+            out.push(
+              `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`
+            );
           } else {
             out.push(escapeHtml(text));
           }
           return;
         }
-        Array.from(node.childNodes).forEach(c => walk(c, out));
+        Array.from(node.childNodes).forEach((c) => walk(c, out));
       }
     }
 
     const out = [];
-    Array.from(root.childNodes).forEach(n => walk(n, out));
+    Array.from(root.childNodes).forEach((n) => walk(n, out));
     return out.join("");
+  }
+
+  // =========================================================
+  // 4.4) 2択抽出（今回追加）
+  // =========================================================
+  function extractTwoChoicesFromLucyReply(rawText) {
+    const t = String(rawText || "").replace(/\r\n/g, "\n");
+
+    // まずは「以下でしたらどちらの気分ですか？」が含まれることを条件にする（誤爆防止）
+    // ※ 文言が変わっても、末尾が「どちらの気分ですか？」なら拾えるようにする
+    const hasQuestion =
+      /どちらの気分ですか[？\?]/.test(t) || /どちらの気分ですか$/.test(t);
+
+    if (!hasQuestion) return null;
+
+    // 行単位で「・」「-」「•」などの箇条書きを拾う
+    const lines = t.split("\n").map((s) => s.trim()).filter(Boolean);
+
+    const bullets = [];
+    for (const line of lines) {
+      // 例: "・自然の景色" / "- 自然の景色" / "• 自然の景色"
+      const m = line.match(/^(?:[・•\-]|(?:\u2022))\s*(.+)$/);
+      if (m && m[1]) {
+        const v = m[1].trim();
+        if (v) bullets.push(v);
+      }
+    }
+
+    // 2つだけ欲しい
+    if (bullets.length < 2) return null;
+
+    // 先頭2つを採用（3つ以上ある場合は、現状は2択UIなので切り捨て）
+    const a = bullets[0];
+    const b = bullets[1];
+    if (!a || !b) return null;
+
+    return [a, b];
   }
 
   // =========================================================
@@ -203,10 +249,76 @@
     chatEl.appendChild(row);
 
     chatEl.scrollTop = chatEl.scrollHeight;
+
+    // 追加: 呼び出し側でボタン等を付けられるように返す
+    return { row, bubble, body };
   }
 
   const appendUser = (t) => appendBubble("user", "You", t, false);
-  const appendLucy = (t) => appendBubble("assistant", "Lucy", sanitizeLucyReplyToHtml(t), true);
+
+  function appendLucy(rawText) {
+    const html = sanitizeLucyReplyToHtml(rawText);
+    const parts = appendBubble("assistant", "Lucy", html, true);
+
+    const choices = extractTwoChoicesFromLucyReply(rawText);
+    if (choices && choices.length === 2) {
+      const wrap = document.createElement("div");
+      wrap.className = "lucy-choice-wrap";
+      // CSSが無くても最低限見えるように軽くスタイル
+      wrap.style.marginTop = "10px";
+      wrap.style.display = "flex";
+      wrap.style.gap = "8px";
+      wrap.style.flexWrap = "wrap";
+
+      const makeBtn = (label) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "lucy-choice-btn";
+        btn.textContent = label;
+
+        // CSSが無くてもボタンらしくする
+        btn.style.padding = "8px 10px";
+        btn.style.borderRadius = "10px";
+        btn.style.border = "1px solid rgba(0,0,0,0.15)";
+        btn.style.background = "#fff";
+        btn.style.cursor = "pointer";
+        btn.style.fontSize = "14px";
+
+        btn.addEventListener("mouseenter", () => {
+          btn.style.filter = "brightness(0.98)";
+        });
+        btn.addEventListener("mouseleave", () => {
+          btn.style.filter = "none";
+        });
+
+        btn.addEventListener("click", async () => {
+          // 送信中は無視
+          if (sendBtn.disabled) return;
+
+          // クリック後は二重送信防止のため無効化
+          try {
+            const all = wrap.querySelectorAll("button");
+            all.forEach((b) => (b.disabled = true));
+          } catch (_) {}
+
+          // UI上は「ユーザーが選んだ」として、そのテキストを送信
+          inputEl.value = label;
+          await onSend();
+        });
+
+        return btn;
+      };
+
+      wrap.appendChild(makeBtn(choices[0]));
+      wrap.appendChild(makeBtn(choices[1]));
+
+      // バブル内（本文の下）にボタンを追加
+      parts.bubble.appendChild(wrap);
+
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+  }
+
   const appendError = (t, d) => {
     const msg = d ? `${t}\n${d}` : t;
     appendBubble("assistant", "ERROR", msg, false);
@@ -236,7 +348,9 @@
 
   function stopVoiceTracks() {
     if (voiceMediaStream) {
-      try { voiceMediaStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+      try {
+        voiceMediaStream.getTracks().forEach((t) => t.stop());
+      } catch (_) {}
     }
     voiceMediaStream = null;
   }
@@ -385,7 +499,7 @@
     };
 
     speechRec.onerror = (ev) => {
-      const msg = (ev && ev.error) ? String(ev.error) : "unknown";
+      const msg = ev && ev.error ? String(ev.error) : "unknown";
       setLucyVoiceStatus(`音声認識エラー：${msg}`);
     };
 
@@ -405,8 +519,14 @@
 
   function stopSpeechRecognition() {
     if (!speechRec) return;
-    try { speechRec.onresult = null; speechRec.onerror = null; speechRec.onend = null; } catch (_) {}
-    try { speechRec.stop(); } catch (_) {}
+    try {
+      speechRec.onresult = null;
+      speechRec.onerror = null;
+      speechRec.onend = null;
+    } catch (_) {}
+    try {
+      speechRec.stop();
+    } catch (_) {}
     speechRec = null;
     speechIsRunning = false;
     setLucyVoiceBtnLabel(false);
@@ -477,7 +597,9 @@
 
     voiceMediaRecorder.onerror = () => {
       setLucyVoiceStatus("録音中にエラーが発生しました。");
-      try { stopVoiceTracks(); } catch (_) {}
+      try {
+        stopVoiceTracks();
+      } catch (_) {}
       voiceIsRecording = false;
       setLucyVoiceBtnLabel(false);
     };
@@ -557,7 +679,9 @@
       } catch (e) {
         setLucyVoiceStatus("音声機能の起動に失敗しました。");
         appendError("音声の処理に失敗しました", e.message);
-        try { stopVoiceFlow(); } catch (_) {}
+        try {
+          stopVoiceFlow();
+        } catch (_) {}
         setLucyVoiceBtnLabel(false);
       }
     });
@@ -587,5 +711,4 @@
       onSend();
     }
   });
-
 })();
