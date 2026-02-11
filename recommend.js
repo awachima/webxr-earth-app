@@ -6,6 +6,10 @@
  * ★ 多言語対応・修正版:
  * - 言語切り替え (window.currentLang) に動的に追従。
  * - UIテキストを window.i18n.recommend から取得。
+ *
+ * ★ チャットバブルUI化:
+ * - #recommendChat に「msg-row / msg-bubble / msg-meta」DOMを追加して表示する
+ * - Lucy(assistant)=左 / You(user)=右
  */
 (() => {
   "use strict";
@@ -96,9 +100,6 @@
       sendBtn.dataset._prevText = sendBtn.textContent || "";
       sendBtn.textContent = getTerm("sendLoading", "送信中…");
     } else {
-      // ★修正: 単純に dataset._prevText を戻すのではなく、
-      // 現在の言語設定(window.i18n)から最新のラベルを取得してセットする。
-      // これにより、通信中に言語リソースがロードされた場合でも正しい翻訳が適用される。
       const fallback = sendBtn.dataset._prevText || "質問する";
       sendBtn.textContent = getTerm("send", fallback);
 
@@ -121,6 +122,7 @@
       .replace(/'/g, "&#39;");
   }
 
+  // Lucyの返答は「安全な範囲でリンクを許可」しつつ、それ以外はテキスト扱いにする
   function sanitizeLucyReplyToHtml(rawText) {
     const input = String(rawText || "").replace(/\r\n/g, "\n");
     const parser = new DOMParser();
@@ -165,28 +167,50 @@
         Array.from(node.childNodes).forEach(c => walk(c, out));
       }
     }
+
     const out = [];
     Array.from(root.childNodes).forEach(n => walk(n, out));
     return out.join("");
   }
 
-  function appendMessage(role, label, content, isHtml) {
-    const line = document.createElement("div");
-    line.className = `chat-line chat-${role}`;
-    const prefix = document.createElement("span");
-    prefix.className = "chat-prefix";
-    prefix.textContent = `${label}: `;
-    const body = document.createElement("span");
-    body.className = "chat-body";
-    if (isHtml) body.innerHTML = content; else body.textContent = content;
-    line.append(prefix, body);
-    chatEl.appendChild(line);
+  // =========================================================
+  // 4.5) バブルUI：ログ追加
+  // =========================================================
+  function appendBubble(role, label, content, isHtml) {
+    // role: "user" | "assistant"
+    const row = document.createElement("div");
+    row.className = `msg-row ${role}`;
+
+    const bubble = document.createElement("div");
+    bubble.className = "msg-bubble";
+
+    const meta = document.createElement("div");
+    meta.className = "msg-meta";
+    meta.textContent = label;
+
+    const body = document.createElement("div");
+    body.className = "msg-body";
+
+    if (isHtml) {
+      body.innerHTML = content;
+    } else {
+      body.textContent = content;
+    }
+
+    bubble.appendChild(meta);
+    bubble.appendChild(body);
+    row.appendChild(bubble);
+    chatEl.appendChild(row);
+
     chatEl.scrollTop = chatEl.scrollHeight;
   }
 
-  const appendUser = t => appendMessage("user", "You", t, false);
-  const appendLucy = t => appendMessage("lucy", "Lucy", sanitizeLucyReplyToHtml(t), true);
-  const appendError = (t, d) => appendMessage("error", "ERROR", d ? `${t}\n${d}` : t, false);
+  const appendUser = (t) => appendBubble("user", "You", t, false);
+  const appendLucy = (t) => appendBubble("assistant", "Lucy", sanitizeLucyReplyToHtml(t), true);
+  const appendError = (t, d) => {
+    const msg = d ? `${t}\n${d}` : t;
+    appendBubble("assistant", "ERROR", msg, false);
+  };
 
   function ensurePanelOpenSoftly() {
     if (!recommendSection) return;
@@ -249,7 +273,7 @@
   async function transcribeVoiceBlob(blob) {
     const formData = new FormData();
     formData.append("audio", blob, "voice.webm");
-    
+
     const lang = getCurrentLang();
     formData.append("lang", lang);
 
@@ -359,14 +383,17 @@
         setSending(false);
       }
     };
+
     speechRec.onerror = (ev) => {
       const msg = (ev && ev.error) ? String(ev.error) : "unknown";
       setLucyVoiceStatus(`音声認識エラー：${msg}`);
     };
+
     speechRec.onend = () => {
       speechIsRunning = false;
       setLucyVoiceBtnLabel(false);
     };
+
     try {
       speechRec.start();
     } catch (e) {
@@ -430,8 +457,10 @@
         setLucyVoiceStatus("音声データが取得できませんでした。");
         return;
       }
+
       setLucyVoiceStatus(getTerm("statusSending", "音声を送信しています…"));
       setSending(true);
+
       try {
         const text = normalizeUserText(await transcribeVoiceBlob(blob));
         setLucyVoiceStatus(`認識：${text}`);
@@ -445,12 +474,14 @@
         setSending(false);
       }
     };
-    voiceMediaRecorder.onerror = (ev) => {
+
+    voiceMediaRecorder.onerror = () => {
       setLucyVoiceStatus("録音中にエラーが発生しました。");
       try { stopVoiceTracks(); } catch (_) {}
       voiceIsRecording = false;
       setLucyVoiceBtnLabel(false);
     };
+
     try {
       voiceMediaRecorder.start();
     } catch (e) {
@@ -483,6 +514,7 @@
   async function startVoiceFlow() {
     if (isVoiceActive()) return;
     const hasSpeech = !!getSpeechRecognitionCtor();
+
     if (VOICE_MODE === "speech") {
       startSpeechRecognition();
       return;
@@ -537,7 +569,7 @@
   (async () => {
     setSending(true);
     try {
-      const data = await callWorker(null); 
+      const data = await callWorker(null);
       if (data.reply) appendLucy(data.reply);
       if (data.nextState) nextState = data.nextState;
     } catch (e) {
