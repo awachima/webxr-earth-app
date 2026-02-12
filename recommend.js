@@ -77,11 +77,6 @@
   // =========================================================
   let nextState = null;
 
-  // 「どっちも違う」連打時のフォールバック（会話が行き止まりになった場合の保険）
-  // - 同じセッションで「どっちも違う」を2回連続で押したら、次は「最初から選びたい」を送る。
-  //   （Lucy側の状態が噛み合わないケースでも、再スタートできるようにする）
-  let neitherStreak = 0;
-
   // 音声録音用
   let voiceMediaStream = null;
   let voiceMediaRecorder = null;
@@ -188,24 +183,31 @@
   }
 
   // =========================================================
-  // 4.4) 「絞り込み用の選択肢」抽出
-  // - Lucyが「どちらの気分ですか？」系の質問をし、箇条書きで候補を出している場合に
-  //   候補ボタンを出す。
+  // 4.4) 絞り込み用の選択肢抽出（今回追加・改良版）
+  // - Lucyが「どれが好み？」系の質問をし、箇条書きで候補を出している場合にボタン化する
   // - ただし、候補の中にリンク（<a> / http(s)）が混ざっている場合は
-  //   それは「ツアー提案（リンク付き）」扱いなのでボタン化しない。
+  //   それは「ツアー提案（リンク付き）」扱いなのでボタン化しない
   // =========================================================
   function extractFilterChoicesFromLucyReply(rawText) {
     const t = String(rawText || "").replace(/\r\n/g, "\n");
 
-    // 誤爆防止：まず「どちらの気分ですか？」が含まれること
-    const hasQuestion = /どちらの気分ですか[？\?]/.test(t) || /どちらの気分ですか$/.test(t);
+    // 誤爆防止：「選ぶ」系の問いかけが含まれること
+    const hasQuestion =
+      /どちらの気分ですか[？\?]/.test(t) ||
+      /どちらの気分ですか$/.test(t) ||
+      /どれがお好みでしょうか[？\?]/.test(t) ||
+      /どれがお好みですか[？\?]/.test(t) ||
+      /この中でしたらどれがお好み/.test(t) ||
+      /どれが良い/.test(t) ||
+      /どれがいい/.test(t);
+
     if (!hasQuestion) return null;
 
+    // 行単位で「・」「-」「•」などの箇条書きを拾う
     const lines = t.split("\n").map((s) => s.trim()).filter(Boolean);
-    const bullets = [];
 
+    const bullets = [];
     for (const line of lines) {
-      // 例: "・自然の景色" / "- 自然の景色" / "• 自然の景色"
       const m = line.match(/^(?:[・•\-]|(?:\u2022))\s*(.+)$/);
       if (m && m[1]) {
         const v = m[1].trim();
@@ -213,16 +215,22 @@
       }
     }
 
-    // 2個以上ないなら、ボタン化しない
+    // 2個以上ないならボタン化しない
     if (bullets.length < 2) return null;
 
     // 候補にリンクが混ざっているなら、ボタン化しない（ツアー提案扱い）
-    // - サーバ側が <a> を返す
-    // - もしくは、URL文字列（http/https）を返す
     const joined = bullets.join("\n");
     if (/<\s*a\b/i.test(joined) || /https?:\/\//i.test(joined)) return null;
 
     return bullets;
+  }
+
+  // 「どっちも違う」ボタンの文言は、i18nの誤設定に引きずられないように
+  // 日本語だけは固定で出す（ここが「最初から選びたい」等に化ける事故を防止）
+  function getNeitherLabel() {
+    const lang = getCurrentLang();
+    if (lang === "ja") return "どっちも違う";
+    return getTerm("choiceNeither", "Neither");
   }
 
   // =========================================================
@@ -276,8 +284,7 @@
       wrap.style.gap = "8px";
       wrap.style.flexWrap = "wrap";
 
-      const makeBtn = (label, opts) => {
-        const o = opts && typeof opts === "object" ? opts : {};
+      const makeBtn = (label) => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "lucy-choice-btn";
@@ -308,35 +315,19 @@
             all.forEach((b) => (b.disabled = true));
           } catch (_) {}
 
-          const neitherText = getTerm("choiceNeither", "どっちも違う");
-          const restartText = getTerm("choiceRestart", "最初から選びたい");
-
-          // 「どっちも違う」だけは、2回連続で押したら自動で「最初から選びたい」を送る
-          let sendText = label;
-          if (o.isNeither) {
-            neitherStreak += 1;
-            sendText = neitherStreak >= 2 ? restartText : neitherText;
-            if (neitherStreak >= 2) neitherStreak = 0;
-          } else {
-            neitherStreak = 0;
-          }
-
           // UI上は「ユーザーが選んだ」として、そのテキストを送信
-          inputEl.value = sendText;
+          inputEl.value = label;
           await onSend();
         });
 
         return btn;
       };
 
-      // 候補数は可変（2つ以上）。そのまま全てボタン化。
-      for (const c of choices) {
-        wrap.appendChild(makeBtn(c));
-      }
+      // 候補をすべてボタン化
+      choices.forEach((c) => wrap.appendChild(makeBtn(c)));
 
-      // ★追加: 「どっちも違う」ボタン
-      // i18nがあれば window.i18n.recommend.choiceNeither を優先
-      wrap.appendChild(makeBtn(getTerm("choiceNeither", "どっちも違う"), { isNeither: true }));
+      // 「どっちも違う」ボタン（※日本語は固定）
+      wrap.appendChild(makeBtn(getNeitherLabel()));
 
       // バブル内（本文の下）にボタンを追加
       parts.bubble.appendChild(wrap);
@@ -449,21 +440,8 @@
   // 6) 送信処理
   // =========================================================
   async function onSend() {
-    let text = normalizeUserText(inputEl.value);
+    const text = normalizeUserText(inputEl.value);
     if (!text) return;
-
-    // 手入力でも「どっちも違う」連打フォールバックを効かせる
-    const neitherText = getTerm("choiceNeither", "どっちも違う");
-    const restartText = getTerm("choiceRestart", "最初から選びたい");
-    if (text === neitherText) {
-      neitherStreak += 1;
-      if (neitherStreak >= 2) {
-        text = restartText;
-        neitherStreak = 0;
-      }
-    } else {
-      neitherStreak = 0;
-    }
 
     ensurePanelOpenSoftly();
     appendUser(text);
@@ -494,21 +472,8 @@
   }
 
   async function sendRecognizedTextToLucy(text) {
-    let t = normalizeUserText(text);
+    const t = normalizeUserText(text);
     if (!t) throw new Error("empty transcript");
-
-    // 音声でも「どっちも違う」連打フォールバックを効かせる
-    const neitherText = getTerm("choiceNeither", "どっちも違う");
-    const restartText = getTerm("choiceRestart", "最初から選びたい");
-    if (t === neitherText) {
-      neitherStreak += 1;
-      if (neitherStreak >= 2) {
-        t = restartText;
-        neitherStreak = 0;
-      }
-    } else {
-      neitherStreak = 0;
-    }
 
     ensurePanelOpenSoftly();
     appendUser(t);
