@@ -11,10 +11,9 @@
  * - #recommendChat に「msg-row / msg-bubble / msg-meta」DOMを追加して表示する
  * - Lucy(assistant)=左 / You(user)=右
  *
- * ★ 選択肢クリック対応（拡張）:
- * - Lucyの返答に「質問文」＋「・選択肢」が含まれる場合、バブルの下にボタンを表示し、
- *   クリックでその選択肢を送信する。
- * - 2択だけでなく、3択以上（追加の絞り込み）でもボタンを出す。
+ * ★ 選択肢クリック対応（絞り込み専用）:
+ * - Lucyの返答が「絞り込み質問」＋「箇条書き」のときだけ、バブル下にボタンを表示する
+ * - ただし、本文にリンク（<a> / href / URL）が含まれる場合は「結果提示」とみなし、ボタンは出さない
  */
 (() => {
   "use strict";
@@ -184,13 +183,24 @@
   }
 
   // =========================================================
-  // 4.4) 選択肢抽出（拡張版）
+  // 4.4) 選択肢抽出（絞り込み専用）
   // =========================================================
   function extractChoicesFromLucyReply(rawText) {
     const t = String(rawText || "").replace(/\r\n/g, "\n");
 
+    // ★重要：リンクが含まれる返信は「結果提示」とみなし、ボタンは出さない
+    // - <a ...> / href= がある
+    // - http(s):// がある
+    // - dokodemodoors の tour URL がある（保険）
+    const hasLink =
+      /<\s*a\b/i.test(t) ||
+      /\bhref\s*=/i.test(t) ||
+      /https?:\/\/\S+/i.test(t) ||
+      /dokodemodoors\.com\/selfhost\/tour\//i.test(t);
+
+    if (hasLink) return null;
+
     // 誤爆防止：質問っぽい文面がある場合のみボタン化する
-    // 例）「この中でしたらどれがお好みでしょうか？」など
     const hasQuestionLike =
       /[？\?]/.test(t) ||
       /(どちら|どれ|この中|お好み|選んで|選択|気分|いかが|教えて)(?:.*)$/.test(t);
@@ -202,7 +212,6 @@
 
     const bullets = [];
     for (const line of lines) {
-      // 例: "・自然の景色" / "- 自然の景色" / "• 自然の景色" / "● 自然の景色"
       const m = line.match(/^(?:[・•●\-]|(?:\u2022))\s*(.+)$/);
       if (m && m[1]) {
         const v = m[1].trim();
@@ -210,6 +219,7 @@
       }
     }
 
+    // 2個以上でボタン化（絞り込み前提）
     if (bullets.length < 2) return null;
 
     // 重複除去（順序維持）
@@ -320,8 +330,7 @@
       // すべての選択肢をボタン化
       choices.forEach((c) => wrap.appendChild(makeBtn(c)));
 
-      // ★追加: 「どっちも違う」ボタン（維持）
-      // i18nがあれば window.i18n.recommend.choiceNeither を優先
+      // 「どっちも違う」ボタン
       wrap.appendChild(makeBtn(getTerm("choiceNeither", "どっちも違う")));
 
       // バブル内（本文の下）にボタンを追加
