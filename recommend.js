@@ -11,9 +11,13 @@
  * - #recommendChat に「msg-row / msg-bubble / msg-meta」DOMを追加して表示する
  * - Lucy(assistant)=左 / You(user)=右
  *
- * ★ 2択クリック対応（今回追加）:
- * - Lucyの返答に「以下でしたらどちらの気分ですか？」＋「・選択肢×2」が含まれる場合、
- *   バブルの下に2つのボタンを表示し、クリックでその選択肢を送信する。
+ * ★ 絞り込み選択肢のボタン化:
+ * - Lucyの返答が「選ぶ系の質問」＋「リンク無しの箇条書き（2件以上）」のときだけボタンを出す
+ * - ただし、候補にリンク（<a> / http(s)）が混ざっている場合は「ツアー提案」なのでボタン化しない
+ *
+ * ★ 今回追加（停止対策）:
+ * - 「うーん、それではこういうのはいかがでしょう？」等で“提案の中身が返っていない”場合に限り、
+ *   自動で「ほかには」を1回だけ追送信して次の提案を引き出す（無限ループ防止あり）
  */
 (() => {
   "use strict";
@@ -76,6 +80,10 @@
   // 3) 内部状態
   // =========================================================
   let nextState = null;
+
+  // 「提案します」だけ言って中身が来ないケースの自動追送信ガード
+  let autoContinueLock = false;
+  let autoContinueLastAt = 0;
 
   // 音声録音用
   let voiceMediaStream = null;
@@ -183,10 +191,7 @@
   }
 
   // =========================================================
-  // 4.4) 絞り込み用の選択肢抽出（今回追加・改良版）
-  // - Lucyが「どれが好み？」系の質問をし、箇条書きで候補を出している場合にボタン化する
-  // - ただし、候補の中にリンク（<a> / http(s)）が混ざっている場合は
-  //   それは「ツアー提案（リンク付き）」扱いなのでボタン化しない
+  // 4.4) 絞り込み用の選択肢抽出
   // =========================================================
   function extractFilterChoicesFromLucyReply(rawText) {
     const t = String(rawText || "").replace(/\r\n/g, "\n");
@@ -203,7 +208,6 @@
 
     if (!hasQuestion) return null;
 
-    // 行単位で「・」「-」「•」などの箇条書きを拾う
     const lines = t.split("\n").map((s) => s.trim()).filter(Boolean);
 
     const bullets = [];
@@ -215,7 +219,6 @@
       }
     }
 
-    // 2個以上ないならボタン化しない
     if (bullets.length < 2) return null;
 
     // 候補にリンクが混ざっているなら、ボタン化しない（ツアー提案扱い）
@@ -225,8 +228,7 @@
     return bullets;
   }
 
-  // 「どっちも違う」ボタンの文言は、i18nの誤設定に引きずられないように
-  // 日本語だけは固定で出す（ここが「最初から選びたい」等に化ける事故を防止）
+  // 「どっちも違う」ボタンの文言は、日本語だけは固定（i18n誤設定事故を防止）
   function getNeitherLabel() {
     const lang = getCurrentLang();
     if (lang === "ja") return "どっちも違う";
@@ -234,10 +236,71 @@
   }
 
   // =========================================================
+  // 4.4b) 「提案します」だけで止まるケースの検知 → 自動で「ほかには」を1回だけ送る
+  // =========================================================
+  function shouldAutoContinue(rawText) {
+    const t = String(rawText || "").replace(/\r\n/g, "\n").trim();
+    if (!t) return false;
+
+    // 近すぎる連続実行を抑制（念のため）
+    const now = Date.now();
+    if (autoContinueLock) return false;
+    if (now - autoContinueLastAt < 1500) return false;
+
+    // すでにリスト（箇条書き/リンク）があるなら、止まってないので追送しない
+    const hasBulletLine = /^(?:\s*[・•\-]|\s*\u2022)\s+.+$/m.test(t);
+    const hasLink = /<\s*a\b/i.test(t) || /https?:\/\//i.test(t);
+    if (hasBulletLine || hasLink) return false;
+
+    // 「提案します」っぽいのに中身が無い時だけ
+    const looksLikeOffering =
+      /こういうのはいかがでしょう/.test(t) ||
+      /こちらはいかがでしょう/.test(t) ||
+      /いかがでしょうか/.test(t) ||
+      /おすすめです/.test(t);
+
+    if (!looksLikeOffering) return false;
+
+    // 「質問を続けたい」系（=止まりではない）には反応しない
+    const looksLikeAskingMore =
+      /教えていただけますか/.test(t) ||
+      /どんな気分/.test(t) ||
+      /差し支えなければ/.test(t);
+
+    if (looksLikeAskingMore) return false;
+
+    return true;
+  }
+
+  function getMoreLabel() {
+    const lang = getCurrentLang();
+    if (lang === "ja") return "ほかには";
+    return getTerm("more", "more");
+  }
+
+  async function autoContinueOnce() {
+    autoContinueLock = true;
+    autoContinueLastAt = Date.now();
+
+    // 少しだけ遅延（描画が落ち着いてから送る）
+    setTimeout(async () => {
+      try {
+        if (sendBtn.disabled) return;
+        inputEl.value = getMoreLabel();
+        await onSend();
+      } finally {
+        // 次の返信後に再度必要な時だけ動くように解放（時間でも解放）
+        setTimeout(() => {
+          autoContinueLock = false;
+        }, 1200);
+      }
+    }, 0);
+  }
+
+  // =========================================================
   // 4.5) バブルUI：ログ追加
   // =========================================================
   function appendBubble(role, label, content, isHtml) {
-    // role: "user" | "assistant"
     const row = document.createElement("div");
     row.className = `msg-row ${role}`;
 
@@ -251,11 +314,8 @@
     const body = document.createElement("div");
     body.className = "msg-body";
 
-    if (isHtml) {
-      body.innerHTML = content;
-    } else {
-      body.textContent = content;
-    }
+    if (isHtml) body.innerHTML = content;
+    else body.textContent = content;
 
     bubble.appendChild(meta);
     bubble.appendChild(body);
@@ -263,8 +323,6 @@
     chatEl.appendChild(row);
 
     chatEl.scrollTop = chatEl.scrollHeight;
-
-    // 追加: 呼び出し側でボタン等を付けられるように返す
     return { row, bubble, body };
   }
 
@@ -274,11 +332,11 @@
     const html = sanitizeLucyReplyToHtml(rawText);
     const parts = appendBubble("assistant", "Lucy", html, true);
 
+    // 1) 絞り込み候補ボタン
     const choices = extractFilterChoicesFromLucyReply(rawText);
     if (choices && choices.length >= 2) {
       const wrap = document.createElement("div");
       wrap.className = "lucy-choice-wrap";
-      // CSSが無くても最低限見えるように軽くスタイル
       wrap.style.marginTop = "10px";
       wrap.style.display = "flex";
       wrap.style.gap = "8px";
@@ -290,7 +348,6 @@
         btn.className = "lucy-choice-btn";
         btn.textContent = label;
 
-        // CSSが無くてもボタンらしくする
         btn.style.padding = "8px 10px";
         btn.style.borderRadius = "10px";
         btn.style.border = "1px solid rgba(0,0,0,0.15)";
@@ -298,24 +355,17 @@
         btn.style.cursor = "pointer";
         btn.style.fontSize = "14px";
 
-        btn.addEventListener("mouseenter", () => {
-          btn.style.filter = "brightness(0.98)";
-        });
-        btn.addEventListener("mouseleave", () => {
-          btn.style.filter = "none";
-        });
+        btn.addEventListener("mouseenter", () => (btn.style.filter = "brightness(0.98)"));
+        btn.addEventListener("mouseleave", () => (btn.style.filter = "none"));
 
         btn.addEventListener("click", async () => {
-          // 送信中は無視
           if (sendBtn.disabled) return;
 
-          // クリック後は二重送信防止のため無効化
+          // 二重送信防止
           try {
-            const all = wrap.querySelectorAll("button");
-            all.forEach((b) => (b.disabled = true));
+            wrap.querySelectorAll("button").forEach((b) => (b.disabled = true));
           } catch (_) {}
 
-          // UI上は「ユーザーが選んだ」として、そのテキストを送信
           inputEl.value = label;
           await onSend();
         });
@@ -323,16 +373,16 @@
         return btn;
       };
 
-      // 候補をすべてボタン化
       choices.forEach((c) => wrap.appendChild(makeBtn(c)));
-
-      // 「どっちも違う」ボタン（※日本語は固定）
       wrap.appendChild(makeBtn(getNeitherLabel()));
 
-      // バブル内（本文の下）にボタンを追加
       parts.bubble.appendChild(wrap);
-
       chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    // 2) 「提案します」だけで止まるケースの自動追送信（1回だけ）
+    if (shouldAutoContinue(rawText)) {
+      autoContinueOnce();
     }
   }
 
@@ -356,11 +406,7 @@
 
   function setLucyVoiceBtnLabel(isActive) {
     if (!lucyVoiceAskBtn) return;
-    if (isActive) {
-      lucyVoiceAskBtn.textContent = getTerm("voiceBtnStop", "音声停止");
-    } else {
-      lucyVoiceAskBtn.textContent = getTerm("voiceBtnIdle", "Lucyに質問（音声）");
-    }
+    lucyVoiceAskBtn.textContent = isActive ? getTerm("voiceBtnStop", "音声停止") : getTerm("voiceBtnIdle", "Lucyに質問（音声）");
   }
 
   function stopVoiceTracks() {
@@ -392,12 +438,8 @@
     const raw = await res.text();
     const parsed = safeJsonParse(raw);
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}\n${raw}`);
-    }
-    if (!parsed.ok) {
-      throw new Error(`JSON parse failed\n${raw}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
+    if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
     return parsed.value;
   }
 
@@ -408,17 +450,12 @@
     const lang = getCurrentLang();
     formData.append("lang", lang);
 
-    const res = await fetch(WORKER_VOICE_URL, {
-      method: "POST",
-      body: formData,
-    });
+    const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: formData });
 
     const raw = await res.text();
     const parsed = safeJsonParse(raw);
 
-    if (!res.ok) {
-      throw new Error(`VOICE HTTP ${res.status}\n${raw}`);
-    }
+    if (!res.ok) throw new Error(`VOICE HTTP ${res.status}\n${raw}`);
 
     if (parsed.ok && parsed.value && typeof parsed.value === "object") {
       const v = parsed.value;
@@ -635,9 +672,7 @@
     if (!voiceIsRecording) return;
     setLucyVoiceStatus("録音を停止しました。解析中…");
     try {
-      if (voiceMediaRecorder && voiceMediaRecorder.state !== "inactive") {
-        voiceMediaRecorder.stop();
-      }
+      if (voiceMediaRecorder && voiceMediaRecorder.state !== "inactive") voiceMediaRecorder.stop();
     } catch (e) {
       setLucyVoiceStatus("録音停止に失敗しました。");
       stopVoiceTracks();
@@ -654,21 +689,15 @@
     if (isVoiceActive()) return;
     const hasSpeech = !!getSpeechRecognitionCtor();
 
-    if (VOICE_MODE === "speech") {
-      startSpeechRecognition();
-      return;
-    }
-    if (VOICE_MODE === "server") {
-      await startServerVoiceRecording();
-      return;
-    }
+    if (VOICE_MODE === "speech") return startSpeechRecognition();
+    if (VOICE_MODE === "server") return startServerVoiceRecording();
+
     if (hasSpeech) {
       try {
-        startSpeechRecognition();
-        return;
+        return startSpeechRecognition();
       } catch (e) {}
     }
-    await startServerVoiceRecording();
+    return startServerVoiceRecording();
   }
 
   function stopVoiceFlow() {
@@ -677,10 +706,7 @@
       stopSpeechRecognition();
       return;
     }
-    if (voiceIsRecording) {
-      stopServerVoiceRecording();
-      return;
-    }
+    if (voiceIsRecording) stopServerVoiceRecording();
   }
 
   if (lucyVoiceAskBtn) {
@@ -688,11 +714,8 @@
     lucyVoiceAskBtn.addEventListener("click", async () => {
       if (lucyVoiceAskBtn.disabled) return;
       try {
-        if (!isVoiceActive()) {
-          await startVoiceFlow();
-        } else {
-          stopVoiceFlow();
-        }
+        if (!isVoiceActive()) await startVoiceFlow();
+        else stopVoiceFlow();
       } catch (e) {
         setLucyVoiceStatus("音声機能の起動に失敗しました。");
         appendError("音声の処理に失敗しました", e.message);
