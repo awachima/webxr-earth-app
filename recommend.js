@@ -312,6 +312,10 @@
       wrap.appendChild(makeBtn(choices[0]));
       wrap.appendChild(makeBtn(choices[1]));
 
+      // ★追加: 「どっちも違う」ボタン
+      // i18nがあれば window.i18n.recommend.choiceNeither を優先
+      wrap.appendChild(makeBtn(getTerm("choiceNeither", "どっちも違う")));
+
       // バブル内（本文の下）にボタンを追加
       parts.bubble.appendChild(wrap);
 
