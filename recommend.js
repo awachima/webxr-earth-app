@@ -11,9 +11,9 @@
  * - #recommendChat に「msg-row / msg-bubble / msg-meta」DOMを追加して表示する
  * - Lucy(assistant)=左 / You(user)=右
  *
- * ★ 選択肢クリック対応（絞り込み専用）:
- * - Lucyの返答が「絞り込み質問」＋「箇条書き」のときだけ、バブル下にボタンを表示する
- * - ただし、本文にリンク（<a> / href / URL）が含まれる場合は「結果提示」とみなし、ボタンは出さない
+ * ★ 2択クリック対応（今回追加）:
+ * - Lucyの返答に「以下でしたらどちらの気分ですか？」＋「・選択肢×2」が含まれる場合、
+ *   バブルの下に2つのボタンを表示し、クリックでその選択肢を送信する。
  */
 (() => {
   "use strict";
@@ -76,6 +76,11 @@
   // 3) 内部状態
   // =========================================================
   let nextState = null;
+
+  // 「どっちも違う」連打時のフォールバック（会話が行き止まりになった場合の保険）
+  // - 同じセッションで「どっちも違う」を2回連続で押したら、次は「最初から選びたい」を送る。
+  //   （Lucy側の状態が噛み合わないケースでも、再スタートできるようにする）
+  let neitherStreak = 0;
 
   // 音声録音用
   let voiceMediaStream = null;
@@ -183,58 +188,41 @@
   }
 
   // =========================================================
-  // 4.4) 選択肢抽出（絞り込み専用）
+  // 4.4) 「絞り込み用の選択肢」抽出
+  // - Lucyが「どちらの気分ですか？」系の質問をし、箇条書きで候補を出している場合に
+  //   候補ボタンを出す。
+  // - ただし、候補の中にリンク（<a> / http(s)）が混ざっている場合は
+  //   それは「ツアー提案（リンク付き）」扱いなのでボタン化しない。
   // =========================================================
-  function extractChoicesFromLucyReply(rawText) {
+  function extractFilterChoicesFromLucyReply(rawText) {
     const t = String(rawText || "").replace(/\r\n/g, "\n");
 
-    // ★重要：リンクが含まれる返信は「結果提示」とみなし、ボタンは出さない
-    // - <a ...> / href= がある
-    // - http(s):// がある
-    // - dokodemodoors の tour URL がある（保険）
-    const hasLink =
-      /<\s*a\b/i.test(t) ||
-      /\bhref\s*=/i.test(t) ||
-      /https?:\/\/\S+/i.test(t) ||
-      /dokodemodoors\.com\/selfhost\/tour\//i.test(t);
+    // 誤爆防止：まず「どちらの気分ですか？」が含まれること
+    const hasQuestion = /どちらの気分ですか[？\?]/.test(t) || /どちらの気分ですか$/.test(t);
+    if (!hasQuestion) return null;
 
-    if (hasLink) return null;
-
-    // 誤爆防止：質問っぽい文面がある場合のみボタン化する
-    const hasQuestionLike =
-      /[？\?]/.test(t) ||
-      /(どちら|どれ|この中|お好み|選んで|選択|気分|いかが|教えて)(?:.*)$/.test(t);
-
-    if (!hasQuestionLike) return null;
-
-    // 行単位で「・」「-」「•」「●」などの箇条書きを拾う
     const lines = t.split("\n").map((s) => s.trim()).filter(Boolean);
-
     const bullets = [];
+
     for (const line of lines) {
-      const m = line.match(/^(?:[・•●\-]|(?:\u2022))\s*(.+)$/);
+      // 例: "・自然の景色" / "- 自然の景色" / "• 自然の景色"
+      const m = line.match(/^(?:[・•\-]|(?:\u2022))\s*(.+)$/);
       if (m && m[1]) {
         const v = m[1].trim();
         if (v) bullets.push(v);
       }
     }
 
-    // 2個以上でボタン化（絞り込み前提）
+    // 2個以上ないなら、ボタン化しない
     if (bullets.length < 2) return null;
 
-    // 重複除去（順序維持）
-    const uniq = [];
-    const seen = new Set();
-    for (const b of bullets) {
-      const key = String(b);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      uniq.push(b);
-    }
+    // 候補にリンクが混ざっているなら、ボタン化しない（ツアー提案扱い）
+    // - サーバ側が <a> を返す
+    // - もしくは、URL文字列（http/https）を返す
+    const joined = bullets.join("\n");
+    if (/<\s*a\b/i.test(joined) || /https?:\/\//i.test(joined)) return null;
 
-    // ボタン多すぎ抑制（必要なら上限）
-    const MAX = 16;
-    return uniq.slice(0, MAX);
+    return bullets;
   }
 
   // =========================================================
@@ -278,7 +266,7 @@
     const html = sanitizeLucyReplyToHtml(rawText);
     const parts = appendBubble("assistant", "Lucy", html, true);
 
-    const choices = extractChoicesFromLucyReply(rawText);
+    const choices = extractFilterChoicesFromLucyReply(rawText);
     if (choices && choices.length >= 2) {
       const wrap = document.createElement("div");
       wrap.className = "lucy-choice-wrap";
@@ -288,7 +276,8 @@
       wrap.style.gap = "8px";
       wrap.style.flexWrap = "wrap";
 
-      const makeBtn = (label) => {
+      const makeBtn = (label, opts) => {
+        const o = opts && typeof opts === "object" ? opts : {};
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "lucy-choice-btn";
@@ -319,19 +308,35 @@
             all.forEach((b) => (b.disabled = true));
           } catch (_) {}
 
+          const neitherText = getTerm("choiceNeither", "どっちも違う");
+          const restartText = getTerm("choiceRestart", "最初から選びたい");
+
+          // 「どっちも違う」だけは、2回連続で押したら自動で「最初から選びたい」を送る
+          let sendText = label;
+          if (o.isNeither) {
+            neitherStreak += 1;
+            sendText = neitherStreak >= 2 ? restartText : neitherText;
+            if (neitherStreak >= 2) neitherStreak = 0;
+          } else {
+            neitherStreak = 0;
+          }
+
           // UI上は「ユーザーが選んだ」として、そのテキストを送信
-          inputEl.value = label;
+          inputEl.value = sendText;
           await onSend();
         });
 
         return btn;
       };
 
-      // すべての選択肢をボタン化
-      choices.forEach((c) => wrap.appendChild(makeBtn(c)));
+      // 候補数は可変（2つ以上）。そのまま全てボタン化。
+      for (const c of choices) {
+        wrap.appendChild(makeBtn(c));
+      }
 
-      // 「どっちも違う」ボタン
-      wrap.appendChild(makeBtn(getTerm("choiceNeither", "どっちも違う")));
+      // ★追加: 「どっちも違う」ボタン
+      // i18nがあれば window.i18n.recommend.choiceNeither を優先
+      wrap.appendChild(makeBtn(getTerm("choiceNeither", "どっちも違う"), { isNeither: true }));
 
       // バブル内（本文の下）にボタンを追加
       parts.bubble.appendChild(wrap);
@@ -444,8 +449,21 @@
   // 6) 送信処理
   // =========================================================
   async function onSend() {
-    const text = normalizeUserText(inputEl.value);
+    let text = normalizeUserText(inputEl.value);
     if (!text) return;
+
+    // 手入力でも「どっちも違う」連打フォールバックを効かせる
+    const neitherText = getTerm("choiceNeither", "どっちも違う");
+    const restartText = getTerm("choiceRestart", "最初から選びたい");
+    if (text === neitherText) {
+      neitherStreak += 1;
+      if (neitherStreak >= 2) {
+        text = restartText;
+        neitherStreak = 0;
+      }
+    } else {
+      neitherStreak = 0;
+    }
 
     ensurePanelOpenSoftly();
     appendUser(text);
@@ -476,8 +494,21 @@
   }
 
   async function sendRecognizedTextToLucy(text) {
-    const t = normalizeUserText(text);
+    let t = normalizeUserText(text);
     if (!t) throw new Error("empty transcript");
+
+    // 音声でも「どっちも違う」連打フォールバックを効かせる
+    const neitherText = getTerm("choiceNeither", "どっちも違う");
+    const restartText = getTerm("choiceRestart", "最初から選びたい");
+    if (t === neitherText) {
+      neitherStreak += 1;
+      if (neitherStreak >= 2) {
+        t = restartText;
+        neitherStreak = 0;
+      }
+    } else {
+      neitherStreak = 0;
+    }
 
     ensurePanelOpenSoftly();
     appendUser(t);
