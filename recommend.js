@@ -11,9 +11,10 @@
  * - #recommendChat に「msg-row / msg-bubble / msg-meta」DOMを追加して表示する
  * - Lucy(assistant)=左 / You(user)=右
  *
- * ★ 2択クリック対応（今回追加）:
- * - Lucyの返答に「以下でしたらどちらの気分ですか？」＋「・選択肢×2」が含まれる場合、
- *   バブルの下に2つのボタンを表示し、クリックでその選択肢を送信する。
+ * ★ 選択肢クリック対応（拡張）:
+ * - Lucyの返答に「質問文」＋「・選択肢」が含まれる場合、バブルの下にボタンを表示し、
+ *   クリックでその選択肢を送信する。
+ * - 2択だけでなく、3択以上（追加の絞り込み）でもボタンを出す。
  */
 (() => {
   "use strict";
@@ -183,40 +184,47 @@
   }
 
   // =========================================================
-  // 4.4) 2択抽出（今回追加）
+  // 4.4) 選択肢抽出（拡張版）
   // =========================================================
-  function extractTwoChoicesFromLucyReply(rawText) {
+  function extractChoicesFromLucyReply(rawText) {
     const t = String(rawText || "").replace(/\r\n/g, "\n");
 
-    // まずは「以下でしたらどちらの気分ですか？」が含まれることを条件にする（誤爆防止）
-    // ※ 文言が変わっても、末尾が「どちらの気分ですか？」なら拾えるようにする
-    const hasQuestion =
-      /どちらの気分ですか[？\?]/.test(t) || /どちらの気分ですか$/.test(t);
+    // 誤爆防止：質問っぽい文面がある場合のみボタン化する
+    // 例）「この中でしたらどれがお好みでしょうか？」など
+    const hasQuestionLike =
+      /[？\?]/.test(t) ||
+      /(どちら|どれ|この中|お好み|選んで|選択|気分|いかが|教えて)(?:.*)$/.test(t);
 
-    if (!hasQuestion) return null;
+    if (!hasQuestionLike) return null;
 
-    // 行単位で「・」「-」「•」などの箇条書きを拾う
+    // 行単位で「・」「-」「•」「●」などの箇条書きを拾う
     const lines = t.split("\n").map((s) => s.trim()).filter(Boolean);
 
     const bullets = [];
     for (const line of lines) {
-      // 例: "・自然の景色" / "- 自然の景色" / "• 自然の景色"
-      const m = line.match(/^(?:[・•\-]|(?:\u2022))\s*(.+)$/);
+      // 例: "・自然の景色" / "- 自然の景色" / "• 自然の景色" / "● 自然の景色"
+      const m = line.match(/^(?:[・•●\-]|(?:\u2022))\s*(.+)$/);
       if (m && m[1]) {
         const v = m[1].trim();
         if (v) bullets.push(v);
       }
     }
 
-    // 2つだけ欲しい
     if (bullets.length < 2) return null;
 
-    // 先頭2つを採用（3つ以上ある場合は、現状は2択UIなので切り捨て）
-    const a = bullets[0];
-    const b = bullets[1];
-    if (!a || !b) return null;
+    // 重複除去（順序維持）
+    const uniq = [];
+    const seen = new Set();
+    for (const b of bullets) {
+      const key = String(b);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      uniq.push(b);
+    }
 
-    return [a, b];
+    // ボタン多すぎ抑制（必要なら上限）
+    const MAX = 16;
+    return uniq.slice(0, MAX);
   }
 
   // =========================================================
@@ -260,8 +268,8 @@
     const html = sanitizeLucyReplyToHtml(rawText);
     const parts = appendBubble("assistant", "Lucy", html, true);
 
-    const choices = extractTwoChoicesFromLucyReply(rawText);
-    if (choices && choices.length === 2) {
+    const choices = extractChoicesFromLucyReply(rawText);
+    if (choices && choices.length >= 2) {
       const wrap = document.createElement("div");
       wrap.className = "lucy-choice-wrap";
       // CSSが無くても最低限見えるように軽くスタイル
@@ -309,10 +317,10 @@
         return btn;
       };
 
-      wrap.appendChild(makeBtn(choices[0]));
-      wrap.appendChild(makeBtn(choices[1]));
+      // すべての選択肢をボタン化
+      choices.forEach((c) => wrap.appendChild(makeBtn(c)));
 
-      // ★追加: 「どっちも違う」ボタン
+      // ★追加: 「どっちも違う」ボタン（維持）
       // i18nがあれば window.i18n.recommend.choiceNeither を優先
       wrap.appendChild(makeBtn(getTerm("choiceNeither", "どっちも違う")));
 
