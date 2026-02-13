@@ -144,7 +144,19 @@
 
   // Lucyの返答は「安全な範囲でリンクを許可」しつつ、それ以外はテキスト扱いにする
   function sanitizeLucyReplyToHtml(rawText) {
-    const text = String(rawText || "");
+    const original = String(rawText || "");
+
+    // 0) Worker から <a ...>...</a> が来る場合がある（それを textContent で見せないため）
+    //    まず「安全な a タグ」だけをプレースホルダとして退避し、
+    //    それ以外は従来どおりエスケープ → URLリンク化 → 改行 <br> の順でHTML化する。
+    const anchorTokens = [];
+    let text = original.replace(/<a\b[\s\S]*?<\/a>/gi, (m) => {
+      const safe = sanitizeAnchorHtml(m);
+      const token = `__ANCHOR_TOKEN_${anchorTokens.length}__`;
+      anchorTokens.push({ token, html: safe });
+      return token;
+    });
+
     // 1) まずエスケープ
     let html = escapeHtml(text);
 
@@ -156,15 +168,53 @@
       const trimmed = m.replace(/[)\]、。．，.]+$/g, (x) => x);
       const suffix = m.slice(trimmed.length);
       const safe = escapeHtml(trimmed);
-      return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>${escapeHtml(
-        suffix
-      )}`;
+      return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>${escapeHtml(suffix)}`;
     });
 
-    // 3) 改行を <br>
-    html = html.replace(/\n/g, "<br>");
+    // 3) 退避した a タグを復元（すでにサニタイズ済み）
+    for (const a of anchorTokens) {
+      const tokenRe = new RegExp(escapeRegExp(a.token), "g");
+      html = html.replace(tokenRe, a.html);
+    }
+
+    // 4) 改行は <br> に
+    html = html.replace(/\r?\n/g, "<br>");
 
     return html;
+  }
+
+  function sanitizeAnchorHtml(anchorHtml) {
+    try {
+      // href と表示テキストだけを許可（それ以外は落とす）
+      const hrefMatch = anchorHtml.match(/\bhref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
+      const hrefRaw = hrefMatch ? (hrefMatch[2] || hrefMatch[3] || hrefMatch[4] || "") : "";
+      const href = String(hrefRaw || "").trim();
+
+      // http/https のみ許可
+      if (!/^https?:\/\//i.test(href)) {
+        // 許可しないリンクはテキストとして表示
+        return escapeHtml(stripTags(anchorHtml));
+      }
+
+      // aタグ内部の表示テキスト（タグは除去）
+      const label = stripTags(anchorHtml).trim() || href;
+
+      const safeHref = escapeHtml(href);
+      const safeLabel = escapeHtml(label);
+
+      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`;
+    } catch (e) {
+      // 万一失敗したら、タグを落としてテキスト化
+      return escapeHtml(stripTags(anchorHtml));
+    }
+  }
+
+  function stripTags(html) {
+    return String(html || "").replace(/<\/?[^>]+>/g, "");
+  }
+
+  function escapeRegExp(s) {
+    return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   // 返答テキストから、絞り込み候補の箇条書きだけ抽出する
