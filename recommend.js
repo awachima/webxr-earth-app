@@ -116,6 +116,7 @@
   // 4) 内部状態
   // =========================================================
   let nextState = null;
+  let lucyGreetingShown = false;
 
   let voiceMediaStream = null;
   let voiceMediaRecorder = null;
@@ -189,397 +190,311 @@
     }
   }
 
-  function sanitizeLucyReplyToHtml(rawText) {
-    const original = String(rawText || "");
+  // =========================================================
+  // 6) バブルUI
+  // =========================================================
+  function appendMessage(role, text, meta) {
+    const row = document.createElement("div");
+    row.className = `msg-row ${role === "user" ? "user" : "assistant"}`;
 
-    const anchorTokens = [];
-    let text = original.replace(/<a\b[\s\S]*?<\/a>/gi, (m) => {
-      const safe = sanitizeAnchorHtml(m);
-      const token = `__ANCHOR_TOKEN_${anchorTokens.length}__`;
-      anchorTokens.push({ token, html: safe });
-      return token;
-    });
+    const metaEl = document.createElement("div");
+    metaEl.className = "msg-meta";
+    metaEl.textContent = meta || (role === "user" ? "You" : "Lucy");
 
-    let html = escapeHtml(text);
+    const bubble = document.createElement("div");
+    bubble.className = "msg-bubble";
+    bubble.innerHTML = renderRichText(text);
 
+    row.appendChild(metaEl);
+    row.appendChild(bubble);
+    chatEl.appendChild(row);
+
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function appendYou(text) {
+    appendMessage("user", text, "You");
+  }
+
+  function appendLucy(text) {
+    appendMessage("assistant", text, "Lucy");
+    try {
+      enhanceChoiceButtonsForLastLucy();
+    } catch (_) {}
+  }
+
+  function appendError(title, detail) {
+    const t = title || "エラー";
+    const d = detail ? `\n${detail}` : "";
+    appendMessage("assistant", `⚠️ ${t}${d}`, "System");
+  }
+
+  // =========================================================
+  // 7) Lucy返信のリッチ表示（リンク/箇条書きなど）
+  // =========================================================
+  function renderRichText(text) {
+    const raw = String(text || "");
+    const escaped = escapeHtml(raw);
+
+    // URL をリンク化（簡易）
     const urlRe = /(https?:\/\/[^\s<>"']+)/g;
-    html = html.replace(urlRe, (m) => {
-      const trimmed = m.replace(/[)\]、。．，.]+$/g, (x) => x);
-      const suffix = m.slice(trimmed.length);
-      const safe = escapeHtml(trimmed);
-      return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>${escapeHtml(suffix)}`;
+    let html = escaped.replace(urlRe, (m) => {
+      const u = escapeHtml(m);
+      return `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`;
     });
 
-    for (const a of anchorTokens) {
-      const tokenRe = new RegExp(escapeRegExp(a.token), "g");
-      html = html.replace(tokenRe, a.html);
-    }
+    // Worker から <a> が来る場合の保護（最小限）
+    html = html.replace(/&lt;a\b[^&]*&gt;.*?&lt;\/a&gt;/gi, (m) => {
+      const decoded = m
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, "&");
+      return sanitizeAnchorHtml(decoded);
+    });
 
-    html = html.replace(/\r?\n/g, "<br>");
+    // 改行
+    html = html.replace(/\n/g, "<br>");
     return html;
   }
 
-  function extractChoicesFromLucyReply(rawText) {
-    const text = String(rawText || "");
-    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-
-    const choices = [];
-    for (const line of lines) {
-      if (/https?:\/\//i.test(line)) continue;
-
-      const m =
-        line.match(/^[・\-\*]\s*(.+)$/) ||
-        line.match(/^\d+\.\s*(.+)$/) ||
-        line.match(/^\(\d+\)\s*(.+)$/);
-
-      if (!m) continue;
-
-      const c = String(m[1] || "").trim();
-      if (!c) continue;
-
-      const cleaned = c.replace(/[：:\-–—]\s*$/g, "").trim();
-      if (!cleaned) continue;
-
-      if (!choices.includes(cleaned)) choices.push(cleaned);
-    }
-
-    if (choices.length < 2) return null;
-    return { choices };
-  }
-
   // =========================================================
-  // 6) UI描画
-  // =========================================================
-  function appendBubble(role, label, content, isHtml) {
-    const row = document.createElement("div");
-    row.className = `msg-row ${role === "assistant" ? "assistant" : "user"}`;
-
-    const bubble = document.createElement("div");
-    bubble.className = `msg-bubble ${role === "assistant" ? "assistant" : "user"}`;
-
-    const meta = document.createElement("div");
-    meta.className = "msg-meta";
-    meta.textContent = label;
-
-    const body = document.createElement("div");
-    body.className = "msg-body";
-    if (isHtml) body.innerHTML = content;
-    else body.textContent = content;
-
-    bubble.appendChild(meta);
-    bubble.appendChild(body);
-    row.appendChild(bubble);
-    chatEl.appendChild(row);
-    chatEl.scrollTop = chatEl.scrollHeight;
-
-    return { row, bubble, body };
-  }
-
-  const appendUser = (t) => appendBubble("user", "You", t, false);
-
-  function appendLucy(rawText) {
-    const html = sanitizeLucyReplyToHtml(rawText);
-    const parts = appendBubble("assistant", "Lucy", html, true);
-
-    const extracted = extractChoicesFromLucyReply(rawText);
-    if (extracted && extracted.choices && extracted.choices.length >= 2) {
-      const choices = extracted.choices;
-
-      const wrap = document.createElement("div");
-      wrap.className = "lucy-choice-wrap";
-      wrap.style.marginTop = "10px";
-      wrap.style.display = "flex";
-      wrap.style.gap = "8px";
-      wrap.style.flexWrap = "wrap";
-
-      const makeBtn = (label) => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "lucy-choice-btn";
-        btn.textContent = label;
-
-        btn.style.padding = "8px 10px";
-        btn.style.borderRadius = "10px";
-        btn.style.border = "1px solid rgba(0,0,0,0.15)";
-        btn.style.background = "#fff";
-        btn.style.cursor = "pointer";
-        btn.style.fontSize = "14px";
-
-        btn.addEventListener("click", async () => {
-          if (sendBtn.disabled) return;
-
-          try {
-            const all = wrap.querySelectorAll("button");
-            all.forEach((b) => (b.disabled = true));
-          } catch (_) {}
-
-          inputEl.value = label;
-          await onSend();
-        });
-
-        return btn;
-      };
-
-      choices.forEach((c) => wrap.appendChild(makeBtn(c)));
-      wrap.appendChild(makeBtn(getTerm("choiceNeither", "どっちも違う")));
-
-      parts.bubble.appendChild(wrap);
-      chatEl.scrollTop = chatEl.scrollHeight;
-    }
-  }
-
-  const appendError = (t, d) => {
-    const msg = d ? `${t}\n${d}` : t;
-    appendBubble("assistant", "ERROR", msg, false);
-  };
-
-  function ensurePanelOpenSoftly() {
-    if (!recommendSection) return;
-    if (recommendSection.classList.contains("is-collapsed")) {
-      recommendSection.classList.remove("is-collapsed");
-      if (touristInfoBtn) touristInfoBtn.setAttribute("aria-expanded", "true");
-    }
-  }
-
-  // ★ステータス表示（opacity=0 を強制解除する）
-  function setLucyVoiceStatus(text) {
-    if (!lucyVoiceAskStatus) return;
-
-    const t = String(text || "").trim();
-
-    if (!t) {
-      lucyVoiceAskStatus.textContent = "";
-      // 隙間を消す（display:none）＋ 透明化（念のため）
-      lucyVoiceAskStatus.style.setProperty("opacity", "0", "important");
-      lucyVoiceAskStatus.style.setProperty("display", "none", "important");
-      return;
-    }
-
-    lucyVoiceAskStatus.textContent = t;
-
-    // ★ここが肝：見えない原因が opacity:0 なので、必ず 1 に戻す
-lucyVoiceAskStatus.style.setProperty("display", "block", "important");
-lucyVoiceAskStatus.style.setProperty("opacity", "1", "important");
-lucyVoiceAskStatus.style.setProperty("visibility", "visible", "important");
-
-lucyVoiceAskStatus.style.setProperty("background", "none", "important");
-lucyVoiceAskStatus.style.setProperty("border", "none", "important");
-lucyVoiceAskStatus.style.setProperty("padding", "0", "important");
-
-lucyVoiceAskStatus.style.setProperty("color", "#666666", "important");
-lucyVoiceAskStatus.style.setProperty("font-size", "13px", "important");
-lucyVoiceAskStatus.style.setProperty("margin-top", "6px", "important");
-lucyVoiceAskStatus.style.setProperty("line-height", "1.4", "important");  }
-
-  function setLucyVoiceBtnVisual(isActive) {
-    if (!lucyVoiceAskBtn) return;
-
-    if (isActive) {
-      lucyVoiceAskBtn.style.backgroundColor = "rgb(11, 53, 89)";
-      lucyVoiceAskBtn.style.color = "#fff";
-      lucyVoiceAskBtn.style.borderColor = "rgb(11, 53, 89)";
-    } else {
-      lucyVoiceAskBtn.style.backgroundColor = "";
-      lucyVoiceAskBtn.style.color = "";
-      lucyVoiceAskBtn.style.borderColor = "";
-    }
-  }
-
-  function setLucyVoiceBtnLabel(isActive) {
-    if (!lucyVoiceAskBtn) return;
-
-    if (isActive) {
-      lucyVoiceAskBtn.textContent = getTerm("voiceBtnSpeakToSend", "話し終えたら送信");
-    } else {
-      lucyVoiceAskBtn.textContent = getTerm("voiceBtnIdle", "Lucyに質問（音声）");
-    }
-
-    setLucyVoiceBtnVisual(isActive);
-  }
-
-  function stopVoiceTracks() {
-    if (voiceMediaStream) {
-      try { voiceMediaStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
-    }
-    voiceMediaStream = null;
-  }
-
-  // =========================================================
-  // 7) Worker 呼び出し
+  // 8) Worker呼び出し
   // =========================================================
   async function callWorker(userText) {
-    const payload = {};
-    if (userText) payload.userText = userText;
-    if (nextState) payload.state = nextState;
-
-    payload.lang = getCurrentLang();
+    const payload = {
+      text: userText === null ? null : normalizeUserText(userText),
+      nextState: nextState,
+      lang: getCurrentLang()
+    };
 
     const res = await fetch(WORKER_CHAT_URL, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
 
     const raw = await res.text();
     const parsed = safeJsonParse(raw);
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
-    if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}\n${raw}`);
+    }
+    if (!parsed.ok) {
+      throw new Error(`JSON parse failed\n${raw}`);
+    }
     return parsed.value;
   }
 
-  async function sendTextDirect(text) {
-    const t = normalizeUserText(text);
-    if (!t) return;
-    inputEl.value = t;
-    await onSend();
+  // =========================================================
+  // 9) 選択肢ボタン化
+  // =========================================================
+  function findLastLucyBubble() {
+    const rows = chatEl.querySelectorAll(".msg-row.assistant .msg-bubble");
+    if (!rows || rows.length === 0) return null;
+    return rows[rows.length - 1];
+  }
+
+  function extractChoicesFromText(text) {
+    const s = String(text || "");
+    const lines = s.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+
+    // "・" または "-" の行を候補に
+    const bulletRe = /^([・\-]\s*)(.+)$/;
+    const candidates = [];
+    for (const line of lines) {
+      const m = line.match(bulletRe);
+      if (m && m[2]) candidates.push(m[2].trim());
+    }
+    return candidates;
+  }
+
+  function enhanceChoiceButtonsForLastLucy() {
+    const lastBubble = findLastLucyBubble();
+    if (!lastBubble) return;
+
+    const text = stripTags(lastBubble.innerHTML)
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/&nbsp;/g, " ")
+      .trim();
+
+    const choices = extractChoicesFromText(text);
+    if (!choices || choices.length < 2) return;
+
+    // 既にボタンがあるなら二重生成しない
+    if (lastBubble.querySelector(".choice-buttons")) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "choice-buttons";
+    wrap.style.marginTop = "10px";
+    wrap.style.display = "flex";
+    wrap.style.flexWrap = "wrap";
+    wrap.style.gap = "8px";
+
+    const makeBtn = (label) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn ghost";
+      b.textContent = label;
+      b.addEventListener("click", () => {
+        if (sendBtn.disabled) return;
+        inputEl.value = label;
+        onSend();
+      });
+      return b;
+    };
+
+    // 既存の2択 + 「どっちも違う」
+    for (const c of choices.slice(0, 2)) {
+      wrap.appendChild(makeBtn(c));
+    }
+
+    // 「どっちも違う」ボタン
+    const noneLabel = getTerm("choiceNeither", "どっちも違う");
+    wrap.appendChild(makeBtn(noneLabel));
+
+    lastBubble.appendChild(wrap);
   }
 
   // =========================================================
-  // 8) 送信処理
+  // 10) 送信
   // =========================================================
-  async function onSend() {
-    const text = normalizeUserText(inputEl.value);
-    if (!text) return;
+  async function sendTextDirect(userText) {
+    const ut = normalizeUserText(userText);
+    if (!ut) return;
 
-    ensurePanelOpenSoftly();
-    appendUser(text);
-    inputEl.value = "";
-
+    appendYou(ut);
     setSending(true);
+
     try {
-      const data = await callWorker(text);
+      const data = await callWorker(ut);
       if (data.reply) appendLucy(data.reply);
       if (data.nextState) nextState = data.nextState;
       if (data.debug) console.log("[Lucy debug]", data.debug);
     } catch (e) {
-      appendError("通信に失敗しました", e.message);
+      appendError("送信に失敗しました", e.message);
       console.error(e);
     } finally {
       setSending(false);
-      inputEl.focus();
     }
   }
 
-  // =========================================================
-  // 9) 音声：browser（SpeechRecognition）
-  // =========================================================
-  function getSpeechRecognitionCtor() {
-    const w = window;
-    return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+  async function onSend() {
+    if (sendBtn.disabled) return;
+    const ut = normalizeUserText(inputEl.value);
+    if (!ut) return;
+
+    inputEl.value = "";
+    await sendTextDirect(ut);
   }
 
-  function ensureSpeechRec() {
-    if (speechRec) return true;
+  // =========================================================
+  // 11) 音声
+  // =========================================================
+  function setLucyVoiceStatus(msg) {
+    if (!lucyVoiceAskStatus) return;
+    lucyVoiceAskStatus.textContent = String(msg || "");
+  }
+
+  function setLucyVoiceBtnLabel(isRecording) {
+    if (!lucyVoiceAskBtn) return;
+    lucyVoiceAskBtn.textContent = isRecording
+      ? getTerm("voiceStop", "停止")
+      : getTerm("voiceAsk", "Lucyに質問（音声）");
+  }
+
+  function getSpeechRecognitionCtor() {
+    return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  }
+
+  function stopVoiceTracks() {
+    try {
+      if (!voiceMediaStream) return;
+      for (const t of voiceMediaStream.getTracks()) t.stop();
+    } catch (_) {}
+    voiceMediaStream = null;
+  }
+
+  function startBrowserSpeech() {
     const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) return false;
+    if (!Ctor) throw new Error("SpeechRecognition not supported.");
 
     const rec = new Ctor();
-    rec.continuous = false;
-    rec.interimResults = false;
+    speechRec = rec;
+    speechIsRunning = true;
+    lastSpeechFinal = "";
 
-    rec.onstart = () => {
-      speechIsRunning = true;
-      lastSpeechFinal = "";
-      setLucyVoiceBtnLabel(true);
-      setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
+    rec.lang = langToSpeechLocale(getCurrentLang());
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+
+    rec.onresult = (ev) => {
+      let finalText = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const r = ev.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+      }
+      finalText = normalizeUserText(finalText);
+      if (finalText) lastSpeechFinal = finalText;
+
+      const interim = normalizeUserText(ev.results[ev.results.length - 1][0].transcript);
+      setLucyVoiceStatus(interim ? interim : "");
     };
 
-    rec.onresult = async (ev) => {
+    rec.onerror = (e) => {
+      console.error("[speech] error", e);
+      setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
+    };
+
+    rec.onend = async () => {
+      speechIsRunning = false;
+      speechRec = null;
+
+      const text = normalizeUserText(lastSpeechFinal);
+      if (!text) {
+        setLucyVoiceStatus(getTerm("voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
+        setLucyVoiceBtnLabel(false);
+        return;
+      }
+
       try {
-        let finalText = "";
-        for (let i = ev.resultIndex; i < ev.results.length; i++) {
-          const r = ev.results[i];
-          if (r && r.isFinal && r[0] && r[0].transcript) {
-            finalText += (finalText ? " " : "") + r[0].transcript;
-          }
-        }
-        finalText = normalizeUserText(finalText);
-        if (finalText) {
-          lastSpeechFinal = finalText;
-          setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
-          await sendTextDirect(finalText);
-          setLucyVoiceStatus("");
-        }
+        setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
+        setLucyVoiceBtnLabel(false);
+        await sendTextDirect(text);
+        setLucyVoiceStatus("");
       } catch (e) {
         console.error(e);
         setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
       }
     };
 
-    rec.onerror = (e) => {
-      console.warn("[SpeechRecognition] error", e);
-      setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
-    };
-
-    rec.onend = () => {
-      speechIsRunning = false;
-      setLucyVoiceBtnLabel(false);
-
-      if (!lastSpeechFinal) {
-        setLucyVoiceStatus(getTerm("voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
-      }
-    };
-
-    speechRec = rec;
-    return true;
-  }
-
-  async function startBrowserSpeech() {
-    if (!ensureSpeechRec()) {
-      setLucyVoiceStatus(getTerm("voiceUnsupported", "このブラウザでは音声認識が利用できません"));
-      return;
-    }
-    try {
-      speechRec.lang = langToSpeechLocale(getCurrentLang());
-      speechRec.start();
-    } catch (e) {
-      console.error(e);
-      setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
-      speechIsRunning = false;
-      setLucyVoiceBtnLabel(false);
-    }
+    setLucyVoiceBtnLabel(true);
+    setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
+    rec.start();
   }
 
   function stopBrowserSpeech() {
     try {
-      if (speechRec && speechIsRunning) speechRec.stop();
+      if (speechRec) speechRec.stop();
     } catch (_) {}
+    speechIsRunning = false;
+    speechRec = null;
+    setLucyVoiceBtnLabel(false);
   }
 
-  // =========================================================
-  // 10) 音声：server（MediaRecorder → /voice）
-  // =========================================================
   async function startServerVoice() {
     try {
+      setLucyVoiceBtnLabel(true);
+      voiceIsRecording = true;
       setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
 
       voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
-      let mimeType = "";
-      for (const m of mimeCandidates) {
-        if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) {
-          mimeType = m;
-          break;
-        }
-      }
+      voiceMediaRecorder = new MediaRecorder(voiceMediaStream);
 
       voiceChunks = [];
-      voiceMediaRecorder = new MediaRecorder(voiceMediaStream, mimeType ? { mimeType } : undefined);
-
       voiceMediaRecorder.ondataavailable = (ev) => {
         if (ev.data && ev.data.size > 0) voiceChunks.push(ev.data);
-      };
-
-      voiceMediaRecorder.onstart = () => {
-        voiceIsRecording = true;
-        setLucyVoiceBtnLabel(true);
-        setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
-      };
-
-      voiceMediaRecorder.onerror = (e) => {
-        console.error(e);
-        setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
       };
 
       voiceMediaRecorder.onstop = async () => {
@@ -667,31 +582,74 @@ lucyVoiceAskStatus.style.setProperty("line-height", "1.4", "important");  }
     console.log("[voice] mode=", mode, "VOICE_MODE=", VOICE_MODE, "chat=", WORKER_CHAT_URL, "voice=", WORKER_VOICE_URL);
 
     if (mode === "browser") {
-      await startBrowserSpeech();
+      startBrowserSpeech();
     } else {
       await startServerVoice();
     }
   }
 
   // =========================================================
-  // 12) 初期化
+  // 12) 初期化（ツアーインフォメーションを開いたタイミングで挨拶）
   // =========================================================
-  (async () => {
-    setLucyVoiceStatus("");
+  const isPanelOpen = () => {
+    try {
+      if (touristInfoBtn && touristInfoBtn.getAttribute("aria-expanded") === "true") return true;
+    } catch (_) {}
+    try {
+      if (recommendSection && !recommendSection.classList.contains("is-collapsed")) return true;
+    } catch (_) {}
+    return false;
+  };
 
+  const isChatEmpty = () => {
+    try {
+      if (!chatEl) return true;
+      if (chatEl.children && chatEl.children.length > 0) return false;
+      return String(chatEl.textContent || "").trim() === "";
+    } catch (_) {
+      return true;
+    }
+  };
+
+  async function initLucyGreetingIfNeeded() {
+    // すでに挨拶済み、またはチャットが既に埋まっている場合は何もしない
+    if (lucyGreetingShown) return;
+    if (!isChatEmpty()) {
+      lucyGreetingShown = true;
+      return;
+    }
+
+    setLucyVoiceStatus("");
     setSending(true);
     try {
       const data = await callWorker(null);
       if (data.reply) appendLucy(data.reply);
       if (data.nextState) nextState = data.nextState;
       if (data.debug) console.log("[Lucy debug]", data.debug);
+      lucyGreetingShown = true;
     } catch (e) {
       appendError("初期化に失敗しました", e.message);
       console.error(e);
     } finally {
       setSending(false);
     }
-  })();
+  }
+
+  // パネルを開いた直後（言語切替後）に挨拶を出す
+  // ※ 開閉の実体は別スクリプト（またはCSS/属性）で行われるため、click後に状態を確認する
+  if (touristInfoBtn) {
+    touristInfoBtn.addEventListener("click", () => {
+      // click直後は aria-expanded / class の反映前の可能性があるので次tickで判定
+      setTimeout(() => {
+        if (isPanelOpen()) initLucyGreetingIfNeeded();
+      }, 0);
+    });
+  }
+
+  // ページ読み込み時点でパネルが既に開いている場合のみ（例: 直前の状態復元など）挨拶
+  setTimeout(() => {
+    if (isPanelOpen()) initLucyGreetingIfNeeded();
+  }, 0);
 
   sendBtn.addEventListener("click", onSend);
   inputEl.addEventListener("keydown", (ev) => {
