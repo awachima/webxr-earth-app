@@ -357,11 +357,35 @@
     lucyVoiceAskStatus.textContent = String(text || "");
   }
 
+  // ★追加：押下中の色を切り替える（指定RGB/文字色）
+  function setLucyVoiceBtnVisual(isActive) {
+    if (!lucyVoiceAskBtn) return;
+
+    if (isActive) {
+      lucyVoiceAskBtn.style.backgroundColor = "rgb(11, 53, 89)";
+      lucyVoiceAskBtn.style.color = "#fff";
+      // 見た目の安定のため（必要なら削除OK）
+      lucyVoiceAskBtn.style.borderColor = "rgb(11, 53, 89)";
+    } else {
+      // 元のCSSに戻す
+      lucyVoiceAskBtn.style.backgroundColor = "";
+      lucyVoiceAskBtn.style.color = "";
+      lucyVoiceAskBtn.style.borderColor = "";
+    }
+  }
+
+  // ★変更：ボタン文言の「停止」→「話し終えたら送信」へ
   function setLucyVoiceBtnLabel(isActive) {
     if (!lucyVoiceAskBtn) return;
-    lucyVoiceAskBtn.textContent = isActive
-      ? getTerm("voiceBtnStop", "音声停止")
-      : getTerm("voiceBtnIdle", "Lucyに質問（音声）");
+
+    if (isActive) {
+      // 言語切替対応：i18nがあればそちらを優先
+      lucyVoiceAskBtn.textContent = getTerm("voiceBtnSpeakToSend", "話し終えたら送信");
+    } else {
+      lucyVoiceAskBtn.textContent = getTerm("voiceBtnIdle", "Lucyに質問（音声）");
+    }
+
+    setLucyVoiceBtnVisual(isActive);
   }
 
   function stopVoiceTracks() {
@@ -449,7 +473,7 @@
     rec.onstart = () => {
       speechIsRunning = true;
       lastSpeechFinal = "";
-      setLucyVoiceBtnLabel(true);
+      setLucyVoiceBtnLabel(true); // ★ここで「話し終えたら送信」＋青色
       setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
     };
 
@@ -482,9 +506,8 @@
 
     rec.onend = () => {
       speechIsRunning = false;
-      setLucyVoiceBtnLabel(false);
+      setLucyVoiceBtnLabel(false); // ★ここで元の表記＋元の色へ戻す
 
-      // 何も取れなかった場合
       if (!lastSpeechFinal) {
         setLucyVoiceStatus(getTerm("voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
       }
@@ -547,7 +570,7 @@
 
       voiceMediaRecorder.onstart = () => {
         voiceIsRecording = true;
-        setLucyVoiceBtnLabel(true);
+        setLucyVoiceBtnLabel(true); // ★録音中も「話し終えたら送信」＋青色
         setLucyVoiceStatus(getTerm("voiceRecording", "録音中…（もう一度押すと送信）"));
       };
 
@@ -558,7 +581,7 @@
 
       voiceMediaRecorder.onstop = async () => {
         try {
-          setLucyVoiceBtnLabel(false);
+          setLucyVoiceBtnLabel(false); // ★停止した時点で元に戻す（解析中はstatusで表示）
           voiceIsRecording = false;
           setLucyVoiceStatus(getTerm("voiceUploading", "解析中…"));
 
@@ -628,7 +651,6 @@
   }
 
   async function toggleVoice() {
-    // 送信中は触らせない
     if (sendBtn.disabled) return;
 
     // 動作中なら停止
@@ -661,6 +683,7 @@
       const data = await callWorker(null);
       if (data.reply) appendLucy(data.reply);
       if (data.nextState) nextState = data.nextState;
+      if (data.debug) console.log("[Lucy debug]", data.debug);
     } catch (e) {
       appendError("初期化に失敗しました", e.message);
       console.error(e);
