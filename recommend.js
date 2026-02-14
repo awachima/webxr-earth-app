@@ -352,9 +352,21 @@
     }
   }
 
+  // ★修正ポイント：
+  // ステータスが空のときは display:none にして、枠が下がらないようにする
+  // 文字がある時だけ display:block で表示 → その時だけ下がる（=意味がある）
   function setLucyVoiceStatus(text) {
     if (!lucyVoiceAskStatus) return;
-    lucyVoiceAskStatus.textContent = String(text || "");
+
+    const t = String(text || "").trim();
+    if (!t) {
+      lucyVoiceAskStatus.textContent = "";
+      lucyVoiceAskStatus.style.display = "none";
+      return;
+    }
+
+    lucyVoiceAskStatus.style.display = "";
+    lucyVoiceAskStatus.textContent = t;
   }
 
   // ★追加：押下中の色を切り替える（指定RGB/文字色）
@@ -364,10 +376,8 @@
     if (isActive) {
       lucyVoiceAskBtn.style.backgroundColor = "rgb(11, 53, 89)";
       lucyVoiceAskBtn.style.color = "#fff";
-      // 見た目の安定のため（必要なら削除OK）
       lucyVoiceAskBtn.style.borderColor = "rgb(11, 53, 89)";
     } else {
-      // 元のCSSに戻す
       lucyVoiceAskBtn.style.backgroundColor = "";
       lucyVoiceAskBtn.style.color = "";
       lucyVoiceAskBtn.style.borderColor = "";
@@ -379,7 +389,6 @@
     if (!lucyVoiceAskBtn) return;
 
     if (isActive) {
-      // 言語切替対応：i18nがあればそちらを優先
       lucyVoiceAskBtn.textContent = getTerm("voiceBtnSpeakToSend", "話し終えたら送信");
     } else {
       lucyVoiceAskBtn.textContent = getTerm("voiceBtnIdle", "Lucyに質問（音声）");
@@ -473,7 +482,7 @@
     rec.onstart = () => {
       speechIsRunning = true;
       lastSpeechFinal = "";
-      setLucyVoiceBtnLabel(true); // ★ここで「話し終えたら送信」＋青色
+      setLucyVoiceBtnLabel(true);
       setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
     };
 
@@ -491,7 +500,7 @@
           lastSpeechFinal = finalText;
           setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
           await sendTextDirect(finalText);
-          setLucyVoiceStatus("");
+          setLucyVoiceStatus(""); // ★ここで消える→display:noneになり枠も戻る
         }
       } catch (e) {
         console.error(e);
@@ -506,7 +515,7 @@
 
     rec.onend = () => {
       speechIsRunning = false;
-      setLucyVoiceBtnLabel(false); // ★ここで元の表記＋元の色へ戻す
+      setLucyVoiceBtnLabel(false);
 
       if (!lastSpeechFinal) {
         setLucyVoiceStatus(getTerm("voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
@@ -570,7 +579,7 @@
 
       voiceMediaRecorder.onstart = () => {
         voiceIsRecording = true;
-        setLucyVoiceBtnLabel(true); // ★録音中も「話し終えたら送信」＋青色
+        setLucyVoiceBtnLabel(true);
         setLucyVoiceStatus(getTerm("voiceRecording", "録音中…（もう一度押すと送信）"));
       };
 
@@ -581,7 +590,7 @@
 
       voiceMediaRecorder.onstop = async () => {
         try {
-          setLucyVoiceBtnLabel(false); // ★停止した時点で元に戻す（解析中はstatusで表示）
+          setLucyVoiceBtnLabel(false);
           voiceIsRecording = false;
           setLucyVoiceStatus(getTerm("voiceUploading", "解析中…"));
 
@@ -607,7 +616,7 @@
 
           setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
           await sendTextDirect(text);
-          setLucyVoiceStatus("");
+          setLucyVoiceStatus(""); // ★ここで消える→display:noneになり枠も戻る
         } catch (e) {
           console.error(e);
           setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
@@ -663,7 +672,7 @@
       return;
     }
 
-    setLucyVoiceStatus("");
+    setLucyVoiceStatus(""); // ★空なら display:none → 枠は下がらない
     const mode = resolveVoiceMode();
     console.log("[voice] mode=", mode, "VOICE_MODE=", VOICE_MODE, "chat=", WORKER_CHAT_URL, "voice=", WORKER_VOICE_URL);
 
@@ -678,6 +687,9 @@
   // 12) 初期化
   // =========================================================
   (async () => {
+    // ★初期状態でステータス枠を確実に消す
+    setLucyVoiceStatus("");
+
     setSending(true);
     try {
       const data = await callWorker(null);
