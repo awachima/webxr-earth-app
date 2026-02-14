@@ -1,25 +1,28 @@
 /**
  * recommend.js
- * - index.html の既存UI (#recommendInput / #recommendSend / #recommendChat) を使って
+ * - index.html の既存UI (#recommendInput / #recommendSend / #recommendChat / #lucyVoiceAskBtn) を使って
  *   Cloudflare Worker の /chat に POST し、reply と nextState を表示する。
  *
- * ★ 多言語対応・修正版:
- * - 言語切り替え (window.currentLang) に動的に追従。
- * - UIテキストを window.i18n.recommend から取得。
+ * ★ 多言語対応:
+ * - 言語切り替え (window.currentLang / window.__DD_LANG / localStorage) に動的に追従。
+ * - UIテキストは window.i18n.recommend があれば参照（無ければデフォルト文言）。
  *
- * ★ チャットバブルUI化:
- * - #recommendChat に「msg-row / msg-bubble / msg-meta」DOMを追加して表示する
- * - Lucy(assistant)=左 / You(user)=右
+ * ★ チャットバブルUI:
+ * - #recommendChat に msg-row / msg-bubble / msg-meta を追加して表示（Lucy=左 / You=右）
  *
- * ★ 2択クリック対応:
- * - Lucyの返答に「以下でしたらどちらの気分ですか？」＋「・選択肢×2以上」が含まれる場合、
- *   バブルの下にボタンを表示し、クリックでその選択肢を送信する。
+ * ★ 選択肢ボタン化:
+ * - Lucyの返答に箇条書きが含まれる場合、ボタン化してクリック送信
+ * - 「どっちも違う」ボタンを追加
  *
- * ★ 音声質問ボタン対応（今回追加）:
- * - #lucyVoiceAskBtn をクリックすると、
- *   - VOICE_MODE=auto: ブラウザSTTが使えればそれを使う / 使えなければサーバーSTT（録音→/voice）
- *   - VOICE_MODE=browser: ブラウザSTTのみ
- *   - VOICE_MODE=server: サーバーSTTのみ（MediaRecorderで録音→/voice）
+ * ★ 音声:
+ * - VOICE_MODE = "auto" | "browser" | "server"
+ * - "auto" は SpeechRecognition が使えれば browser / それ以外は server
+ * - Quest/Android は index.html 側で window.__LUCY_VOICE_MODE="server" を強制している想定
+ *
+ * ▼ 重要:
+ * - Pages 側に /chat は無いので 405 になります。
+ *   必ず Worker の /chat に向けるため、
+ *   window.__LUCY_CHAT_URL があればそれを最優先、無ければ下の既定URLを使用します。
  */
 
 (() => {
@@ -27,44 +30,38 @@
   try { console.log("[recommend.js] loaded"); } catch (_) {}
 
   // =========================================================
-  // 1) 設定
+  // 1) 設定（★ここだけあなたの環境で変える可能性あり）
   // =========================================================
+  const WORKER_CHAT_URL_DEFAULT = "https://lucy-recommend.awachima7.workers.dev/chat";
 
-  // ★優先順位:
-  // 1) window.__LUCY_CHAT_URL があればそれ
-  // 2) 既定の Worker URL
   const WORKER_CHAT_URL = (() => {
-    try {
-      if (typeof window !== "undefined" && window.__LUCY_CHAT_URL) {
-        return String(window.__LUCY_CHAT_URL);
-      }
-    } catch (_) {}
-    return "https://lucy-recommend.awachima7.workers.dev/chat";
+    if (typeof window !== "undefined" && window.__LUCY_CHAT_URL) return String(window.__LUCY_CHAT_URL);
+    return WORKER_CHAT_URL_DEFAULT;
   })();
 
-  // voice endpoint は /chat → /voice の派生（明示指定があればそれを優先）
   const WORKER_VOICE_URL = (() => {
-    try {
-      if (typeof window !== "undefined" && window.__LUCY_VOICE_URL) {
-        return String(window.__LUCY_VOICE_URL);
-      }
-    } catch (_) {}
-
+    if (typeof window !== "undefined" && window.__LUCY_VOICE_URL) return String(window.__LUCY_VOICE_URL);
     const s = String(WORKER_CHAT_URL || "");
     if (/\/chat(\?.*)?$/i.test(s)) return s.replace(/\/chat(\?.*)?$/i, "/voice");
     return s.replace(/\/+$/, "") + "/voice";
   })();
 
-  // "auto" | "browser" | "server"
   const VOICE_MODE = (() => {
-    try {
-      if (typeof window !== "undefined" && window.__LUCY_VOICE_MODE) {
-        return String(window.__LUCY_VOICE_MODE);
-      }
-    } catch (_) {}
+    if (typeof window !== "undefined" && window.__LUCY_VOICE_MODE) return String(window.__LUCY_VOICE_MODE);
     return "auto";
   })();
 
+  // Pages 側に誤爆していたら早めに気づけるように警告
+  try {
+    const u = new URL(WORKER_CHAT_URL, location.href);
+    if (u.origin === location.origin) {
+      console.warn("[recommend.js] WORKER_CHAT_URL looks same-origin. If it's '/chat', it will 405 on Pages. URL=", WORKER_CHAT_URL);
+    }
+  } catch (_) {}
+
+  // =========================================================
+  // 2) 言語
+  // =========================================================
   const getCurrentLang = () => {
     if (typeof window !== "undefined" && window.currentLang) return String(window.currentLang);
     if (typeof window !== "undefined" && window.__DD_LANG) return String(window.__DD_LANG);
@@ -76,20 +73,7 @@
     return "ja";
   };
 
-  // SpeechRecognition 用の言語コード寄せ（必要なら増やす）
-  function mapToSpeechLang(lang) {
-    const l = String(lang || "").toLowerCase();
-    if (l === "ja") return "ja-JP";
-    if (l === "en") return "en-US";
-    if (l === "zh") return "zh-CN";
-    if (l === "hi") return "hi-IN";
-    if (l === "fa") return "fa-IR";
-    if (l === "he") return "he-IL";
-    return l;
-  }
-
-  // 翻訳ヘルパー（i18nの形が複数あり得るので吸収）
-  // 想定:
+  // UIテキスト（i18nの形が複数あり得るので吸収）
   // 1) window.i18n.recommend[key] = "..."
   // 2) window.i18n.recommend[lang][key] = "..."
   const getTerm = (key, def) => {
@@ -98,18 +82,26 @@
       const rec = window.i18n && window.i18n.recommend;
       if (!rec) return def;
 
-      // 2) 多言語辞書形式
       if (rec[lang] && rec[lang][key]) return rec[lang][key];
       if (rec.ja && rec.ja[key]) return rec.ja[key];
-
-      // 1) フラット形式
       if (rec[key]) return rec[key];
     } catch (_) {}
     return def;
   };
 
+  const langToSpeechLocale = (lang) => {
+    const l = String(lang || "ja").toLowerCase();
+    if (l === "ja") return "ja-JP";
+    if (l === "en") return "en-US";
+    if (l === "zh") return "zh-CN";
+    if (l === "hi") return "hi-IN";
+    if (l === "he") return "he-IL";
+    if (l === "fa") return "fa-IR";
+    return "ja-JP";
+  };
+
   // =========================================================
-  // 2) DOM取得
+  // 3) DOM取得
   // =========================================================
   const inputEl = document.getElementById("recommendInput");
   const sendBtn = document.getElementById("recommendSend");
@@ -127,22 +119,23 @@
   }
 
   // =========================================================
-  // 3) 内部状態
+  // 4) 内部状態
   // =========================================================
   let nextState = null;
 
-  // 音声録音用
+  // 音声録音（server）
   let voiceMediaStream = null;
   let voiceMediaRecorder = null;
   let voiceChunks = [];
   let voiceIsRecording = false;
 
-  // SpeechRecognition
+  // SpeechRecognition（browser）
   let speechRec = null;
   let speechIsRunning = false;
+  let lastSpeechFinal = "";
 
   // =========================================================
-  // 4) ユーティリティ
+  // 5) ユーティリティ
   // =========================================================
   function safeJsonParse(text) {
     try {
@@ -163,10 +156,7 @@
     } else {
       const fallback = sendBtn.dataset._prevText || "質問する";
       sendBtn.textContent = getTerm("send", fallback);
-
-      if (sendBtn.dataset._prevText) {
-        delete sendBtn.dataset._prevText;
-      }
+      if (sendBtn.dataset._prevText) delete sendBtn.dataset._prevText;
     }
   }
 
@@ -183,73 +173,6 @@
       .replace(/'/g, "&#39;");
   }
 
-  // Lucyの返答は「安全な範囲でリンクを許可」しつつ、それ以外はテキスト扱いにする
-  function sanitizeLucyReplyToHtml(rawText) {
-    const original = String(rawText || "");
-
-    // 0) Worker から <a ...>...</a> が来る場合がある（それを textContent で見せないため）
-    //    まず「安全な a タグ」だけをプレースホルダとして退避し、
-    //    それ以外は従来どおりエスケープ → URLリンク化 → 改行 <br> の順でHTML化する。
-    const anchorTokens = [];
-    let text = original.replace(/<a\b[\s\S]*?<\/a>/gi, (m) => {
-      const safe = sanitizeAnchorHtml(m);
-      const token = `__ANCHOR_TOKEN_${anchorTokens.length}__`;
-      anchorTokens.push({ token, html: safe });
-      return token;
-    });
-
-    // 1) まずエスケープ
-    let html = escapeHtml(text);
-
-    // 2) URL をリンク化（http/httpsのみ）
-    //    ただし、末尾の句読点などはリンクに含めない
-    const urlRe = /(https?:\/\/[^\s<>"']+)/g;
-    html = html.replace(urlRe, (m) => {
-      // 末尾に付くことがある記号を落とす
-      const trimmed = m.replace(/[)\]、。．，.]+$/g, (x) => x);
-      const suffix = m.slice(trimmed.length);
-      const safe = escapeHtml(trimmed);
-      return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>${escapeHtml(suffix)}`;
-    });
-
-    // 3) 退避した a タグを復元（すでにサニタイズ済み）
-    for (const a of anchorTokens) {
-      const tokenRe = new RegExp(escapeRegExp(a.token), "g");
-      html = html.replace(tokenRe, a.html);
-    }
-
-    // 4) 改行は <br> に
-    html = html.replace(/\r?\n/g, "<br>");
-
-    return html;
-  }
-
-  function sanitizeAnchorHtml(anchorHtml) {
-    try {
-      // href と表示テキストだけを許可（それ以外は落とす）
-      const hrefMatch = anchorHtml.match(/\bhref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
-      const hrefRaw = hrefMatch ? (hrefMatch[2] || hrefMatch[3] || hrefMatch[4] || "") : "";
-      const href = String(hrefRaw || "").trim();
-
-      // http/https のみ許可
-      if (!/^https?:\/\//i.test(href)) {
-        // 許可しないリンクはテキストとして表示
-        return escapeHtml(stripTags(anchorHtml));
-      }
-
-      // aタグ内部の表示テキスト（タグは除去）
-      const label = stripTags(anchorHtml).trim() || href;
-
-      const safeHref = escapeHtml(href);
-      const safeLabel = escapeHtml(label);
-
-      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`;
-    } catch (e) {
-      // 万一失敗したら、タグを落としてテキスト化
-      return escapeHtml(stripTags(anchorHtml));
-    }
-  }
-
   function stripTags(html) {
     return String(html || "").replace(/<\/?[^>]+>/g, "");
   }
@@ -258,20 +181,63 @@
     return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
-  // 返答テキストから、絞り込み候補の箇条書きだけ抽出する
-  // - 「・」や「-」などの箇条書きを候補として拾う
-  // - URLを含む行（=ツアー候補）は拾わない
+  // href と表示テキストだけを許可（http/httpsのみ）
+  function sanitizeAnchorHtml(anchorHtml) {
+    try {
+      const hrefMatch = anchorHtml.match(/\bhref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
+      const hrefRaw = hrefMatch ? (hrefMatch[2] || hrefMatch[3] || hrefMatch[4] || "") : "";
+      const href = String(hrefRaw || "").trim();
+      if (!/^https?:\/\//i.test(href)) return escapeHtml(stripTags(anchorHtml));
+
+      const label = stripTags(anchorHtml).trim() || href;
+      const safeHref = escapeHtml(href);
+      const safeLabel = escapeHtml(label);
+      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`;
+    } catch (e) {
+      return escapeHtml(stripTags(anchorHtml));
+    }
+  }
+
+  // Lucyの返答は「安全な範囲でリンクを許可」しつつ、それ以外はテキスト扱い
+  function sanitizeLucyReplyToHtml(rawText) {
+    const original = String(rawText || "");
+
+    const anchorTokens = [];
+    let text = original.replace(/<a\b[\s\S]*?<\/a>/gi, (m) => {
+      const safe = sanitizeAnchorHtml(m);
+      const token = `__ANCHOR_TOKEN_${anchorTokens.length}__`;
+      anchorTokens.push({ token, html: safe });
+      return token;
+    });
+
+    let html = escapeHtml(text);
+
+    const urlRe = /(https?:\/\/[^\s<>"']+)/g;
+    html = html.replace(urlRe, (m) => {
+      const trimmed = m.replace(/[)\]、。．，.]+$/g, (x) => x);
+      const suffix = m.slice(trimmed.length);
+      const safe = escapeHtml(trimmed);
+      return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>${escapeHtml(suffix)}`;
+    });
+
+    for (const a of anchorTokens) {
+      const tokenRe = new RegExp(escapeRegExp(a.token), "g");
+      html = html.replace(tokenRe, a.html);
+    }
+
+    html = html.replace(/\r?\n/g, "<br>");
+    return html;
+  }
+
+  // 返答テキストから箇条書き候補を抽出（URL行は除外）
   function extractChoicesFromLucyReply(rawText) {
     const text = String(rawText || "");
-    // URL行が混ざる場合はボタン化しないため、URL含む行は除外
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
     const choices = [];
     for (const line of lines) {
-      // URLがあれば候補ではない（ツアーの提案）
       if (/https?:\/\//i.test(line)) continue;
 
-      // 箇条書きっぽい記号
       const m =
         line.match(/^[・\-\*]\s*(.+)$/) ||
         line.match(/^\d+\.\s*(.+)$/) ||
@@ -282,21 +248,18 @@
       const c = String(m[1] || "").trim();
       if (!c) continue;
 
-      // 余計な末尾記号を落とす
       const cleaned = c.replace(/[：:\-–—]\s*$/g, "").trim();
       if (!cleaned) continue;
 
-      // 重複排除（同じ候補が複数行あるとボタンが増えるので）
       if (!choices.includes(cleaned)) choices.push(cleaned);
     }
 
-    // 2個以上ないと「絞り込み候補」っぽくないので null
     if (choices.length < 2) return null;
     return { choices };
   }
 
   // =========================================================
-  // 5) UI描画（チャットバブル）
+  // 6) UI描画（チャットバブル）
   // =========================================================
   function appendBubble(role, label, content, isHtml) {
     const row = document.createElement("div");
@@ -311,21 +274,15 @@
 
     const body = document.createElement("div");
     body.className = "msg-body";
-
-    if (isHtml) {
-      body.innerHTML = content;
-    } else {
-      body.textContent = content;
-    }
+    if (isHtml) body.innerHTML = content;
+    else body.textContent = content;
 
     bubble.appendChild(meta);
     bubble.appendChild(body);
     row.appendChild(bubble);
     chatEl.appendChild(row);
-
     chatEl.scrollTop = chatEl.scrollHeight;
 
-    // 追加: 呼び出し側でボタン等を付けられるように返す
     return { row, bubble, body };
   }
 
@@ -338,9 +295,9 @@
     const extracted = extractChoicesFromLucyReply(rawText);
     if (extracted && extracted.choices && extracted.choices.length >= 2) {
       const choices = extracted.choices;
+
       const wrap = document.createElement("div");
       wrap.className = "lucy-choice-wrap";
-      // CSSが無くても最低限見えるように軽くスタイル
       wrap.style.marginTop = "10px";
       wrap.style.display = "flex";
       wrap.style.gap = "8px";
@@ -352,7 +309,6 @@
         btn.className = "lucy-choice-btn";
         btn.textContent = label;
 
-        // CSSが無くてもボタンらしくする
         btn.style.padding = "8px 10px";
         btn.style.borderRadius = "10px";
         btn.style.border = "1px solid rgba(0,0,0,0.15)";
@@ -360,24 +316,14 @@
         btn.style.cursor = "pointer";
         btn.style.fontSize = "14px";
 
-        btn.addEventListener("mouseenter", () => {
-          btn.style.filter = "brightness(0.98)";
-        });
-        btn.addEventListener("mouseleave", () => {
-          btn.style.filter = "none";
-        });
-
         btn.addEventListener("click", async () => {
-          // 送信中は無視
           if (sendBtn.disabled) return;
 
-          // クリック後は二重送信防止のため無効化
           try {
             const all = wrap.querySelectorAll("button");
             all.forEach((b) => (b.disabled = true));
           } catch (_) {}
 
-          // UI上は「ユーザーが選んだ」として、そのテキストを送信
           inputEl.value = label;
           await onSend();
         });
@@ -385,15 +331,10 @@
         return btn;
       };
 
-      // すべての候補をボタン化（2段目で大量に出てもOK）
       choices.forEach((c) => wrap.appendChild(makeBtn(c)));
-
-      // 「どっちも違う」ボタン
       wrap.appendChild(makeBtn(getTerm("choiceNeither", "どっちも違う")));
 
-      // バブル内（本文の下）にボタンを追加
       parts.bubble.appendChild(wrap);
-
       chatEl.scrollTop = chatEl.scrollHeight;
     }
   }
@@ -418,28 +359,20 @@
 
   function setLucyVoiceBtnLabel(isActive) {
     if (!lucyVoiceAskBtn) return;
-    if (isActive) {
-      lucyVoiceAskBtn.textContent = getTerm("voiceBtnStop", "音声停止");
-    } else {
-      lucyVoiceAskBtn.textContent = getTerm("voiceBtnIdle", "Lucyに質問（音声）");
-    }
+    lucyVoiceAskBtn.textContent = isActive
+      ? getTerm("voiceBtnStop", "音声停止")
+      : getTerm("voiceBtnIdle", "Lucyに質問（音声）");
   }
 
   function stopVoiceTracks() {
     if (voiceMediaStream) {
-      try {
-        voiceMediaStream.getTracks().forEach((t) => t.stop());
-      } catch (_) {}
+      try { voiceMediaStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
     }
     voiceMediaStream = null;
   }
 
-  function isSpeechRecognitionAvailable() {
-    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-  }
-
   // =========================================================
-  // 6) Worker 呼び出し
+  // 7) Worker 呼び出し
   // =========================================================
   async function callWorker(userText) {
     const payload = {};
@@ -458,17 +391,20 @@
     const raw = await res.text();
     const parsed = safeJsonParse(raw);
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}\n${raw}`);
-    }
-    if (!parsed.ok) {
-      throw new Error(`JSON parse failed\n${raw}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
+    if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
     return parsed.value;
   }
 
+  async function sendTextDirect(text) {
+    const t = normalizeUserText(text);
+    if (!t) return;
+    inputEl.value = t;
+    await onSend();
+  }
+
   // =========================================================
-  // 7) 送信処理
+  // 8) 送信処理
   // =========================================================
   async function onSend() {
     const text = normalizeUserText(inputEl.value);
@@ -493,254 +429,231 @@
     }
   }
 
-  // 文字列をそのまま送信するためのヘルパー（音声→テキスト送信で使う）
-  async function sendTextDirect(text) {
-    const t = normalizeUserText(text);
-    if (!t) return;
-    inputEl.value = t;
-    await onSend();
+  // =========================================================
+  // 9) 音声：browser（SpeechRecognition）
+  // =========================================================
+  function getSpeechRecognitionCtor() {
+    const w = window;
+    return w.SpeechRecognition || w.webkitSpeechRecognition || null;
   }
 
-  // =========================================================
-  // 8) 音声（ブラウザSTT）
-  // =========================================================
-  function startBrowserSTT() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      throw new Error("SpeechRecognition not available");
-    }
+  function ensureSpeechRec() {
+    if (speechRec) return true;
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) return false;
 
-    if (speechRec) {
-      try { speechRec.onresult = null; speechRec.onerror = null; speechRec.onend = null; } catch (_) {}
-      speechRec = null;
-    }
-
-    const rec = new SR();
-    rec.lang = mapToSpeechLang(getCurrentLang());
-    rec.interimResults = false;
+    const rec = new Ctor();
     rec.continuous = false;
+    rec.interimResults = false;
 
-    speechIsRunning = true;
-    setLucyVoiceBtnLabel(true);
-    setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
+    rec.onstart = () => {
+      speechIsRunning = true;
+      lastSpeechFinal = "";
+      setLucyVoiceBtnLabel(true);
+      setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
+    };
 
     rec.onresult = async (ev) => {
       try {
-        const text = ev.results && ev.results[0] && ev.results[0][0] ? ev.results[0][0].transcript : "";
-        const normalized = normalizeUserText(text);
-        if (!normalized) {
-          setLucyVoiceStatus(getTerm("voiceNoSpeech", "音声が認識できませんでした。もう一度お試しください。"));
-          return;
+        let finalText = "";
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+          const r = ev.results[i];
+          if (r && r.isFinal && r[0] && r[0].transcript) {
+            finalText += (finalText ? " " : "") + r[0].transcript;
+          }
         }
-        setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
-        await sendTextDirect(normalized);
-        setLucyVoiceStatus("");
+        finalText = normalizeUserText(finalText);
+        if (finalText) {
+          lastSpeechFinal = finalText;
+          setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
+          await sendTextDirect(finalText);
+          setLucyVoiceStatus("");
+        }
       } catch (e) {
         console.error(e);
-        setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました。"));
+        setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
       }
     };
 
-    rec.onerror = (ev) => {
-      console.error("[SpeechRecognition error]", ev);
-      setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました。"));
+    rec.onerror = (e) => {
+      console.warn("[SpeechRecognition] error", e);
+      setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
     };
 
     rec.onend = () => {
       speechIsRunning = false;
       setLucyVoiceBtnLabel(false);
-      // onresultで送信しているので、ここでは過剰にメッセージを出さない
-      if (!voiceIsRecording) {
-        // 何も送られなかった場合の保険
-        // setLucyVoiceStatus("");
+
+      // 何も取れなかった場合
+      if (!lastSpeechFinal) {
+        setLucyVoiceStatus(getTerm("voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
       }
     };
 
     speechRec = rec;
-    rec.start();
+    return true;
   }
 
-  function stopBrowserSTT() {
+  async function startBrowserSpeech() {
+    if (!ensureSpeechRec()) {
+      setLucyVoiceStatus(getTerm("voiceUnsupported", "このブラウザでは音声認識が利用できません"));
+      return;
+    }
+    try {
+      const lang = getCurrentLang();
+      speechRec.lang = langToSpeechLocale(lang);
+      speechRec.start();
+    } catch (e) {
+      console.error(e);
+      setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
+      speechIsRunning = false;
+      setLucyVoiceBtnLabel(false);
+    }
+  }
+
+  function stopBrowserSpeech() {
     try {
       if (speechRec && speechIsRunning) speechRec.stop();
     } catch (_) {}
-    speechIsRunning = false;
-    setLucyVoiceBtnLabel(false);
   }
 
   // =========================================================
-  // 9) 音声（サーバーSTT：録音→/voice）
+  // 10) 音声：server（MediaRecorder → /voice）
   // =========================================================
   async function startServerVoice() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error("getUserMedia not supported");
-    }
+    try {
+      setLucyVoiceStatus(getTerm("voicePrepare", "マイク準備中…"));
 
-    // すでに録音中なら無視
-    if (voiceIsRecording) return;
-
-    setLucyVoiceStatus(getTerm("voiceMicRequest", "マイクの使用を許可してください…"));
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    voiceMediaStream = stream;
-
-    voiceChunks = [];
-    let mimeType = "";
-
-    // できれば webm
-    if (window.MediaRecorder) {
-      const candidates = [
+      voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeCandidates = [
         "audio/webm;codecs=opus",
         "audio/webm",
         "audio/ogg;codecs=opus",
-        "audio/ogg",
       ];
-      for (const c of candidates) {
-        if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) {
-          mimeType = c;
+      let mimeType = "";
+      for (const m of mimeCandidates) {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) {
+          mimeType = m;
           break;
         }
       }
-    }
 
-    const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-    voiceMediaRecorder = mr;
+      voiceChunks = [];
+      voiceMediaRecorder = new MediaRecorder(voiceMediaStream, mimeType ? { mimeType } : undefined);
 
-    mr.ondataavailable = (ev) => {
-      try {
+      voiceMediaRecorder.ondataavailable = (ev) => {
         if (ev.data && ev.data.size > 0) voiceChunks.push(ev.data);
-      } catch (_) {}
-    };
+      };
 
-    mr.onerror = (ev) => {
-      console.error("[MediaRecorder error]", ev);
-      setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました。"));
-    };
+      voiceMediaRecorder.onstart = () => {
+        voiceIsRecording = true;
+        setLucyVoiceBtnLabel(true);
+        setLucyVoiceStatus(getTerm("voiceRecording", "録音中…（もう一度押すと送信）"));
+      };
 
-    mr.onstart = () => {
-      voiceIsRecording = true;
-      setLucyVoiceBtnLabel(true);
-      setLucyVoiceStatus(getTerm("voiceRecording", "録音中…（もう一度押すと停止）"));
-    };
-
-    mr.onstop = async () => {
-      voiceIsRecording = false;
-      setLucyVoiceBtnLabel(false);
-      stopVoiceTracks();
-
-      try {
-        setLucyVoiceStatus(getTerm("voiceUploading", "送信中…"));
-
-        const blob = new Blob(voiceChunks, { type: mimeType || "audio/webm" });
-        const fd = new FormData();
-        fd.append("lang", getCurrentLang());
-        fd.append("audio", blob, "voice.webm");
-
-        const res = await fetch(WORKER_VOICE_URL, {
-          method: "POST",
-          body: fd,
-        });
-
-        const raw = await res.text();
-        const parsed = safeJsonParse(raw);
-
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}\n${raw}`);
-        }
-        if (!parsed.ok) {
-          throw new Error(`JSON parse failed\n${raw}`);
-        }
-
-        const text = normalizeUserText(parsed.value && parsed.value.text ? parsed.value.text : "");
-        if (!text) {
-          setLucyVoiceStatus(getTerm("voiceNoSpeech", "音声が認識できませんでした。もう一度お試しください。"));
-          return;
-        }
-
-        setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
-        await sendTextDirect(text);
-        setLucyVoiceStatus("");
-      } catch (e) {
+      voiceMediaRecorder.onerror = (e) => {
         console.error(e);
-        setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました。"));
-      } finally {
-        voiceChunks = [];
-        voiceMediaRecorder = null;
-      }
-    };
+        setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
+      };
 
-    mr.start();
+      voiceMediaRecorder.onstop = async () => {
+        try {
+          setLucyVoiceBtnLabel(false);
+          voiceIsRecording = false;
+          setLucyVoiceStatus(getTerm("voiceUploading", "解析中…"));
+
+          const blob = new Blob(voiceChunks, { type: voiceMediaRecorder.mimeType || "audio/webm" });
+          voiceChunks = [];
+
+          const fd = new FormData();
+          fd.append("audio", blob, "voice.webm");
+          fd.append("lang", getCurrentLang());
+
+          const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
+          const raw = await res.text();
+          const parsed = safeJsonParse(raw);
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
+          if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
+
+          const text = normalizeUserText(parsed.value && parsed.value.text);
+          if (!text) {
+            setLucyVoiceStatus(getTerm("voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
+            return;
+          }
+
+          setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
+          await sendTextDirect(text);
+          setLucyVoiceStatus("");
+        } catch (e) {
+          console.error(e);
+          setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
+        } finally {
+          stopVoiceTracks();
+          voiceMediaRecorder = null;
+        }
+      };
+
+      voiceMediaRecorder.start();
+    } catch (e) {
+      console.error(e);
+      setLucyVoiceStatus(getTerm("voicePermissionDenied", "マイクの許可が必要です"));
+      setLucyVoiceBtnLabel(false);
+      voiceIsRecording = false;
+      stopVoiceTracks();
+    }
   }
 
   function stopServerVoice() {
     try {
       if (voiceMediaRecorder && voiceIsRecording) voiceMediaRecorder.stop();
     } catch (_) {
-      // 失敗したら強制停止
+      stopVoiceTracks();
       voiceIsRecording = false;
       setLucyVoiceBtnLabel(false);
-      stopVoiceTracks();
     }
   }
 
   // =========================================================
-  // 10) 音声：トグル制御
+  // 11) 音声トグル（ボタン）
   // =========================================================
+  function resolveVoiceMode() {
+    const m = String(VOICE_MODE || "auto").toLowerCase();
+    if (m === "browser") return "browser";
+    if (m === "server") return "server";
+
+    // auto
+    const hasSR = !!getSpeechRecognitionCtor();
+    return hasSR ? "browser" : "server";
+  }
+
   async function toggleVoice() {
-    // 送信中は触らない
+    // 送信中は触らせない
     if (sendBtn.disabled) return;
 
-    // すでに動作中なら停止
+    // 動作中なら停止
     if (speechIsRunning) {
-      stopBrowserSTT();
-      setLucyVoiceStatus("");
+      stopBrowserSpeech();
       return;
     }
     if (voiceIsRecording) {
       stopServerVoice();
-      // onstop 側で送信する
       return;
     }
 
-    ensurePanelOpenSoftly();
+    setLucyVoiceStatus("");
+    const mode = resolveVoiceMode();
+    console.log("[voice] mode=", mode, "VOICE_MODE=", VOICE_MODE, "chat=", WORKER_CHAT_URL, "voice=", WORKER_VOICE_URL);
 
-    const mode = String(VOICE_MODE || "auto").toLowerCase();
-    const canBrowser = isSpeechRecognitionAvailable();
-
-    try {
-      if (mode === "browser") {
-        if (!canBrowser) {
-          setLucyVoiceStatus(getTerm("voiceBrowserUnavailable", "この環境ではブラウザ音声認識が利用できません。"));
-          return;
-        }
-        startBrowserSTT();
-        return;
-      }
-
-      if (mode === "server") {
-        await startServerVoice();
-        return;
-      }
-
-      // auto
-      if (canBrowser) {
-        startBrowserSTT();
-        return;
-      }
+    if (mode === "browser") {
+      await startBrowserSpeech();
+    } else {
       await startServerVoice();
-    } catch (e) {
-      console.error(e);
-      setLucyVoiceBtnLabel(false);
-      setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました。"));
-      // 念のため停止
-      stopBrowserSTT();
-      stopServerVoice();
-      stopVoiceTracks();
     }
   }
 
   // =========================================================
-  // 11) 初期化
+  // 12) 初期化
   // =========================================================
   (async () => {
     setSending(true);
@@ -764,11 +677,9 @@
     }
   });
 
-  // ★ここが今回の本題：音声ボタンのイベントを付ける
   if (lucyVoiceAskBtn) {
-    lucyVoiceAskBtn.addEventListener("click", () => {
-      toggleVoice();
-    });
+    setLucyVoiceBtnLabel(false);
+    lucyVoiceAskBtn.addEventListener("click", toggleVoice);
   } else {
     console.warn("[recommend.js] lucyVoiceAskBtn not found.");
   }
