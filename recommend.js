@@ -358,10 +358,18 @@
     lucyVoiceAskStatus.textContent = t;
 
     // ★ここが肝：見えない原因が opacity:0 なので、必ず 1 に戻す
-    lucyVoiceAskStatus.style.setProperty("display", "block", "important");
-    lucyVoiceAskStatus.style.setProperty("opacity", "1", "important");
-    lucyVoiceAskStatus.style.setProperty("visibility", "visible", "important");
-  }
+lucyVoiceAskStatus.style.setProperty("display", "block", "important");
+lucyVoiceAskStatus.style.setProperty("opacity", "1", "important");
+lucyVoiceAskStatus.style.setProperty("visibility", "visible", "important");
+
+lucyVoiceAskStatus.style.setProperty("background", "none", "important");
+lucyVoiceAskStatus.style.setProperty("border", "none", "important");
+lucyVoiceAskStatus.style.setProperty("padding", "0", "important");
+
+lucyVoiceAskStatus.style.setProperty("color", "#666666", "important");
+lucyVoiceAskStatus.style.setProperty("font-size", "13px", "important");
+lucyVoiceAskStatus.style.setProperty("margin-top", "6px", "important");
+lucyVoiceAskStatus.style.setProperty("line-height", "1.4", "important");  }
 
   function setLucyVoiceBtnVisual(isActive) {
     if (!lucyVoiceAskBtn) return;
