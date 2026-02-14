@@ -352,9 +352,7 @@
     }
   }
 
-  // ★修正ポイント：
-  // ステータスが空のときは display:none にして、枠が下がらないようにする
-  // 文字がある時だけ display:block で表示 → その時だけ下がる（=意味がある）
+  // ステータス表示
   function setLucyVoiceStatus(text) {
     if (!lucyVoiceAskStatus) return;
 
@@ -500,7 +498,7 @@
           lastSpeechFinal = finalText;
           setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
           await sendTextDirect(finalText);
-          setLucyVoiceStatus(""); // ★ここで消える→display:noneになり枠も戻る
+          setLucyVoiceStatus("");
         }
       } catch (e) {
         console.error(e);
@@ -554,7 +552,8 @@
   // =========================================================
   async function startServerVoice() {
     try {
-      setLucyVoiceStatus(getTerm("voicePrepare", "マイク準備中…"));
+      // ★「話している間の空白」を埋めるため、録音開始前から表示
+      setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
 
       voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeCandidates = [
@@ -580,7 +579,10 @@
       voiceMediaRecorder.onstart = () => {
         voiceIsRecording = true;
         setLucyVoiceBtnLabel(true);
-        setLucyVoiceStatus(getTerm("voiceRecording", "録音中…（もう一度押すと送信）"));
+
+        // ★ここが今回の修正の肝：
+        // 録音中も「聞き取り中…」を出して、隙間が“空欄”にならないようにする
+        setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
       };
 
       voiceMediaRecorder.onerror = (e) => {
@@ -616,7 +618,7 @@
 
           setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
           await sendTextDirect(text);
-          setLucyVoiceStatus(""); // ★ここで消える→display:noneになり枠も戻る
+          setLucyVoiceStatus("");
         } catch (e) {
           console.error(e);
           setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
@@ -672,7 +674,7 @@
       return;
     }
 
-    setLucyVoiceStatus(""); // ★空なら display:none → 枠は下がらない
+    setLucyVoiceStatus("");
     const mode = resolveVoiceMode();
     console.log("[voice] mode=", mode, "VOICE_MODE=", VOICE_MODE, "chat=", WORKER_CHAT_URL, "voice=", WORKER_VOICE_URL);
 
