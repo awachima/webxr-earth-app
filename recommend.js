@@ -5,19 +5,19 @@
  *
  * ★ 多言語対応:
  * - 言語切り替え (window.currentLang / window.__DD_LANG / localStorage) に動的に追従。
- * - UIテキストは window.i18n.recommend から取得。
+ * - UIテキストは window.i18n.recommend があれば参照（無ければデフォルト文言）。
  *
- * ★ チャットバブルUI化:
- * - #recommendChat に「msg-row / msg-bubble / msg-meta」DOMを追加して表示する
- * - Lucy(assistant)=左 / You(user)=右
+ * ★ チャットバブルUI:
+ * - #recommendChat に msg-row / msg-bubble / msg-meta を追加して表示（Lucy=左 / You=右）
  *
- * ★ 2択クリック対応:
- * - Lucyの返答に「以下でしたらどちらの気分ですか？」＋「・選択肢」が含まれる場合、
- *   バブルの下に候補ボタンを表示し、クリックでその選択肢を送信する。
+ * ★ 選択肢ボタン化:
+ * - Lucyの返答に箇条書きが含まれる場合、ボタン化してクリック送信
+ * - 「どっちも違う」ボタンを追加
  *
  * ★ 音声:
- * - browser: SpeechRecognition（途中経過=interim をステータスに表示）
- * - server : MediaRecorder → /voice（途中経過の文字起こしは基本不可）
+ * - VOICE_MODE = "auto" | "browser" | "server"
+ * - "auto" は SpeechRecognition が使えれば browser / それ以外は server
+ * - Quest/Android は index.html 側で window.__LUCY_VOICE_MODE="server" を強制している想定
  *
  * ▼ 重要:
  * - Pages 側に /chat は無いので 405 になります。
@@ -74,8 +74,8 @@
   };
 
   // UIテキスト（i18nの形が複数あり得るので吸収）
-  // 1) window.i18n.recommend[key] = "."
-  // 2) window.i18n.recommend[lang][key] = "."
+  // 1) window.i18n.recommend[key] = "..."
+  // 2) window.i18n.recommend[lang][key] = "..."
   const getTerm = (key, def) => {
     try {
       const lang = getCurrentLang();
@@ -84,10 +84,20 @@
 
       if (rec[lang] && rec[lang][key]) return rec[lang][key];
       if (rec.ja && rec.ja[key]) return rec.ja[key];
-
       if (rec[key]) return rec[key];
     } catch (_) {}
     return def;
+  };
+
+  const langToSpeechLocale = (lang) => {
+    const l = String(lang || "ja").toLowerCase();
+    if (l === "ja") return "ja-JP";
+    if (l === "en") return "en-US";
+    if (l === "zh") return "zh-CN";
+    if (l === "hi") return "hi-IN";
+    if (l === "he") return "he-IL";
+    if (l === "fa") return "fa-IR";
+    return "ja-JP";
   };
 
   // =========================================================
@@ -113,13 +123,13 @@
   // =========================================================
   let nextState = null;
 
-  // 音声録音用（server mode）
+  // 音声録音（server）
   let voiceMediaStream = null;
   let voiceMediaRecorder = null;
   let voiceChunks = [];
   let voiceIsRecording = false;
 
-  // SpeechRecognition（browser mode）
+  // SpeechRecognition（browser）
   let speechRec = null;
   let speechIsRunning = false;
   let lastSpeechFinal = "";
@@ -163,102 +173,148 @@
       .replace(/'/g, "&#39;");
   }
 
-  // Lucyの返答は「安全な範囲でリンクを許可」しつつ、それ以外はテキスト扱いにする
+  function stripTags(html) {
+    return String(html || "").replace(/<\/?[^>]+>/g, "");
+  }
+
+  function escapeRegExp(s) {
+    return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  // href と表示テキストだけを許可（http/httpsのみ）
+  function sanitizeAnchorHtml(anchorHtml) {
+    try {
+      const hrefMatch = anchorHtml.match(/\bhref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
+      const hrefRaw = hrefMatch ? (hrefMatch[2] || hrefMatch[3] || hrefMatch[4] || "") : "";
+      const href = String(hrefRaw || "").trim();
+      if (!/^https?:\/\//i.test(href)) return escapeHtml(stripTags(anchorHtml));
+
+      const label = stripTags(anchorHtml).trim() || href;
+      const safeHref = escapeHtml(href);
+      const safeLabel = escapeHtml(label);
+      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`;
+    } catch (e) {
+      return escapeHtml(stripTags(anchorHtml));
+    }
+  }
+
+  // Lucyの返答は「安全な範囲でリンクを許可」しつつ、それ以外はテキスト扱い
   function sanitizeLucyReplyToHtml(rawText) {
     const original = String(rawText || "");
 
-    // 0) Worker から <a ...> が来る可能性があるので、一旦エスケープ
-    let s = escapeHtml(original);
+    const anchorTokens = [];
+    let text = original.replace(/<a\b[\s\S]*?<\/a>/gi, (m) => {
+      const safe = sanitizeAnchorHtml(m);
+      const token = `__ANCHOR_TOKEN_${anchorTokens.length}__`;
+      anchorTokens.push({ token, html: safe });
+      return token;
+    });
 
-    // 1) http(s)リンクを自動リンク化（既に <a> が来る場合は Worker 側で整形されている想定だが、念のため）
-    s = s.replace(
-      /(https?:\/\/[^\s<>"']+)/g,
-      (m) => `<a href="${m}" target="_blank" rel="noopener noreferrer">${m}</a>`
-    );
+    let html = escapeHtml(text);
 
-    // 2) 改行は <br>
-    s = s.replace(/\n/g, "<br>");
+    const urlRe = /(https?:\/\/[^\s<>"']+)/g;
+    html = html.replace(urlRe, (m) => {
+      const trimmed = m.replace(/[)\]、。．，.]+$/g, (x) => x);
+      const suffix = m.slice(trimmed.length);
+      const safe = escapeHtml(trimmed);
+      return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>${escapeHtml(suffix)}`;
+    });
 
-    // 3) 「・」箇条書きは簡易的に <div> にする（見た目のため）
-    //    ※ HTMLタグが見える問題を避けるため、ここでは余計なタグ生成は最小限
-    return s;
+    for (const a of anchorTokens) {
+      const tokenRe = new RegExp(escapeRegExp(a.token), "g");
+      html = html.replace(tokenRe, a.html);
+    }
+
+    html = html.replace(/\r?\n/g, "<br>");
+    return html;
   }
 
-  function appendBubble(role, who, text, allowHtml) {
+  // 返答テキストから箇条書き候補を抽出（URL行は除外）
+  function extractChoicesFromLucyReply(rawText) {
+    const text = String(rawText || "");
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+    const choices = [];
+    for (const line of lines) {
+      if (/https?:\/\//i.test(line)) continue;
+
+      const m =
+        line.match(/^[・\-\*]\s*(.+)$/) ||
+        line.match(/^\d+\.\s*(.+)$/) ||
+        line.match(/^\(\d+\)\s*(.+)$/);
+
+      if (!m) continue;
+
+      const c = String(m[1] || "").trim();
+      if (!c) continue;
+
+      const cleaned = c.replace(/[：:\-–—]\s*$/g, "").trim();
+      if (!cleaned) continue;
+
+      if (!choices.includes(cleaned)) choices.push(cleaned);
+    }
+
+    if (choices.length < 2) return null;
+    return { choices };
+  }
+
+  // =========================================================
+  // 6) UI描画（チャットバブル）
+  // =========================================================
+  function appendBubble(role, label, content, isHtml) {
     const row = document.createElement("div");
-    row.className = `msg-row ${role}`;
+    row.className = `msg-row ${role === "assistant" ? "assistant" : "user"}`;
 
     const bubble = document.createElement("div");
-    bubble.className = "msg-bubble";
+    bubble.className = `msg-bubble ${role === "assistant" ? "assistant" : "user"}`;
 
     const meta = document.createElement("div");
     meta.className = "msg-meta";
-    meta.textContent = who;
+    meta.textContent = label;
 
     const body = document.createElement("div");
     body.className = "msg-body";
-    if (allowHtml) {
-      body.innerHTML = sanitizeLucyReplyToHtml(text);
-    } else {
-      body.textContent = text;
-    }
+    if (isHtml) body.innerHTML = content;
+    else body.textContent = content;
 
     bubble.appendChild(meta);
     bubble.appendChild(body);
     row.appendChild(bubble);
     chatEl.appendChild(row);
-
     chatEl.scrollTop = chatEl.scrollHeight;
 
     return { row, bubble, body };
   }
 
-  function appendLucy(text) {
-    const parts = appendBubble("assistant", "Lucy", String(text || ""), true);
+  const appendUser = (t) => appendBubble("user", "You", t, false);
 
-    // Lucy返答に「・」が含まれている場合、候補ボタン化を試みる
-    // 例:
-    // 以下でしたらどちらの気分ですか？
-    // ・自然の景色
-    // ・街や市場をそぞろ歩きするなど
-    // （and/or 「どっちも違う」等）
-    try {
-      const raw = String(text || "");
-      if (!raw.includes("・")) return;
+  function appendLucy(rawText) {
+    const html = sanitizeLucyReplyToHtml(rawText);
+    const parts = appendBubble("assistant", "Lucy", html, true);
 
-      const lines = raw.split("\n").map((x) => x.trim()).filter(Boolean);
-      const choices = lines
-        .filter((l) => l.startsWith("・"))
-        .map((l) => l.replace(/^・\s*/, "").trim())
-        .filter(Boolean);
-
-      if (!choices || choices.length === 0) return;
+    const extracted = extractChoicesFromLucyReply(rawText);
+    if (extracted && extracted.choices && extracted.choices.length >= 2) {
+      const choices = extracted.choices;
 
       const wrap = document.createElement("div");
-      wrap.className = "choice-buttons";
-      wrap.style.display = "flex";
-      wrap.style.flexWrap = "wrap";
-      wrap.style.gap = "8px";
+      wrap.className = "lucy-choice-wrap";
       wrap.style.marginTop = "10px";
+      wrap.style.display = "flex";
+      wrap.style.gap = "8px";
+      wrap.style.flexWrap = "wrap";
 
       const makeBtn = (label) => {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "btn ghost";
+        btn.className = "lucy-choice-btn";
         btn.textContent = label;
 
-        btn.style.padding = "8px 12px";
-        btn.style.borderRadius = "999px";
-        btn.style.border = "1px solid rgba(0,0,0,0.2)";
-        btn.style.background = "rgba(255,255,255,0.95)";
+        btn.style.padding = "8px 10px";
+        btn.style.borderRadius = "10px";
+        btn.style.border = "1px solid rgba(0,0,0,0.15)";
+        btn.style.background = "#fff";
         btn.style.cursor = "pointer";
-
-        btn.addEventListener("mouseenter", () => {
-          btn.style.filter = "brightness(0.98)";
-        });
-        btn.addEventListener("mouseleave", () => {
-          btn.style.filter = "none";
-        });
+        btn.style.fontSize = "14px";
 
         btn.addEventListener("click", async () => {
           if (sendBtn.disabled) return;
@@ -275,19 +331,12 @@
         return btn;
       };
 
-      // すべての候補をボタン化
       choices.forEach((c) => wrap.appendChild(makeBtn(c)));
-
-      // 「どっちも違う」ボタン（固定）
       wrap.appendChild(makeBtn(getTerm("choiceNeither", "どっちも違う")));
 
       parts.bubble.appendChild(wrap);
       chatEl.scrollTop = chatEl.scrollHeight;
-    } catch (_) {}
-  }
-
-  function appendUser(text) {
-    appendBubble("user", "You", String(text || ""), false);
+    }
   }
 
   const appendError = (t, d) => {
@@ -308,26 +357,46 @@
     lucyVoiceAskStatus.textContent = String(text || "");
   }
 
+  // ★追加：押下中の色を切り替える（指定RGB/文字色）
+  function setLucyVoiceBtnVisual(isActive) {
+    if (!lucyVoiceAskBtn) return;
+
+    if (isActive) {
+      lucyVoiceAskBtn.style.backgroundColor = "rgb(11, 53, 89)";
+      lucyVoiceAskBtn.style.color = "#fff";
+      // 見た目の安定のため（必要なら削除OK）
+      lucyVoiceAskBtn.style.borderColor = "rgb(11, 53, 89)";
+    } else {
+      // 元のCSSに戻す
+      lucyVoiceAskBtn.style.backgroundColor = "";
+      lucyVoiceAskBtn.style.color = "";
+      lucyVoiceAskBtn.style.borderColor = "";
+    }
+  }
+
+  // ★変更：ボタン文言の「停止」→「話し終えたら送信」へ
   function setLucyVoiceBtnLabel(isActive) {
     if (!lucyVoiceAskBtn) return;
+
     if (isActive) {
-      lucyVoiceAskBtn.textContent = getTerm("voiceBtnStop", "音声停止");
+      // 言語切替対応：i18nがあればそちらを優先
+      lucyVoiceAskBtn.textContent = getTerm("voiceBtnSpeakToSend", "話し終えたら送信");
     } else {
       lucyVoiceAskBtn.textContent = getTerm("voiceBtnIdle", "Lucyに質問（音声）");
     }
+
+    setLucyVoiceBtnVisual(isActive);
   }
 
   function stopVoiceTracks() {
     if (voiceMediaStream) {
-      try {
-        voiceMediaStream.getTracks().forEach((t) => t.stop());
-      } catch (_) {}
+      try { voiceMediaStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
     }
     voiceMediaStream = null;
   }
 
   // =========================================================
-  // 6) Worker 呼び出し
+  // 7) Worker 呼び出し
   // =========================================================
   async function callWorker(userText) {
     const payload = {};
@@ -346,38 +415,20 @@
     const raw = await res.text();
     const parsed = safeJsonParse(raw);
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}\n${raw}`);
-    }
-    if (!parsed.ok) {
-      throw new Error(`JSON parse failed\n${raw}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
+    if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
     return parsed.value;
   }
 
   async function sendTextDirect(text) {
     const t = normalizeUserText(text);
     if (!t) return;
-    ensurePanelOpenSoftly();
-    appendUser(t);
-
-    setSending(true);
-    try {
-      const data = await callWorker(t);
-      if (data.reply) appendLucy(data.reply);
-      if (data.nextState) nextState = data.nextState;
-      if (data.debug) console.log("[Lucy debug]", data.debug);
-    } catch (e) {
-      appendError("通信に失敗しました", e.message);
-      console.error(e);
-    } finally {
-      setSending(false);
-      inputEl.focus();
-    }
+    inputEl.value = t;
+    await onSend();
   }
 
   // =========================================================
-  // 7) 送信処理
+  // 8) 送信処理
   // =========================================================
   async function onSend() {
     const text = normalizeUserText(inputEl.value);
@@ -403,22 +454,11 @@
   }
 
   // =========================================================
-  // 8) 音声：browser（SpeechRecognition）
+  // 9) 音声：browser（SpeechRecognition）
   // =========================================================
   function getSpeechRecognitionCtor() {
     const w = window;
     return w.SpeechRecognition || w.webkitSpeechRecognition || null;
-  }
-
-  function langToSpeechLocale(lang) {
-    const l = String(lang || "ja").toLowerCase();
-    if (l.startsWith("ja")) return "ja-JP";
-    if (l.startsWith("en")) return "en-US";
-    if (l.startsWith("zh")) return "zh-CN";
-    if (l.startsWith("hi")) return "hi-IN";
-    if (l.startsWith("he")) return "he-IL";
-    if (l.startsWith("fa")) return "fa-IR";
-    return "ja-JP";
   }
 
   function ensureSpeechRec() {
@@ -428,42 +468,24 @@
 
     const rec = new Ctor();
     rec.continuous = false;
-
-    // ★ここが重要：途中経過（interim）を受け取れるようにする
-    rec.interimResults = true;
+    rec.interimResults = false;
 
     rec.onstart = () => {
       speechIsRunning = true;
       lastSpeechFinal = "";
-      setLucyVoiceBtnLabel(true);
+      setLucyVoiceBtnLabel(true); // ★ここで「話し終えたら送信」＋青色
       setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
     };
 
-    // ★途中経過をステータスに表示する（聞き取り中の文字が見えるようになる）
     rec.onresult = async (ev) => {
       try {
         let finalText = "";
-        let interimText = "";
-
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
           const r = ev.results[i];
-          if (!r || !r[0] || !r[0].transcript) continue;
-
-          if (r.isFinal) {
+          if (r && r.isFinal && r[0] && r[0].transcript) {
             finalText += (finalText ? " " : "") + r[0].transcript;
-          } else {
-            interimText += (interimText ? " " : "") + r[0].transcript;
           }
         }
-
-        // 途中経過（聞き取り中の文字）をステータスに表示
-        interimText = normalizeUserText(interimText);
-        if (interimText) {
-          setLucyVoiceStatus(interimText);
-        } else if (!lastSpeechFinal) {
-          setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
-        }
-
         finalText = normalizeUserText(finalText);
         if (finalText) {
           lastSpeechFinal = finalText;
@@ -484,7 +506,7 @@
 
     rec.onend = () => {
       speechIsRunning = false;
-      setLucyVoiceBtnLabel(false);
+      setLucyVoiceBtnLabel(false); // ★ここで元の表記＋元の色へ戻す
 
       if (!lastSpeechFinal) {
         setLucyVoiceStatus(getTerm("voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
@@ -519,7 +541,7 @@
   }
 
   // =========================================================
-  // 9) 音声：server（MediaRecorder → /voice）
+  // 10) 音声：server（MediaRecorder → /voice）
   // =========================================================
   async function startServerVoice() {
     try {
@@ -548,7 +570,7 @@
 
       voiceMediaRecorder.onstart = () => {
         voiceIsRecording = true;
-        setLucyVoiceBtnLabel(true);
+        setLucyVoiceBtnLabel(true); // ★録音中も「話し終えたら送信」＋青色
         setLucyVoiceStatus(getTerm("voiceRecording", "録音中…（もう一度押すと送信）"));
       };
 
@@ -559,7 +581,7 @@
 
       voiceMediaRecorder.onstop = async () => {
         try {
-          setLucyVoiceBtnLabel(false);
+          setLucyVoiceBtnLabel(false); // ★停止した時点で元に戻す（解析中はstatusで表示）
           voiceIsRecording = false;
           setLucyVoiceStatus(getTerm("voiceUploading", "解析中…"));
 
@@ -616,7 +638,7 @@
   }
 
   // =========================================================
-  // 10) 音声トグル（ボタン）
+  // 11) 音声トグル（ボタン）
   // =========================================================
   function resolveVoiceMode() {
     const m = String(VOICE_MODE || "auto").toLowerCase();
@@ -653,7 +675,7 @@
   }
 
   // =========================================================
-  // 11) 初期化
+  // 12) 初期化
   // =========================================================
   (async () => {
     setSending(true);
