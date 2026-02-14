@@ -116,6 +116,12 @@
   const lucyVoiceAskBtn = document.getElementById("lucyVoiceAskBtn");
   const lucyVoiceAskStatus = document.getElementById("lucyVoiceAskStatus");
 
+
+  inputEl.addEventListener("input", () => {
+    lucyVoiceAskStatus.textContent = "";
+  });
+
+
   if (!inputEl || !sendBtn || !chatEl) {
     console.warn("[recommend.js] Required DOM not found.");
     return;
