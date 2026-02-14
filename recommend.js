@@ -17,12 +17,10 @@
  * ★ 音声:
  * - VOICE_MODE = "auto" | "browser" | "server"
  * - "auto" は SpeechRecognition が使えれば browser / それ以外は server
- * - Quest/Android は index.html 側で window.__LUCY_VOICE_MODE="server" を強制している想定
  *
  * ▼ 重要:
  * - Pages 側に /chat は無いので 405 になります。
- *   必ず Worker の /chat に向けるため、
- *   window.__LUCY_CHAT_URL があればそれを最優先、無ければ下の既定URLを使用します。
+ *   window.__LUCY_CHAT_URL があればそれを最優先、無ければ既定URLを使用します。
  */
 
 (() => {
@@ -30,7 +28,7 @@
   try { console.log("[recommend.js] loaded"); } catch (_) {}
 
   // =========================================================
-  // 1) 設定（★ここだけあなたの環境で変える可能性あり）
+  // 1) 設定
   // =========================================================
   const WORKER_CHAT_URL_DEFAULT = "https://lucy-recommend.awachima7.workers.dev/chat";
 
@@ -51,7 +49,6 @@
     return "auto";
   })();
 
-  // Pages 側に誤爆していたら早めに気づけるように警告
   try {
     const u = new URL(WORKER_CHAT_URL, location.href);
     if (u.origin === location.origin) {
@@ -68,14 +65,11 @@
     try {
       const stored = localStorage.getItem("lang");
       if (stored) return stored;
-    } catch (e) {}
+    } catch (_) {}
     if (document.documentElement.lang) return document.documentElement.lang;
     return "ja";
   };
 
-  // UIテキスト（i18nの形が複数あり得るので吸収）
-  // 1) window.i18n.recommend[key] = "..."
-  // 2) window.i18n.recommend[lang][key] = "..."
   const getTerm = (key, def) => {
     try {
       const lang = getCurrentLang();
@@ -123,13 +117,11 @@
   // =========================================================
   let nextState = null;
 
-  // 音声録音（server）
   let voiceMediaStream = null;
   let voiceMediaRecorder = null;
   let voiceChunks = [];
   let voiceIsRecording = false;
 
-  // SpeechRecognition（browser）
   let speechRec = null;
   let speechIsRunning = false;
   let lastSpeechFinal = "";
@@ -181,7 +173,6 @@
     return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
-  // href と表示テキストだけを許可（http/httpsのみ）
   function sanitizeAnchorHtml(anchorHtml) {
     try {
       const hrefMatch = anchorHtml.match(/\bhref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
@@ -193,12 +184,11 @@
       const safeHref = escapeHtml(href);
       const safeLabel = escapeHtml(label);
       return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`;
-    } catch (e) {
+    } catch (_) {
       return escapeHtml(stripTags(anchorHtml));
     }
   }
 
-  // Lucyの返答は「安全な範囲でリンクを許可」しつつ、それ以外はテキスト扱い
   function sanitizeLucyReplyToHtml(rawText) {
     const original = String(rawText || "");
 
@@ -229,7 +219,6 @@
     return html;
   }
 
-  // 返答テキストから箇条書き候補を抽出（URL行は除外）
   function extractChoicesFromLucyReply(rawText) {
     const text = String(rawText || "");
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -259,7 +248,7 @@
   }
 
   // =========================================================
-  // 6) UI描画（チャットバブル）
+  // 6) UI描画
   // =========================================================
   function appendBubble(role, label, content, isHtml) {
     const row = document.createElement("div");
@@ -352,22 +341,28 @@
     }
   }
 
-  // ステータス表示
+  // ★ステータス表示（opacity=0 を強制解除する）
   function setLucyVoiceStatus(text) {
     if (!lucyVoiceAskStatus) return;
 
     const t = String(text || "").trim();
+
     if (!t) {
       lucyVoiceAskStatus.textContent = "";
-      lucyVoiceAskStatus.style.display = "none";
+      // 隙間を消す（display:none）＋ 透明化（念のため）
+      lucyVoiceAskStatus.style.setProperty("opacity", "0", "important");
+      lucyVoiceAskStatus.style.setProperty("display", "none", "important");
       return;
     }
 
-    lucyVoiceAskStatus.style.display = "";
     lucyVoiceAskStatus.textContent = t;
+
+    // ★ここが肝：見えない原因が opacity:0 なので、必ず 1 に戻す
+    lucyVoiceAskStatus.style.setProperty("display", "block", "important");
+    lucyVoiceAskStatus.style.setProperty("opacity", "1", "important");
+    lucyVoiceAskStatus.style.setProperty("visibility", "visible", "important");
   }
 
-  // ★追加：押下中の色を切り替える（指定RGB/文字色）
   function setLucyVoiceBtnVisual(isActive) {
     if (!lucyVoiceAskBtn) return;
 
@@ -382,7 +377,6 @@
     }
   }
 
-  // ★変更：ボタン文言の「停止」→「話し終えたら送信」へ
   function setLucyVoiceBtnLabel(isActive) {
     if (!lucyVoiceAskBtn) return;
 
@@ -410,8 +404,7 @@
     if (userText) payload.userText = userText;
     if (nextState) payload.state = nextState;
 
-    const lang = getCurrentLang();
-    payload.lang = lang;
+    payload.lang = getCurrentLang();
 
     const res = await fetch(WORKER_CHAT_URL, {
       method: "POST",
@@ -530,8 +523,7 @@
       return;
     }
     try {
-      const lang = getCurrentLang();
-      speechRec.lang = langToSpeechLocale(lang);
+      speechRec.lang = langToSpeechLocale(getCurrentLang());
       speechRec.start();
     } catch (e) {
       console.error(e);
@@ -552,15 +544,10 @@
   // =========================================================
   async function startServerVoice() {
     try {
-      // ★「話している間の空白」を埋めるため、録音開始前から表示
       setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
 
       voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeCandidates = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
-        "audio/ogg;codecs=opus",
-      ];
+      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
       let mimeType = "";
       for (const m of mimeCandidates) {
         if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) {
@@ -579,9 +566,6 @@
       voiceMediaRecorder.onstart = () => {
         voiceIsRecording = true;
         setLucyVoiceBtnLabel(true);
-
-        // ★ここが今回の修正の肝：
-        // 録音中も「聞き取り中…」を出して、隙間が“空欄”にならないようにする
         setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
       };
 
@@ -649,22 +633,18 @@
   }
 
   // =========================================================
-  // 11) 音声トグル（ボタン）
+  // 11) 音声トグル
   // =========================================================
   function resolveVoiceMode() {
     const m = String(VOICE_MODE || "auto").toLowerCase();
     if (m === "browser") return "browser";
     if (m === "server") return "server";
-
-    // auto
-    const hasSR = !!getSpeechRecognitionCtor();
-    return hasSR ? "browser" : "server";
+    return getSpeechRecognitionCtor() ? "browser" : "server";
   }
 
   async function toggleVoice() {
     if (sendBtn.disabled) return;
 
-    // 動作中なら停止
     if (speechIsRunning) {
       stopBrowserSpeech();
       return;
@@ -689,7 +669,6 @@
   // 12) 初期化
   // =========================================================
   (async () => {
-    // ★初期状態でステータス枠を確実に消す
     setLucyVoiceStatus("");
 
     setSending(true);
