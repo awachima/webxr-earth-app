@@ -146,7 +146,12 @@
     "voiceBtnStop": "توقف ضبط",
     "voiceHint": "🎤 شمرده و واضح صحبت کردن دقت تشخیص را بالا می‌برد.",
     "statusRecording": "در حال ضبط. برای توقف دوباره کلیک کنید.",
-    "statusSending": "در حال ارسال صدا..."
+    "statusSending": "در حال ارسال صدا...",
+    "voiceSendingAfterTalk": "پس از پایان صحبت ارسال شود",
+    "voiceListening": "در حال شنیدن…",
+    "voiceNotHeard": "متوجه نشدم. لطفاً دوباره تلاش کنید.",
+    "choiceNeither": "هیچ‌کدام"
+
   }
 
 }

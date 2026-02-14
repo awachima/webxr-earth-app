@@ -146,7 +146,11 @@
     "voiceBtnStop": "עצור הקלטה",
     "voiceHint": "🎤 דיבור איטי וברור משפר את דיוק הזיהוי.",
     "statusRecording": "מקליט. לחצו שוב לעצירה.",
-    "statusSending": "שולח שמע..."
+    "statusSending": "שולח שמע...",
+    "voiceSendingAfterTalk": "שלח כשמסיימים לדבר",
+    "voiceListening": "מקשיב…",
+    "voiceNotHeard": "לא הצלחתי לשמוע. נסו שוב בבקשה.",
+    "choiceNeither": "אף אחד מהם"
   }
 
 }

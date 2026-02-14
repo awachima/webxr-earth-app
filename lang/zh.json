@@ -146,7 +146,11 @@
     "voiceBtnStop": "停止录音",
     "voiceHint": "🎤 慢慢且清晰地说话有助于提高识别准确度。",
     "statusRecording": "正在录音。再次点击停止。",
-    "statusSending": "正在发送语音…"
+    "statusSending": "正在发送语音…",
+    "voiceSendingAfterTalk": "说完后发送",
+    "voiceListening": "正在听…",
+    "voiceNotHeard": "未能听清。请再试一次。",
+    "choiceNeither": "都不是"
   }
 
 }

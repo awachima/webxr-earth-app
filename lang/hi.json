@@ -146,7 +146,11 @@
     "voiceBtnStop": "वॉयस रोकें",
     "voiceHint": "🎤 धीरे और स्पष्ट बोलने से पहचान बेहतर होती है।",
     "statusRecording": "रिकॉर्डिंग जारी है। रोकने के लिए फिर से दबाएं।",
-    "statusSending": "ऑडियो भेजा जा रहा है..."
+    "statusSending": "ऑडियो भेजा जा रहा है...",
+    "voiceSendingAfterTalk": "बोलना खत्म होने पर भेजें",
+    "voiceListening": "सुन रहे हैं…",
+    "voiceNotHeard": "मैं ठीक से सुन नहीं पाया। कृपया फिर से कोशिश करें।",
+    "choiceNeither": "इनमें से कोई नहीं"
   }
 
 }

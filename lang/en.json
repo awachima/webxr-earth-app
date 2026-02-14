@@ -147,7 +147,11 @@
     "voiceBtnStop": "Stop Voice",
     "voiceHint": "🎤 Speaking slowly and clearly improves recognition.",
     "statusRecording": "Recording. Press again to stop.",
-    "statusSending": "Sending audio..."
+    "statusSending": "Sending audio...",
+    "voiceSendingAfterTalk": "Send when you finish speaking",
+    "voiceListening": "Listening...",
+    "voiceNotHeard": "I couldn't catch that. Please try again.",
+    "choiceNeither": "Neither"
   }
 
 }

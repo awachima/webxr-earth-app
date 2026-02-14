@@ -147,7 +147,11 @@
     "voiceBtnStop": "音声停止",
     "voiceHint": "🎤 ゆっくり・はっきり話すと認識が安定します。",
     "statusRecording": "録音中です。もう一度押すと停止します。",
-    "statusSending": "音声を送信しています…"
+    "statusSending": "音声を送信しています…",
+    "voiceSendingAfterTalk": "話し終えたら送信",
+    "voiceListening": "聞き取り中…",
+    "voiceNotHeard": "聞き取れませんでした。もう一度お試しください。",
+    "choiceNeither": "どっちも違う"
   }
 
 }
