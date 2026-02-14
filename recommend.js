@@ -301,189 +301,149 @@
         btn.className = "lucy-choice-btn";
         btn.textContent = label;
 
-        btn.style.padding = "8px 10px";
-        btn.style.borderRadius = "10px";
-        btn.style.border = "1px solid rgba(0,0,0,0.15)";
-        btn.style.background = "#fff";
-        btn.style.cursor = "pointer";
-        btn.style.fontSize = "14px";
-
         btn.addEventListener("click", async () => {
-          if (sendBtn.disabled) return;
-
           try {
-            const all = wrap.querySelectorAll("button");
-            all.forEach((b) => (b.disabled = true));
-          } catch (_) {}
-
-          inputEl.value = label;
-          await onSend();
+            btn.disabled = true;
+            await sendText(label);
+          } finally {
+            btn.disabled = false;
+          }
         });
 
         return btn;
       };
 
-      choices.forEach((c) => wrap.appendChild(makeBtn(c)));
+      for (const c of choices) {
+        wrap.appendChild(makeBtn(c));
+      }
+
       wrap.appendChild(makeBtn(getTerm("choiceNeither", "どっちも違う")));
 
-      parts.bubble.appendChild(wrap);
-      chatEl.scrollTop = chatEl.scrollHeight;
+      parts.body.appendChild(wrap);
     }
+
+    return parts;
   }
 
-  const appendError = (t, d) => {
-    const msg = d ? `${t}\n${d}` : t;
-    appendBubble("assistant", "ERROR", msg, false);
-  };
-
-  function ensurePanelOpenSoftly() {
-    if (!recommendSection) return;
-    if (recommendSection.classList.contains("is-collapsed")) {
-      recommendSection.classList.remove("is-collapsed");
-      if (touristInfoBtn) touristInfoBtn.setAttribute("aria-expanded", "true");
-    }
+  function clearChat() {
+    chatEl.innerHTML = "";
   }
 
-  // ★ステータス表示（opacity=0 を強制解除する）
   function setLucyVoiceStatus(text) {
     if (!lucyVoiceAskStatus) return;
-
-    const t = String(text || "").trim();
-
-    if (!t) {
-      lucyVoiceAskStatus.textContent = "";
-      lucyVoiceAskStatus.style.setProperty("opacity", "0", "important");
-      lucyVoiceAskStatus.style.setProperty("display", "none", "important");
-      return;
-    }
-
-    lucyVoiceAskStatus.textContent = t;
-
-    lucyVoiceAskStatus.style.setProperty("display", "block", "important");
-    lucyVoiceAskStatus.style.setProperty("opacity", "1", "important");
-    lucyVoiceAskStatus.style.setProperty("visibility", "visible", "important");
-
-    lucyVoiceAskStatus.style.setProperty("background", "none", "important");
-    lucyVoiceAskStatus.style.setProperty("border", "none", "important");
-    lucyVoiceAskStatus.style.setProperty("padding", "0", "important");
-
-    lucyVoiceAskStatus.style.setProperty("color", "#666666", "important");
-    lucyVoiceAskStatus.style.setProperty("font-size", "13px", "important");
-    lucyVoiceAskStatus.style.setProperty("margin-top", "6px", "important");
-    lucyVoiceAskStatus.style.setProperty("line-height", "1.4", "important");
-  }
-
-  function setLucyVoiceBtnVisual(isActive) {
-    if (!lucyVoiceAskBtn) return;
-
-    if (isActive) {
-      lucyVoiceAskBtn.style.backgroundColor = "rgb(11, 53, 89)";
-      lucyVoiceAskBtn.style.color = "#fff";
-      lucyVoiceAskBtn.style.borderColor = "rgb(11, 53, 89)";
-    } else {
-      lucyVoiceAskBtn.style.backgroundColor = "";
-      lucyVoiceAskBtn.style.color = "";
-      lucyVoiceAskBtn.style.borderColor = "";
-    }
+    lucyVoiceAskStatus.textContent = text || "";
   }
 
   function setLucyVoiceBtnLabel(isActive) {
     if (!lucyVoiceAskBtn) return;
 
     if (isActive) {
-      lucyVoiceAskBtn.textContent = getTerm("voiceBtnSpeakToSend", "話し終えたら送信");
+      // ★「話し終えたら送信」：各言語JSONの recommend.voiceSendingAfterTalk を参照
+      lucyVoiceAskBtn.textContent = getTerm("voiceSendingAfterTalk", "話し終えたら送信");
     } else {
+      // ★既存キー：recommend.voiceBtnIdle
       lucyVoiceAskBtn.textContent = getTerm("voiceBtnIdle", "Lucyに質問（音声）");
     }
 
-    setLucyVoiceBtnVisual(isActive);
-  }
-
-  function stopVoiceTracks() {
-    if (voiceMediaStream) {
-      try { voiceMediaStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
-    }
-    voiceMediaStream = null;
+    setLucyVoiceStatus("");
   }
 
   // =========================================================
-  // 7) Worker 呼び出し（※送信フォーマットは元のまま維持）
+  // 7) Worker通信
   // =========================================================
-  async function callWorker(userText) {
-    const payload = {};
-    if (userText) payload.userText = userText;
-    if (nextState) payload.state = nextState;
-
-    payload.lang = getCurrentLang();
-
+  async function postChat(payload) {
     const res = await fetch(WORKER_CHAT_URL, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    const raw = await res.text();
-    const parsed = safeJsonParse(raw);
+    const ct = res.headers.get("content-type") || "";
+    const txt = await res.text();
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
-    if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
-    return parsed.value;
+    if (!res.ok) {
+      const err = new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
+      err.status = res.status;
+      err.body = txt;
+      throw err;
+    }
+
+    if (ct.includes("application/json")) {
+      const p = safeJsonParse(txt);
+      if (p.ok) return p.value;
+      return { reply: txt };
+    }
+
+    const p = safeJsonParse(txt);
+    if (p.ok) return p.value;
+    return { reply: txt };
   }
 
-  async function sendTextDirect(text) {
-    const t = normalizeUserText(text);
+  async function sendTextDirect(userText) {
+    const payload = {
+      userText,
+      nextState,
+      lang: getCurrentLang(),
+    };
+
+    const data = await postChat(payload);
+    if (data && typeof data.nextState !== "undefined") nextState = data.nextState;
+
+    const reply = (data && typeof data.reply === "string") ? data.reply : String(data?.reply ?? "");
+    appendLucy(reply);
+  }
+
+  async function sendText(userText) {
+    const t = normalizeUserText(userText);
     if (!t) return;
-    inputEl.value = t;
-    await onSend();
-  }
-
-  // =========================================================
-  // 8) 送信処理
-  // =========================================================
-  async function onSend() {
-    const text = normalizeUserText(inputEl.value);
-    if (!text) return;
-
-    ensurePanelOpenSoftly();
-    appendUser(text);
-    inputEl.value = "";
+    appendUser(t);
 
     setSending(true);
     try {
-      const data = await callWorker(text);
-      if (data.reply) appendLucy(data.reply);
-      if (data.nextState) nextState = data.nextState;
-      if (data.debug) console.log("[Lucy debug]", data.debug);
+      await sendTextDirect(t);
     } catch (e) {
-      appendError("通信に失敗しました", e.message);
       console.error(e);
+      appendLucy(`エラー: ${String(e?.message || e)}`);
     } finally {
       setSending(false);
-      inputEl.focus();
     }
   }
 
   // =========================================================
-  // 9) 音声：browser（SpeechRecognition）
+  // 8) 挨拶（パネルを開いた時に1回）
   // =========================================================
-  function getSpeechRecognitionCtor() {
-    const w = window;
-    return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+  async function ensureLucyGreetingIfNeeded() {
+    if (lucyGreetingShown) return;
+    lucyGreetingShown = true;
+
+    setSending(true);
+    try {
+      await sendTextDirect("");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSending(false);
+    }
   }
 
+  // =========================================================
+  // 9) 音声（browser SpeechRecognition）
+  // =========================================================
   function ensureSpeechRec() {
     if (speechRec) return true;
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) return false;
 
-    const rec = new Ctor();
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return false;
+
+    const rec = new SR();
+    rec.interimResults = true;
     rec.continuous = false;
-    rec.interimResults = false;
 
     rec.onstart = () => {
       speechIsRunning = true;
       lastSpeechFinal = "";
       setLucyVoiceBtnLabel(true);
+      // ★ recommend.voiceListening
       setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
     };
 
@@ -492,26 +452,29 @@
         let finalText = "";
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
           const r = ev.results[i];
-          if (r && r.isFinal && r[0] && r[0].transcript) {
-            finalText += (finalText ? " " : "") + r[0].transcript;
-          }
+          if (!r || !r[0]) continue;
+          const t = String(r[0].transcript || "");
+          if (r.isFinal) finalText += t;
         }
+
         finalText = normalizeUserText(finalText);
         if (finalText) {
           lastSpeechFinal = finalText;
-          setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
+          // 送信中は statusSending に寄せる（各言語対応済み想定）
+          setLucyVoiceStatus(getTerm("statusSending", "認識しました。送信します…"));
           await sendTextDirect(finalText);
           setLucyVoiceStatus("");
         }
       } catch (e) {
         console.error(e);
-        setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
+        // ★ 失敗時は voiceNotHeard に寄せて多言語化優先
+        setLucyVoiceStatus(getTerm("voiceNotHeard", "聞き取れませんでした。もう一度お試しください。"));
       }
     };
 
     rec.onerror = (e) => {
       console.warn("[SpeechRecognition] error", e);
-      setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
+      setLucyVoiceStatus(getTerm("voiceNotHeard", "聞き取れませんでした。もう一度お試しください。"));
     };
 
     rec.onend = () => {
@@ -519,7 +482,8 @@
       setLucyVoiceBtnLabel(false);
 
       if (!lastSpeechFinal) {
-        setLucyVoiceStatus(getTerm("voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
+        // ★ recommend.voiceNotHeard
+        setLucyVoiceStatus(getTerm("voiceNotHeard", "聞き取れませんでした。もう一度お試しください。"));
       }
     };
 
@@ -529,7 +493,7 @@
 
   async function startBrowserSpeech() {
     if (!ensureSpeechRec()) {
-      setLucyVoiceStatus(getTerm("voiceUnsupported", "このブラウザでは音声認識が利用できません"));
+      setLucyVoiceStatus(getTerm("voiceNotHeard", "聞き取れませんでした。もう一度お試しください。"));
       return;
     }
     try {
@@ -537,87 +501,87 @@
       speechRec.start();
     } catch (e) {
       console.error(e);
-      setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
-      speechIsRunning = false;
+      setLucyVoiceStatus(getTerm("voiceNotHeard", "聞き取れませんでした。もう一度お試しください。"));
       setLucyVoiceBtnLabel(false);
+      speechIsRunning = false;
     }
   }
 
   function stopBrowserSpeech() {
-    try {
-      if (speechRec && speechIsRunning) speechRec.stop();
-    } catch (_) {}
+    try { speechRec && speechRec.stop(); } catch (_) {}
   }
 
   // =========================================================
-  // 10) 音声：server（MediaRecorder → /voice）
+  // 10) 音声（server upload: MediaRecorder）
   // =========================================================
+  function stopVoiceTracks() {
+    if (voiceMediaStream) {
+      try {
+        voiceMediaStream.getTracks().forEach((t) => {
+          try { t.stop(); } catch (_) {}
+        });
+      } catch (_) {}
+    }
+    voiceMediaStream = null;
+  }
+
   async function startServerVoice() {
     try {
+      voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceChunks = [];
+      voiceIsRecording = true;
+
+      setLucyVoiceBtnLabel(true);
       setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
 
-      voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
-      let mimeType = "";
-      for (const m of mimeCandidates) {
-        if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) {
-          mimeType = m;
-          break;
-        }
-      }
-
-      voiceChunks = [];
-      voiceMediaRecorder = new MediaRecorder(voiceMediaStream, mimeType ? { mimeType } : undefined);
-
-      voiceMediaRecorder.ondataavailable = (ev) => {
-        if (ev.data && ev.data.size > 0) voiceChunks.push(ev.data);
-      };
-
-      voiceMediaRecorder.onstart = () => {
-        voiceIsRecording = true;
-        setLucyVoiceBtnLabel(true);
-        setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
-      };
-
-      voiceMediaRecorder.onerror = (e) => {
-        console.error(e);
-        setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
+      voiceMediaRecorder = new MediaRecorder(voiceMediaStream);
+      voiceMediaRecorder.ondataavailable = (e) => {
+        if (e && e.data && e.data.size > 0) voiceChunks.push(e.data);
       };
 
       voiceMediaRecorder.onstop = async () => {
         try {
           setLucyVoiceBtnLabel(false);
           voiceIsRecording = false;
-          setLucyVoiceStatus(getTerm("voiceUploading", "解析中…"));
+
+          // ★ 解析/送信中：statusSending（各言語に既に存在する想定）
+          setLucyVoiceStatus(getTerm("statusSending", "解析中…"));
 
           const blob = new Blob(voiceChunks, { type: voiceMediaRecorder.mimeType || "audio/webm" });
-          voiceChunks = [];
 
           const fd = new FormData();
           fd.append("audio", blob, "voice.webm");
           fd.append("lang", getCurrentLang());
 
-          const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
-          const raw = await res.text();
-          const parsed = safeJsonParse(raw);
+          const res = await fetch(WORKER_VOICE_URL, {
+            method: "POST",
+            body: fd,
+          });
 
-          if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
-          if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
-
-          const text = normalizeUserText(parsed.value && parsed.value.text);
-          if (!text) {
-            setLucyVoiceStatus(getTerm("voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
+          const txt = await res.text();
+          if (!res.ok) {
+            console.error("voice upload failed", res.status, txt);
+            setLucyVoiceStatus(getTerm("voiceNotHeard", "聞き取れませんでした。もう一度お試しください。"));
             return;
           }
 
-          setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
-          await sendTextDirect(text);
+          const p = safeJsonParse(txt);
+          const recognizedText = p.ok ? (p.value && (p.value.text || p.value.transcript || "")) : "";
+          const finalText = normalizeUserText(recognizedText);
+
+          if (!finalText) {
+            setLucyVoiceStatus(getTerm("voiceNotHeard", "聞き取れませんでした。もう一度お試しください。"));
+            return;
+          }
+
+          await sendText(finalText);
           setLucyVoiceStatus("");
         } catch (e) {
           console.error(e);
-          setLucyVoiceStatus(getTerm("voiceFailed", "音声処理に失敗しました"));
+          setLucyVoiceStatus(getTerm("voiceNotHeard", "聞き取れませんでした。もう一度お試しください。"));
         } finally {
           stopVoiceTracks();
+          voiceChunks = [];
           voiceMediaRecorder = null;
         }
       };
@@ -625,7 +589,8 @@
       voiceMediaRecorder.start();
     } catch (e) {
       console.error(e);
-      setLucyVoiceStatus(getTerm("voicePermissionDenied", "マイクの許可が必要です"));
+      // 許可/非対応などもまず多言語化優先で voiceNotHeard に寄せる
+      setLucyVoiceStatus(getTerm("voiceNotHeard", "聞き取れませんでした。もう一度お試しください。"));
       setLucyVoiceBtnLabel(false);
       voiceIsRecording = false;
       stopVoiceTracks();
@@ -634,41 +599,40 @@
 
   function stopServerVoice() {
     try {
-      if (voiceMediaRecorder && voiceIsRecording) voiceMediaRecorder.stop();
-    } catch (_) {
-      stopVoiceTracks();
-      voiceIsRecording = false;
-      setLucyVoiceBtnLabel(false);
+      if (voiceMediaRecorder && voiceMediaRecorder.state !== "inactive") {
+        voiceMediaRecorder.stop();
+      }
+    } catch (e) {
+      console.warn(e);
     }
   }
 
   // =========================================================
-  // 11) 音声トグル
+  // 11) 音声モード切替
   // =========================================================
-  function resolveVoiceMode() {
-    const m = String(VOICE_MODE || "auto").toLowerCase();
-    if (m === "browser") return "browser";
-    if (m === "server") return "server";
-    return getSpeechRecognitionCtor() ? "browser" : "server";
-  }
-
   async function toggleVoice() {
-    if (sendBtn.disabled) return;
-
-    if (speechIsRunning) {
-      stopBrowserSpeech();
-      return;
-    }
-    if (voiceIsRecording) {
-      stopServerVoice();
+    if (voiceIsRecording || speechIsRunning) {
+      // stop
+      if (speechIsRunning) stopBrowserSpeech();
+      if (voiceIsRecording) stopServerVoice();
       return;
     }
 
-    setLucyVoiceStatus("");
-    const mode = resolveVoiceMode();
-    console.log("[voice] mode=", mode, "VOICE_MODE=", VOICE_MODE, "chat=", WORKER_CHAT_URL, "voice=", WORKER_VOICE_URL);
+    // start
+    const mode = String(VOICE_MODE || "auto").toLowerCase();
+    const canBrowser = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
     if (mode === "browser") {
+      await startBrowserSpeech();
+      return;
+    }
+    if (mode === "server") {
+      await startServerVoice();
+      return;
+    }
+
+    // auto
+    if (canBrowser) {
       await startBrowserSpeech();
     } else {
       await startServerVoice();
@@ -676,84 +640,38 @@
   }
 
   // =========================================================
-  // 12) 初期化（★ここだけが今回の修正点の本体）
-  //   - ページ読み込み時には greeting を出さない
-  //   - ツアーインフォメーションを開いた時に、その瞬間の言語で1回だけ greeting
+  // 12) イベント設定
   // =========================================================
-  function isPanelOpen() {
-    // aria-expanded が true のときは開いている
-    try {
-      if (touristInfoBtn && touristInfoBtn.getAttribute("aria-expanded") === "true") return true;
-    } catch (_) {}
-    // class判定の保険（is-collapsed が無ければ開いている扱い）
-    try {
-      if (recommendSection && !recommendSection.classList.contains("is-collapsed")) return true;
-    } catch (_) {}
-    return false;
-  }
+  sendBtn.addEventListener("click", () => {
+    const t = normalizeUserText(inputEl.value);
+    if (!t) return;
+    inputEl.value = "";
+    sendText(t);
+  });
 
-  function isChatEmpty() {
-    try {
-      if (!chatEl) return true;
-      if (chatEl.children && chatEl.children.length > 0) return false;
-      return String(chatEl.textContent || "").trim() === "";
-    } catch (_) {
-      return true;
-    }
-  }
-
-  async function initLucyGreetingIfNeeded() {
-    // すでに挨拶済みなら何もしない
-    if (lucyGreetingShown) return;
-
-    // 既にチャットに何か入っているなら、挨拶済み扱いにして二重表示を防ぐ
-    if (!isChatEmpty()) {
-      lucyGreetingShown = true;
-      return;
-    }
-
-    setLucyVoiceStatus("");
-    setSending(true);
-    try {
-      // ★ userText を送らずに呼ぶ（元の仕様に合わせる）
-      const data = await callWorker(null);
-      if (data.reply) appendLucy(data.reply);
-      if (data.nextState) nextState = data.nextState;
-      if (data.debug) console.log("[Lucy debug]", data.debug);
-      lucyGreetingShown = true;
-    } catch (e) {
-      appendError("初期化に失敗しました", e.message);
-      console.error(e);
-    } finally {
-      setSending(false);
-    }
-  }
-
-  // ボタン押下で開閉されるので、click直後は状態反映前の可能性あり → 次tickで確認
-  if (touristInfoBtn) {
-    touristInfoBtn.addEventListener("click", () => {
-      setTimeout(() => {
-        if (isPanelOpen()) initLucyGreetingIfNeeded();
-      }, 0);
-    });
-  }
-
-  // ページロード時点で「すでに開いている」場合のみ（状態復元など）挨拶
-  setTimeout(() => {
-    if (isPanelOpen()) initLucyGreetingIfNeeded();
-  }, 0);
-
-  // =========================================================
-  // 13) イベント登録
-  // =========================================================
-  sendBtn.addEventListener("click", onSend);
-  inputEl.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) {
-      ev.preventDefault();
-      onSend();
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendBtn.click();
     }
   });
 
+  // touristInfoBtn が押されたときに recommendSection を表示する場合、挨拶を出す
+  if (touristInfoBtn && recommendSection) {
+    touristInfoBtn.addEventListener("click", () => {
+      try {
+        // 表示制御は index.html 側の既存処理に合わせる（ここでは挨拶だけ）
+        ensureLucyGreetingIfNeeded();
+      } catch (_) {}
+    });
+  } else {
+    // touristInfoBtn がないページでも動くように（何もしない）
+  }
+
+  // 初期ボタン文言
+  setSending(false);
+
+  // 音声ボタン
   if (lucyVoiceAskBtn) {
     setLucyVoiceBtnLabel(false);
     lucyVoiceAskBtn.addEventListener("click", toggleVoice);
