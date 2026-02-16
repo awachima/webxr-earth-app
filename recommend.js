@@ -49,6 +49,11 @@
     return "auto";
   })();
 
+
+const IS_ANDROID = (() => {
+  try { return /Android/i.test(navigator.userAgent || ""); } catch (_) { return false; }
+})();
+
   try {
     const u = new URL(WORKER_CHAT_URL, location.href);
     if (u.origin === location.origin) {
@@ -139,6 +144,15 @@
   let voiceMediaRecorder = null;
   let voiceChunks = [];
   let voiceIsRecording = false;
+
+// ★ Android向け：WAV(PCM)で送るためのWebAudio録音
+let wavAudioCtx = null;
+let wavSourceNode = null;
+let wavProcessorNode = null;
+let wavPcmChunks = [];
+let wavSampleRate = 48000;
+let wavIsRecording = false;
+let wavStartedAt = 0;
 
   let speechRec = null;
   let speechIsRunning = false;
@@ -430,6 +444,83 @@
     voiceMediaStream = null;
   }
 
+
+// =========================================================
+// ★ Android向け：WAVエンコード
+// =========================================================
+function mergeFloat32Chunks(chunks) {
+  const total = chunks.reduce((s, a) => s + a.length, 0);
+  const out = new Float32Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.length;
+  }
+  return out;
+}
+
+function floatTo16BitPCM(float32) {
+  const out = new Int16Array(float32.length);
+  for (let i = 0; i < float32.length; i++) {
+    let s = Math.max(-1, Math.min(1, float32[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+
+function writeString(view, offset, str) {
+  for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+}
+
+function encodeWavMono16(pcm16, sampleRate) {
+  const numChannels = 1;
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = pcm16.length * bytesPerSample;
+
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  writeString(view, 0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(view, 8, "WAVE");
+
+  writeString(view, 12, "fmt ");
+  view.setUint32(16, 16, true);          // PCM
+  view.setUint16(20, 1, true);           // PCM format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true);          // bits
+
+  writeString(view, 36, "data");
+  view.setUint32(40, dataSize, true);
+
+  // PCM data
+  let offset = 44;
+  for (let i = 0; i < pcm16.length; i++, offset += 2) {
+    view.setInt16(offset, pcm16[i], true);
+  }
+
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+function cleanupWavRecorder() {
+  try { if (wavProcessorNode) wavProcessorNode.disconnect(); } catch (_) {}
+  try { if (wavSourceNode) wavSourceNode.disconnect(); } catch (_) {}
+  wavProcessorNode = null;
+  wavSourceNode = null;
+
+  try { if (wavAudioCtx) wavAudioCtx.close(); } catch (_) {}
+  wavAudioCtx = null;
+
+  wavPcmChunks = [];
+  wavIsRecording = false;
+  wavStartedAt = 0;
+}
+
   // =========================================================
   // 7) Worker 呼び出し（※送信フォーマットは元のまま維持）
   // =========================================================
@@ -577,98 +668,237 @@
     } catch (_) {}
   }
 
-  // =========================================================
+  
+// ★ Android向け：WebAudioでWAV録音 → /voice
+async function startServerVoiceWav() {
+  try {
+    setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
+
+    voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // AudioContext はユーザー操作（ボタンクリック）内で生成
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    wavAudioCtx = new AudioCtx();
+    wavSampleRate = wavAudioCtx.sampleRate || 48000;
+
+    wavSourceNode = wavAudioCtx.createMediaStreamSource(voiceMediaStream);
+
+    // ScriptProcessor は古いが互換性が高い（Android/Chromeでも動きやすい）
+    const bufferSize = 4096;
+    wavProcessorNode = wavAudioCtx.createScriptProcessor(bufferSize, 1, 1);
+
+    wavPcmChunks = [];
+    wavIsRecording = true;
+    wavStartedAt = Date.now();
+
+    wavProcessorNode.onaudioprocess = (ev) => {
+      if (!wavIsRecording) return;
+      try {
+        const input = ev.inputBuffer.getChannelData(0);
+        // 参照が使い回されるのでコピー
+        wavPcmChunks.push(new Float32Array(input));
+      } catch (_) {}
+    };
+
+    wavSourceNode.connect(wavProcessorNode);
+    // 出力先に繋がないと動かない環境があるため destination へ
+    wavProcessorNode.connect(wavAudioCtx.destination);
+
+    setLucyVoiceBtnLabel(true);
+    setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
+  } catch (e) {
+    console.error(e);
+    setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voicePermissionDenied", "マイクの許可が必要です"));
+    setLucyVoiceBtnLabel(false);
+    wavIsRecording = false;
+    cleanupWavRecorder();
+    stopVoiceTracks();
+  }
+}
+
+async function stopServerVoiceWav() {
+  if (!wavIsRecording) return;
+
+  try {
+    setLucyVoiceBtnLabel(false);
+    wavIsRecording = false;
+
+    const durationMs = Date.now() - (wavStartedAt || Date.now());
+
+    // ここで録音が短すぎる場合は送らない（空判定の原因になりやすい）
+    if (durationMs < 900) {
+      setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceTooShort", "もう少し長めに話してみてください。"));
+      return;
+    }
+
+    setLucyVoiceStatus(getTerm("voiceUploading", "解析中…"));
+
+    const merged = mergeFloat32Chunks(wavPcmChunks);
+    const pcm16 = floatTo16BitPCM(merged);
+    const wavBlob = encodeWavMono16(pcm16, wavSampleRate);
+
+    const fd = new FormData();
+    fd.append("audio", wavBlob, "voice.wav");
+    fd.append("lang", getCurrentLang());
+
+    const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
+    const raw = await res.text();
+    const parsed = safeJsonParse(raw);
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
+    if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
+
+    const text = normalizeUserText(parsed.value && parsed.value.text);
+    if (!text) {
+      setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
+      return;
+    }
+
+    setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
+    await sendTextDirect(text);
+    setLucyVoiceStatus("");
+  } catch (e) {
+    console.error(e);
+    setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceFailed", "聞き取れませんでした。もう一度お試しください。"));
+  } finally {
+    cleanupWavRecorder();
+    stopVoiceTracks();
+  }
+}
+
+// =========================================================
   // 10) 音声：server（MediaRecorder → /voice）
   // =========================================================
-  async function startServerVoice() {
-    try {
-      setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
+  
+async function startServerVoice() {
+  // ★ AndroidはGemini側でWebM(Opus)が空になりやすいので、WAV(PCM)方式を優先
+  if (IS_ANDROID) {
+    await startServerVoiceWav();
+    return;
+  }
 
-      voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
-      let mimeType = "";
-      for (const m of mimeCandidates) {
-        if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) {
-          mimeType = m;
-          break;
-        }
+  try {
+    setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
+
+    voiceMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // 可能なら mp4/ogg/webm の順に試す（※MediaRecorderが実際にその形式で出力できる場合のみ）
+    const mimeCandidates = [
+      "audio/mp4",
+      "audio/mp4;codecs=mp4a.40.2",
+      "audio/ogg;codecs=opus",
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg",
+    ];
+
+    let mimeType = "";
+    for (const m of mimeCandidates) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) {
+        mimeType = m;
+        break;
       }
+    }
 
-      voiceChunks = [];
-      voiceMediaRecorder = new MediaRecorder(voiceMediaStream, mimeType ? { mimeType } : undefined);
+    voiceChunks = [];
+    voiceMediaRecorder = new MediaRecorder(voiceMediaStream, mimeType ? { mimeType } : undefined);
 
-      voiceMediaRecorder.ondataavailable = (ev) => {
-        if (ev.data && ev.data.size > 0) voiceChunks.push(ev.data);
-      };
+    voiceMediaRecorder.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size > 0) voiceChunks.push(ev.data);
+    };
 
-      voiceMediaRecorder.onstart = () => {
-        voiceIsRecording = true;
-        setLucyVoiceBtnLabel(true);
-        setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
-      };
+    voiceMediaRecorder.onstart = () => {
+      voiceIsRecording = true;
+      setLucyVoiceBtnLabel(true);
+      setLucyVoiceStatus(getTerm("voiceListening", "聞き取り中…"));
+    };
 
-      voiceMediaRecorder.onerror = (e) => {
+    voiceMediaRecorder.onerror = (e) => {
+      console.error(e);
+      setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceFailed", "聞き取れませんでした。もう一度お試しください。"));
+    };
+
+    const startedAt = Date.now();
+
+    voiceMediaRecorder.onstop = async () => {
+      try {
+        setLucyVoiceBtnLabel(false);
+        voiceIsRecording = false;
+
+        const durationMs = Date.now() - startedAt;
+        if (durationMs < 900) {
+          setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceTooShort", "もう少し長めに話してみてください。"));
+          return;
+        }
+
+        setLucyVoiceStatus(getTerm("voiceUploading", "解析中…"));
+
+        const actualType = voiceMediaRecorder.mimeType || "audio/webm";
+        const blob = new Blob(voiceChunks, { type: actualType });
+        voiceChunks = [];
+
+        // 拡張子をMIMEに合わせる
+        const ext =
+          /mp4/i.test(actualType) ? "mp4" :
+          /ogg/i.test(actualType) ? "ogg" :
+          /wav/i.test(actualType) ? "wav" : "webm";
+
+        const fd = new FormData();
+        fd.append("audio", blob, `voice.${ext}`);
+        fd.append("lang", getCurrentLang());
+
+        const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
+        const raw = await res.text();
+        const parsed = safeJsonParse(raw);
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
+        if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
+
+        const text = normalizeUserText(parsed.value && parsed.value.text);
+        if (!text) {
+          setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
+          return;
+        }
+
+        setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
+        await sendTextDirect(text);
+        setLucyVoiceStatus("");
+      } catch (e) {
         console.error(e);
         setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceFailed", "聞き取れませんでした。もう一度お試しください。"));
-      };
+      } finally {
+        stopVoiceTracks();
+        voiceMediaRecorder = null;
+      }
+    };
 
-      voiceMediaRecorder.onstop = async () => {
-        try {
-          setLucyVoiceBtnLabel(false);
-          voiceIsRecording = false;
-          setLucyVoiceStatus(getTerm("voiceUploading", "解析中…"));
+    voiceMediaRecorder.start();
+  } catch (e) {
+    console.error(e);
+    setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voicePermissionDenied", "マイクの許可が必要です"));
+    setLucyVoiceBtnLabel(false);
+    voiceIsRecording = false;
+    stopVoiceTracks();
+  }
+}
 
-          const blob = new Blob(voiceChunks, { type: voiceMediaRecorder.mimeType || "audio/webm" });
-          voiceChunks = [];
-
-          const fd = new FormData();
-          fd.append("audio", blob, "voice.webm");
-          fd.append("lang", getCurrentLang());
-
-          const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
-          const raw = await res.text();
-          const parsed = safeJsonParse(raw);
-
-          if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
-          if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
-
-          const text = normalizeUserText(parsed.value && parsed.value.text);
-          if (!text) {
-            setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
-            return;
-          }
-
-          setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
-          await sendTextDirect(text);
-          setLucyVoiceStatus("");
-        } catch (e) {
-          console.error(e);
-          setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceFailed", "聞き取れませんでした。もう一度お試しください。"));
-        } finally {
-          stopVoiceTracks();
-          voiceMediaRecorder = null;
-        }
-      };
-
-      voiceMediaRecorder.start();
-    } catch (e) {
-      console.error(e);
-      setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voicePermissionDenied", "マイクの許可が必要です"));
-      setLucyVoiceBtnLabel(false);
-      voiceIsRecording = false;
-      stopVoiceTracks();
-    }
+  
+function stopServerVoice() {
+  // ★ Android (WAV) 側
+  if (IS_ANDROID) {
+    // WAV録音は MediaRecorder を使わない
+    stopServerVoiceWav();
+    return;
   }
 
-  function stopServerVoice() {
-    try {
-      if (voiceMediaRecorder && voiceIsRecording) voiceMediaRecorder.stop();
-    } catch (_) {
-      stopVoiceTracks();
-      voiceIsRecording = false;
-      setLucyVoiceBtnLabel(false);
-    }
+  try {
+    if (voiceMediaRecorder && voiceIsRecording) voiceMediaRecorder.stop();
+  } catch (_) {
+    stopVoiceTracks();
+    voiceIsRecording = false;
+    setLucyVoiceBtnLabel(false);
   }
+}
 
   // =========================================================
   // 11) 音声トグル
@@ -687,7 +917,7 @@
       stopBrowserSpeech();
       return;
     }
-    if (voiceIsRecording) {
+    if (voiceIsRecording || wavIsRecording) {
       stopServerVoice();
       return;
     }
