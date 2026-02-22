@@ -356,7 +356,11 @@ let wavStartedAt = 0;
       choices.forEach((c) => wrap.appendChild(makeBtn(c)));
 
       // ★ここが多言語化対象（新キー choiceNeither を優先）
-      wrap.appendChild(makeBtn(getTermCompat("choiceNeither", "choiceNeither", "どっちも違う")));
+      // ★「どっちも違う」は通常の絞り込み用。S6の「ツアーに戻る/雑談を続ける」では付けない。
+const shouldAddNeither = !(nextState && nextState.uiPrompt === "backToTour");
+if (shouldAddNeither) {
+  wrap.appendChild(makeBtn(getTermCompat("choiceNeither", "choiceNeither", "どっちも違う")));
+}
 
       parts.bubble.appendChild(wrap);
       chatEl.scrollTop = chatEl.scrollHeight;
@@ -566,8 +570,8 @@ function cleanupWavRecorder() {
     setSending(true);
     try {
       const data = await callWorker(text);
-      if (data.reply) appendLucy(data.reply);
       if (data.nextState) nextState = data.nextState;
+      if (data.reply) appendLucy(data.reply);
       if (data.debug) console.log("[Lucy debug]", data.debug);
     } catch (e) {
       appendError("通信に失敗しました", e.message);
@@ -968,8 +972,8 @@ function stopServerVoice() {
     setSending(true);
     try {
       const data = await callWorker(null);
-      if (data.reply) appendLucy(data.reply);
       if (data.nextState) nextState = data.nextState;
+      if (data.reply) appendLucy(data.reply);
       if (data.debug) console.log("[Lucy debug]", data.debug);
       lucyGreetingShown = true;
     } catch (e) {
