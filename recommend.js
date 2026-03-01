@@ -55,25 +55,14 @@ const IS_ANDROID = (() => {
 })();
 
   
-// ★ Quest向け：音声優先UI（入力欄にフォーカスが入ると必ず仮想キーボードが出るため）
+
+// ★ Quest向け：音声優先UI（入力欄にフォーカスが入ると仮想キーボードが自動表示されるため）
 const IS_QUEST = (() => {
   try { return /Quest|Oculus/i.test(navigator.userAgent || ""); } catch (_) { return false; }
 })();
 
-// Quest（または強制server音声モード）では「常に音声優先」にする
-const IS_VOICE_FIRST_UI = (() => {
-  try {
-    if (IS_QUEST) return true;
-    // index.html 側で Quest/Android に __LUCY_VOICE_MODE="server" を入れている前提
-    if (typeof window !== "undefined" && String(window.__LUCY_VOICE_MODE || "").toLowerCase() === "server") {
-      // Android は既に WAV 録音などで音声前提になっているので、キーボード問題を避けたい場合は true
-      // ただし、Android は手入力したいケースもあるため、ここは Quest を優先。必要なら下の行を有効化。
-      // return true;
-      return false;
-    }
-  } catch (_) {}
-  return false;
-})();
+// Questでは常に音声優先（キーボードを出さない）
+const IS_VOICE_FIRST_UI = IS_QUEST;
 try {
     const u = new URL(WORKER_CHAT_URL, location.href);
     if (u.origin === location.origin) {
@@ -153,7 +142,7 @@ try {
   }
 
   
-  // ★ Quest向け：音声優先UI
+  // ★ Quest向け：音声優先UI（キーボード抑止）
   applyVoiceFirstUIOnce();
 
 // =========================================================
@@ -470,12 +459,18 @@ if (shouldAddNeither) {
       try { voiceMediaStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
 
 // =========================================================
-// ★ Quest向け：音声優先UI制御
+// ★ Quest向け：音声優先UI制御（キーボード抑止）
 // =========================================================
+function safeBlurInput() {
+  if (!inputEl) return;
+  try { inputEl.blur(); } catch (_) {}
+}
+
 function safeFocusInput() {
   if (!inputEl) return;
   if (IS_VOICE_FIRST_UI) {
-    try { inputEl.blur(); } catch (_) {}
+    // Questではフォーカスを当てない（キーボードが出る）
+    safeBlurInput();
     return;
   }
   try { inputEl.focus(); } catch (_) {}
@@ -484,7 +479,7 @@ function safeFocusInput() {
 function applyVoiceFirstUIOnce() {
   if (!IS_VOICE_FIRST_UI) return;
 
-  // 入力欄にフォーカスが入ると Quest は必ずキーボードを出すため、入力系を「触れない」状態に寄せる
+  // Questでは入力欄を「触ってもキーボードが出ない」寄りにする（表示は残す）
   try {
     inputEl.readOnly = true;
     inputEl.setAttribute("inputmode", "none");
@@ -492,40 +487,14 @@ function applyVoiceFirstUIOnce() {
     inputEl.setAttribute("autocapitalize", "off");
     inputEl.setAttribute("autocorrect", "off");
     inputEl.setAttribute("spellcheck", "false");
-    inputEl.placeholder = getTerm("voiceBtnIdle", "Lucyに質問（音声）");
-  } catch (_) {}
-
-  // 入力欄が誤ってフォーカスされたら即 blur してキーボード抑止
-  try {
-    inputEl.addEventListener("focus", () => {
-      try { inputEl.blur(); } catch (_) {}
-      // ステータスで案内（邪魔ならこの2行を消してください）
-      setLucyVoiceStatus(getTerm("voiceBtnIdle", "Lucyに質問（音声）") + " を押してください");
-    });
-    // Quest のクリック/タップでもフォーカスが入るので保険
-    inputEl.addEventListener("pointerdown", (ev) => {
-      ev.preventDefault();
-      try { inputEl.blur(); } catch (_) {}
-    });
-    inputEl.addEventListener("mousedown", (ev) => {
-      ev.preventDefault();
-      try { inputEl.blur(); } catch (_) {}
-    });
-  } catch (_) {}
-
-  // 入力行を非表示（レイアウト維持のため、行ごと隠す）
-  try {
-    const row = inputEl.closest(".recommend-input-row");
-    if (row) row.style.display = "none";
-  } catch (_) {}
-
-  // 送信ボタンも非表示（音声送信が主）
-  try {
-    if (sendBtn) sendBtn.style.display = "none";
+    // 誤フォーカスでキーボードが出るのを抑止
+    inputEl.addEventListener("focus", () => safeBlurInput());
+    // タップでもフォーカスが入る場合があるので保険（※クリック自体は許可）
+    inputEl.addEventListener("pointerdown", () => safeBlurInput());
   } catch (_) {}
 
   // 初期状態でも念のため blur
-  try { inputEl.blur(); } catch (_) {}
+  safeBlurInput();
 }
 
     }
@@ -1001,6 +970,8 @@ function stopServerVoice() {
   async function toggleVoice() {
     if (sendBtn.disabled) return;
 
+  // ★ Quest: ここでフォーカスを外してキーボードを出さない
+  safeBlurInput();
     if (speechIsRunning) {
       stopBrowserSpeech();
       return;
