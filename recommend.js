@@ -398,8 +398,43 @@ let wavStartedAt = 0;
       choices.forEach((c) => wrap.appendChild(makeBtn(c)));
 
       // ★ここが多言語化対象（新キー choiceNeither を優先）
-      // ★「どっちも違う」は通常の絞り込み用。S6の「ツアーに戻る/雑談を続ける」では付けない。
-const shouldAddNeither = !(nextState && nextState.uiPrompt === "backToTour");
+      // ★「どっちも違う」は通常の絞り込み用。
+      // ★ただし「はい／いいえ」だけの確認（二択）では付けない（＝ここで「どっちも違う」を出すとUXが崩れる）。
+function isYesNoOnlyChoices(choiceList) {
+  try {
+    if (!Array.isArray(choiceList) || choiceList.length !== 2) return false;
+
+    const norm = (s) => String(s || "")
+      .trim()
+      .replace(/[。．，、!！?？\s]+/g, "")
+      .toLowerCase();
+
+    const yesRe = /^(はい|うん|ええ|yes|y|ok|okay|sure|是|对|好的|हाँ|हां|כן|بله)$/i;
+    const noRe  = /^(いいえ|いや|no|n|nope|否|不|不是|नहीं|いいえです|לא|نه)$/i;
+
+    const a = norm(choiceList[0]);
+    const b = norm(choiceList[1]);
+
+    const aYes = yesRe.test(a);
+    const aNo  = noRe.test(a);
+    const bYes = yesRe.test(b);
+    const bNo  = noRe.test(b);
+
+    // 2つが Yes/No の組になっている場合のみ true
+    return (aYes && bNo) || (aNo && bYes);
+  } catch (_) {
+    return false;
+  }
+}
+
+const isConfirmYesNo = isYesNoOnlyChoices(choices);
+
+// 旧ロジック：S6の「ツアーに戻る/雑談を続ける」では付けない（互換として残す）
+const isBackToTourPrompt = !!(nextState && nextState.uiPrompt === "backToTour");
+
+// 結論：Yes/No の確認、または backToTour 系の二択では「どっちも違う」を出さない
+const shouldAddNeither = !(isConfirmYesNo || isBackToTourPrompt);
+
 if (shouldAddNeither) {
   wrap.appendChild(makeBtn(getTermCompat("choiceNeither", "choiceNeither", "どっちも違う")));
 }
