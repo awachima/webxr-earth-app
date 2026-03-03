@@ -382,6 +382,38 @@
     }
     .msg-row.user .msg-meta{ text-align: right; }
 
+  
+    /* =========================================================
+       Waiting Room Toggle Button（左上アイコン）
+       ========================================================= */
+    .waiting-room-btn{
+      position:absolute;
+      top:14px;
+      left:14px;
+      z-index:9999;
+      background:rgba(255,255,255,0.92);
+      border:1px solid rgba(0,0,0,0.12);
+      border-radius:16px;
+      padding:6px;
+      cursor:pointer;
+      box-shadow:0 8px 22px rgba(0,0,0,0.18);
+      backdrop-filter:blur(6px);
+      -webkit-backdrop-filter:blur(6px);
+      transition:all .18s ease;
+    }
+    .waiting-room-btn:hover{
+      transform:scale(1.06);
+    }
+    .waiting-room-btn img{
+      width:34px;
+      height:34px;
+      display:block;
+    }
+
+    .meetups.is-collapsed{
+      display:none;
+    }
+
   </style>
 </head>
 
@@ -474,6 +506,15 @@
 
         <button type="button" id="touristInfoBtn" class="tourist-info-btn" aria-controls="recommendSection" aria-expanded="false">
           観光案内
+        </button>
+
+        
+        <button type="button"
+                id="waitingRoomBtn"
+                class="waiting-room-btn"
+                aria-controls="meetupsSection"
+                aria-expanded="false">
+          <img src="./assets/waiting-room.png" alt="Waiting Room">
         </button>
 
         <iframe
@@ -574,7 +615,7 @@
 
     </section>
 
-    <section class="meetups">
+    <section id="meetupsSection" class="meetups is-collapsed">
       <div class="meetups__head">
         <h2 class="meetups__title">Meetup Rooms</h2>
         <button class="btn ghost head-create" id="openCreate">Create a room</button>
@@ -712,6 +753,48 @@
 })();
 </script>
 <!-- ✅ AutoScrollToTourInfo:END -->
+
+
+<!-- ✅ WaitingRoomToggle:START -->
+<script>
+(function(){
+
+  const btn = document.getElementById("waitingRoomBtn");
+  const section = document.getElementById("meetupsSection");
+
+  if(!btn || !section) return;
+
+  function smoothScroll(){
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{
+        try{
+          section.scrollIntoView({behavior:"smooth", block:"start"});
+        }catch(e){
+          const y = section.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+          window.scrollTo(0,y);
+        }
+      });
+    });
+  }
+
+  btn.addEventListener("click", ()=>{
+
+    const isOpen = !section.classList.contains("is-collapsed");
+
+    if(isOpen){
+      section.classList.add("is-collapsed");
+      btn.setAttribute("aria-expanded","false");
+    }else{
+      section.classList.remove("is-collapsed");
+      btn.setAttribute("aria-expanded","true");
+      setTimeout(smoothScroll,0);
+    }
+
+  });
+
+})();
+</script>
+<!-- ✅ WaitingRoomToggle:END -->
 
 </body>
 </html>
