@@ -310,7 +310,7 @@ header *{
   min-height: 480px;
   max-width: 1000px;
 
-  margin-top: 28px;
+  margin-top: 5px;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
   background: #000;
