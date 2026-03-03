@@ -308,9 +308,8 @@ header *{
   width: 100%;
   height: 70vh;
   min-height: 480px;
-  max-width: 1000px;
 
-  margin-top: 5px;
+  margin: 0 auto;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
   background: #000;
