@@ -246,6 +246,58 @@ header *{
   box-shadow: 0 4px 10px rgba(15,23,42,0.10);
 }
 
+
+/* =========================
+   ボタン位置2：ロゴ左右（HTMLはそのまま）
+   - index.html の .top-controls 内でのみ .site-logo の絶対配置を解除
+   - 画面幅を狭めても「左ボタン・ロゴ・右ボタン」の関係を維持
+   ========================= */
+.top-controls{
+  width: min(980px, calc(100% - 32px));
+  margin-top: 34px;            /* 旧 .intro-bar と同じ見た目感 */
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: nowrap;
+}
+
+/* ロゴをフローに戻す（これをしないと、ロゴが絶対配置のままで崩れます） */
+.top-controls .site-logo{
+  pointer-events: none;
+  position: static;
+  top: auto;
+  left: auto;
+  transform: none;
+  width: min(20vw, 134px);
+  opacity: .95;
+  z-index: 1;
+  filter: drop-shadow(0 4px 6px rgba(15,23,42,0.35));
+}
+
+/* 左右ボタン */
+.top-controls .intro-bar__button{
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* さらに狭い幅で“収まる前提”のまま少しだけ詰める */
+@media (max-width: 600px){
+  .top-controls{
+    width: calc(100% - 32px);
+    gap: 10px;
+  }
+  .top-controls .intro-bar__button{
+    padding: 8px 10px;
+    font-size: 0.92rem;
+  }
+  .top-controls .site-logo{
+    width: min(24vw, 120px);
+  }
+}
+
+
 /* =========================
    WebXR iframe
    ========================= */
