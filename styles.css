@@ -1050,3 +1050,31 @@ header *{
   letter-spacing: .01em;
 }
 
+/* ===============================
+   角丸をツアーインフォメーション(12px)に統一
+   =============================== */
+:root{
+  --panel-radius: 12px;
+}
+
+/* 外枠（地球儀 / 待合室 / ツアーインフォ / モーダル） */
+.earth-frame-wrap,
+.meetups,
+#recommendSection,
+.modal{
+  border-radius: var(--panel-radius) !important;
+}
+
+/* 待合室のカードなど（中身の角丸も揃える） */
+.card{
+  border-radius: var(--panel-radius) !important;
+}
+
+/* 角丸が効くように中身がはみ出さないよう統一 */
+.earth-frame-wrap,
+.meetups,
+#recommendSection,
+.modal,
+.card{
+  overflow: hidden;
+}
