@@ -421,6 +421,7 @@
 
     /* =========================================================
        Top Controls（ボタン位置2：ロゴ左右に配置）
+       - 画面幅を狭めても「左ボタン・ロゴ・右ボタン」の関係を維持
        ========================================================= */
     .top-controls{
       width: min(980px, calc(100% - 32px));
@@ -434,13 +435,10 @@
     .top-controls__btn{
       flex: 0 0 auto;
       white-space: nowrap;
-      padding: 10px 14px;
-      border-radius: 999px;
     }
-    /* 狭い幅でも“左右＋中央”の関係を維持したまま少しだけ詰める */
     @media (max-width: 520px){
       .top-controls{ gap: 10px; margin: 8px auto 12px; }
-      .top-controls__btn{ padding: 8px 10px; font-size: 0.92rem; }
+      .top-controls__btn{ font-size: 0.92rem; padding: 8px 10px; }
       .site-logo{ transform: scale(0.92); transform-origin: center; }
     }
 
@@ -521,13 +519,13 @@
 
       <!-- ✅ ボタン位置2：ロゴ左右に固定（幅を狭めても相対関係を維持） -->
       <div class="top-controls">
-        <button type="button" id="aboutBtn" class="intro-bar__button top-controls__btn left">
+        <button type="button" id="aboutBtn" class="intro-bar__button top-controls__btn">
           What is Dokodemo Doors?
         </button>
 
         <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
 
-        <button type="button" id="guideBtn" class="intro-bar__button top-controls__btn right">
+        <button type="button" id="guideBtn" class="intro-bar__button top-controls__btn">
           What is this fan site?
         </button>
       </div>
