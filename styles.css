@@ -1025,6 +1025,16 @@ header *{
 }
 
 /* ===============================
+   ツアーインフォメーションを待合室/地球儀と同幅に固定
+   （index.html の inline max-width:960px を上書き）
+   =============================== */
+#recommendSection{
+  width: min(var(--wrap-max), calc(100vw - 32px)) !important;
+  max-width: none !important;  /* ← inline の max-width:960px を無効化 */
+  margin: 24px auto !important;
+}
+
+/* ===============================
    ツアーインフォメーションを幅統一
    =============================== */
 
@@ -1039,3 +1049,4 @@ header *{
   font-weight: 800;
   letter-spacing: .01em;
 }
+
