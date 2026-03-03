@@ -671,5 +671,47 @@
   </script>
 
   <script src="./recommend.js"></script>
+
+
+<!-- ✅ AutoScrollToTourInfo:START -->
+<script>
+(function(){
+  // 観光案内パネルを開いた直後に、そこまでスムーズスクロール
+  function smoothScrollToTourInfo(){
+    const section = document.getElementById("recommendSection");
+    if(!section) return;
+
+    // 開閉反映・レイアウト確定を少し待ってからスクロール（Quest等でも安定）
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          section.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+        } catch (e) {
+          const y = section.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+          window.scrollTo(0, y);
+        }
+
+        // 任意：入力欄へフォーカス（スクロールはpreventScrollで阻害しない）
+        const input = document.getElementById("recommendInput");
+        if(input){
+          setTimeout(() => {
+            try { input.focus({ preventScroll: true }); } catch (e) { try { input.focus(); } catch(_){} }
+          }, 350);
+        }
+      });
+    });
+  }
+
+  const btn = document.getElementById("touristInfoBtn");
+  if(!btn) return;
+
+  // 既存のクリック処理を壊さないため、後追いで実行
+  btn.addEventListener("click", () => {
+    setTimeout(smoothScrollToTourInfo, 0);
+  }, { passive: true });
+})();
+</script>
+<!-- ✅ AutoScrollToTourInfo:END -->
+
 </body>
 </html>
