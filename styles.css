@@ -1021,6 +1021,22 @@ header *{
    =============================== */
 
 .earth-frame-wrap {
-  max-width: 1100px;  /* ← .meetups と同じ値にする */
+  width: min(var(--wrap-max), calc(100vw - 32px));
   margin: 0 auto;
+}
+
+/* ===============================
+   ツアーインフォメーションを幅統一
+   =============================== */
+
+#recommendSection {
+  width: min(var(--wrap-max), calc(100vw - 32px));
+  margin: 24px auto;   /* 中央寄せ維持 */
+}
+
+.recommend-title {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: .01em;
 }
