@@ -1008,3 +1008,10 @@ header *{
 .recommend-voice-ask{
   margin-bottom: 6px !important;
 }
+
+/* ===============================
+   ロゴ＋ボタンを 75px 上に詰める
+   =============================== */
+.stage {
+  margin-top: -75px;
+}
