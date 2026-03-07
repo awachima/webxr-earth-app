@@ -809,12 +809,38 @@
   //  Earth messaging
   // ----------------------------
   function postSelected() {
-    // label が未解決のIDは「今は送らない」（ID文字列を送ると全消しになり得る）
-    // ★重要: 親カテゴリ（子を持つノード）は「見出し」なので送らない（AND条件で0件化し得る）
     const ids = Array.from(selected).filter((id) => {
+      if (!id || id === ROOT_ID || id === EMPTY_ID) return false;
+
       const n = nodesById.get(id);
-      if (!n) return true; // loc(G/H) など木構造外の選択はそのまま送る
-      return !(n.children && n.children.size > 0); // leaf のみ
+      if (n) {
+        // tree.csv 側は親カテゴリを送らず leaf のみ送る
+        return !(n.children && n.children.size > 0);
+      }
+
+      // 追加カテゴリ loc(G/H) の扱い
+      if (id.startsWith("loc::g::")) {
+        const g = id.slice("loc::g::".length);
+        const kids = locChildren.get(g) || new Set();
+
+        // H が1つでも選ばれているなら、Gは送らない
+        // これで「盛りだくさん」+「インドのベストシーン集」が同時送信されず、
+        // OR 条件で別行まで混ざる問題を防ぐ
+        for (const h of kids) {
+          const hid = "loc::h::" + g + "::" + h;
+          if (selected.has(hid)) return false;
+        }
+
+        // Hが無いG、またはG単独選択の時だけ送る
+        return true;
+      }
+
+      if (id.startsWith("loc::h::")) {
+        return true;
+      }
+
+      // label が無い不明IDは送らない
+      return label.has(id);
     });
 
     const tags = ids
