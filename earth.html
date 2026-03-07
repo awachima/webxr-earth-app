@@ -624,43 +624,16 @@ AFRAME.registerComponent('marker-placer',{
     this.updateClusters();
   },
 
-  // ★ CSV解析（タグ列は将来増えても壊れないように「後ろ側をまとめて拾う」）
+  // ★ CSV解析（改行入りセル対応版）
   parseCsv:function(csvText){
-    const locations=[];
+    const locations = [];
 
-    // 引用符内のコンマを無視して行を正しく分割する関数
-    const parseCsvLine = (line) => {
-      const parts = [];
-      let currentPart = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"' && (i === 0 || line[i-1] !== '"')) {
-            inQuotes = !inQuotes;
-            continue; // 引用符自体は含めない
-        }
-        if (char === ',' && !inQuotes) {
-            parts.push(currentPart);
-            currentPart = '';
-        } else {
-            currentPart += char;
-        }
-      }
-      parts.push(currentPart);
-      // 先頭/末尾の引用符を除去（Google Sheets CSV対策）
-      for (let k=0;k<parts.length;k++){
-        let v = parts[k];
-        if (typeof v !== 'string') { parts[k] = ''; continue; }
-        v = v.trim();
-        if (v.startsWith('"')) v = v.slice(1);
-        if (v.endsWith('"')) v = v.slice(0, -1);
-        parts[k] = v;
-      }
-      return parts;
+    const cleanCell = (value) => {
+      if (typeof value !== 'string') return '';
+      let v = value;
+      if (v.charCodeAt(0) === 0xFEFF) v = v.slice(1);
+      return v.trim();
     };
-
-    const lines = csvText.trim().split(/\r?\n/);
-    if (lines.length === 0) return locations;
 
     const cleanAndParseFloat = (str) => {
       if (typeof str !== 'string') return NaN;
@@ -668,77 +641,122 @@ AFRAME.registerComponent('marker-placer',{
       return parseFloat(cleanedStr);
     };
 
-    // ヘッダー行かどうかの判定（lat/lng が数値でないならヘッダー扱い）
-    const firstLineParts = parseCsvLine(lines[0]);
-    const latTry = cleanAndParseFloat(firstLineParts[1] || '');
-    const lonTry = cleanAndParseFloat(firstLineParts[2] || '');
+    const parseCsvRecords = (text) => {
+      const records = [];
+      let record = [];
+      let field = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const next = text[i + 1];
+
+        if (ch === '"') {
+          if (inQuotes && next === '"') {
+            field += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+          continue;
+        }
+
+        if (ch === ',' && !inQuotes) {
+          record.push(field);
+          field = '';
+          continue;
+        }
+
+        if ((ch === '\n' || ch === '\r') && !inQuotes) {
+          if (ch === '\r' && next === '\n') i++;
+          record.push(field);
+          field = '';
+          if (record.some(v => v !== '')) records.push(record);
+          record = [];
+          continue;
+        }
+
+        field += ch;
+      }
+
+      record.push(field);
+      if (record.some(v => v !== '')) records.push(record);
+      return records;
+    };
+
+    const records = parseCsvRecords(csvText || '');
+    if (!records.length) {
+      this._tagStartIndex = 7;
+      return locations;
+    }
+
+    const firstRecord = records[0].map(cleanCell);
+    const latTry = cleanAndParseFloat(firstRecord[2] || '');
+    const lonTry = cleanAndParseFloat(firstRecord[3] || '');
     const isHeader = isNaN(latTry) || isNaN(lonTry);
 
     let headers = null;
     let startIndex = 0;
-    if (isHeader){
-      headers = firstLineParts;
+    if (isHeader) {
+      headers = firstRecord;
       startIndex = 1;
 
-      // タグ列の開始位置をヘッダーから推定（将来 tree が増えても「タグ文字列」で受けるだけなのでここは緩くてOK）
       let tagStart = null;
-      for (let i=0;i<headers.length;i++){
-        const h = (headers[i] || '').trim();
+      for (let i = 0; i < headers.length; i++) {
+        const h = cleanCell(headers[i]);
         const hl = h.toLowerCase();
         if (!h) continue;
-        if (hl.includes('tag') || h.includes('タグ')) { tagStart = i; break; }
-      }
-      // 推定できない場合は「基本4列の後ろ」ではなく、既存シートで多い構成に合わせて安全側に寄せる
-      // 目安: title,lat,lng,url, status..., note..., tags...
-      if (tagStart === null){
-        tagStart = (headers.length >= 11) ? 10 : 5; // 後方にタグがある想定（将来列が増えても最後側を拾うため致命傷になりにくい）
+        if (hl.includes('tag') || h.includes('タグ')) {
+          tagStart = i;
+          break;
+        }
       }
 
-      // ★重要: 本プロジェクトでは location.csv の追加カテゴリが H/I（0始まり 7/8）にある。
-      // ここがタグ列として拾われないと「第2カラムだけ選択」が地球儀に反映されない。
-      // そのため、列数が十分ある場合は「タグ開始位置」を H(=7) 以前へ寄せて必ず拾う。
-      // （既存のJ列以降のタグも引き続き拾われる）
+      if (tagStart === null) {
+        tagStart = (headers.length >= 11) ? 10 : 5;
+      }
+
       if (headers.length > 8) {
         tagStart = Math.min(tagStart, 7);
       }
       this._tagStartIndex = tagStart;
     } else {
-      this._tagStartIndex = 5; // ヘッダーがない場合は最低限、5列目以降を「メタ+タグ候補」として扱う
+      this._tagStartIndex = 7;
       startIndex = 0;
     }
 
-    for (let i = startIndex; i < lines.length; i++) {
-      if (!lines[i]) continue;
-      const parts = parseCsvLine(lines[i]);
+    for (let i = startIndex; i < records.length; i++) {
+      const parts = records[i].map(cleanCell);
+      if (parts.length < 5) continue;
 
-      if (parts.length >= 5) {
-        const title = parts[0] || '名称不明';
-        const lat = cleanAndParseFloat(parts[2] || '');
-        const lon = cleanAndParseFloat(parts[3] || '');
-        const url = parts[4] || '';
+      const title = parts[0] || '名称不明';
+      const lat = cleanAndParseFloat(parts[2] || '');
+      const lon = cleanAndParseFloat(parts[3] || '');
+      const url = parts[4] || '';
 
-        // タグ列（将来増えてもOK：開始位置〜末尾までを全部拾う。空欄は除外）
-        const tags = [];
+      const tags = [];
+      const seenTags = new Set();
+      const pushTag = (value) => {
+        const t = cleanCell(value);
+        if (!t || seenTags.has(t)) return;
+        seenTags.add(t);
+        tags.push(t);
+      };
 
-        // H列=第一カテゴリ, I列=第二カテゴリ（Hの子）
-        // ※ヘッダー名が空でも動くように「列位置」で読む（0始まり: H=7, I=8）
-        const gCat = (parts[7] || '').trim();
-        const hCat = (parts[8] || '').trim();
-        if (gCat) tags.push(gCat);
-        if (hCat) tags.push(hCat);
+      // H列=第一カテゴリ, I列=第二カテゴリ（0始まり: H=7, I=8）
+      pushTag(parts[7] || '');
+      pushTag(parts[8] || '');
 
-        const tagStart = Math.max(0, Math.min(this._tagStartIndex || 5, parts.length));
-        for (let c = tagStart; c < parts.length; c++){
-          const t = (parts[c] || '').trim();
-          if (!t) continue;
-          tags.push(t);
-        }
-        if (isNaN(lat) || isNaN(lon)) {
-          locations.push({ title: title, lat: -90, lon: 0, url: url, tags: tags });
-        } else {
-          locations.push({ title: title, lat: lat, lon: lon, url: url, tags: tags });
-        }
+      const tagStart = Math.max(0, Math.min((this._tagStartIndex == null ? 7 : this._tagStartIndex), parts.length));
+      for (let c = tagStart; c < parts.length; c++) {
+        pushTag(parts[c] || '');
       }
+
+      if (isNaN(lat) || isNaN(lon)) {
+        continue;
+      }
+
+      locations.push({ title: title, lat: lat, lon: lon, url: url, tags: tags });
     }
     return locations;
   },
