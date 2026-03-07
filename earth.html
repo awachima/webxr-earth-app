@@ -691,19 +691,19 @@ AFRAME.registerComponent('marker-placer',{
       // 推定できない場合は「基本4列の後ろ」ではなく、既存シートで多い構成に合わせて安全側に寄せる
       // 目安: title,lat,lng,url, status..., note..., tags...
       if (tagStart === null){
-        tagStart = (headers.length >= 10) ? 9 : 4; // 後方にタグがある想定（将来列が増えても最後側を拾うため致命傷になりにくい）
+        tagStart = (headers.length >= 11) ? 10 : 5; // 後方にタグがある想定（将来列が増えても最後側を拾うため致命傷になりにくい）
       }
 
-      // ★重要: 本プロジェクトでは location.csv の追加カテゴリが G/H（0始まり 6/7）にある。
+      // ★重要: 本プロジェクトでは location.csv の追加カテゴリが H/I（0始まり 7/8）にある。
       // ここがタグ列として拾われないと「第2カラムだけ選択」が地球儀に反映されない。
-      // そのため、列数が十分ある場合は「タグ開始位置」を G(=6) 以前へ寄せて必ず拾う。
+      // そのため、列数が十分ある場合は「タグ開始位置」を H(=7) 以前へ寄せて必ず拾う。
       // （既存のJ列以降のタグも引き続き拾われる）
-      if (headers.length > 7) {
-        tagStart = Math.min(tagStart, 6);
+      if (headers.length > 8) {
+        tagStart = Math.min(tagStart, 7);
       }
       this._tagStartIndex = tagStart;
     } else {
-      this._tagStartIndex = 4; // ヘッダーがない場合は最低限、4列目以降を「メタ+タグ候補」として扱う
+      this._tagStartIndex = 5; // ヘッダーがない場合は最低限、5列目以降を「メタ+タグ候補」として扱う
       startIndex = 0;
     }
 
@@ -711,23 +711,23 @@ AFRAME.registerComponent('marker-placer',{
       if (!lines[i]) continue;
       const parts = parseCsvLine(lines[i]);
 
-      if (parts.length >= 4) {
+      if (parts.length >= 5) {
         const title = parts[0] || '名称不明';
-        const lat = cleanAndParseFloat(parts[1] || '');
-        const lon = cleanAndParseFloat(parts[2] || '');
-        const url = parts[3] || '';
+        const lat = cleanAndParseFloat(parts[2] || '');
+        const lon = cleanAndParseFloat(parts[3] || '');
+        const url = parts[4] || '';
 
         // タグ列（将来増えてもOK：開始位置〜末尾までを全部拾う。空欄は除外）
         const tags = [];
 
-        // G列=第一カテゴリ, H列=第二カテゴリ（Gの子）
-        // ※ヘッダー名が空でも動くように「列位置」で読む（0始まり: G=6, H=7）
-        const gCat = (parts[6] || '').trim();
-        const hCat = (parts[7] || '').trim();
+        // H列=第一カテゴリ, I列=第二カテゴリ（Hの子）
+        // ※ヘッダー名が空でも動くように「列位置」で読む（0始まり: H=7, I=8）
+        const gCat = (parts[7] || '').trim();
+        const hCat = (parts[8] || '').trim();
         if (gCat) tags.push(gCat);
         if (hCat) tags.push(hCat);
 
-        const tagStart = Math.max(0, Math.min(this._tagStartIndex || 4, parts.length));
+        const tagStart = Math.max(0, Math.min(this._tagStartIndex || 5, parts.length));
         for (let c = tagStart; c < parts.length; c++){
           const t = (parts[c] || '').trim();
           if (!t) continue;
