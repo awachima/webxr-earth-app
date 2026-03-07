@@ -156,9 +156,9 @@
   // ----------------------------
   //  location.csv(G/H) -> extra category UI
   // ----------------------------
-  // ★ 追加タグ開始列は「絶対にG/H」固定（0始まりで 6/7）
-  const LOC_G_INDEX = 6;
-  const LOC_H_INDEX = 7;
+  // ★ 追加タグ開始列は「絶対にH/I」固定（0始まりで 7/8）
+  const LOC_G_INDEX = 7;
+  const LOC_H_INDEX = 8;
 
   let locReady = false;
   let locGList = []; // ["有名な場所", "有名な物", ...]
@@ -188,7 +188,7 @@
     // その場合に備えて range 付きも順に試します（仕様はG/H固定のまま）。
     const locPrimaryCandidates = [
       LOCATION_URL_PRIMARY,
-      LOCATION_URL_PRIMARY + "&range=A:K",
+      LOCATION_URL_PRIMARY + "&range=A:L",
       LOCATION_URL_PRIMARY + "&range=A:Z",
     ];
 
@@ -231,8 +231,8 @@
     let start = 0;
     try {
       const head = csvParseLine(lines[0]);
-      const lat = parseFloat((head[1] || "").replace(/[−–‐]/g, "-"));
-      const lng = parseFloat((head[2] || "").replace(/[−–‐]/g, "-"));
+      const lat = parseFloat((head[2] || "").replace(/[−–‐]/g, "-"));
+      const lng = parseFloat((head[3] || "").replace(/[−–‐]/g, "-"));
       if (isNaN(lat) || isNaN(lng)) start = 1;
     } catch (_) {}
 
@@ -244,7 +244,7 @@
       const firstData = csvParseLine(lines[Math.min(start, lines.length - 1)]);
       if ((firstData || []).length <= LOC_H_INDEX) {
         locDebugMessage =
-          "location.csv の列数が想定より少ないため、G/H を読み取れません（公開CSVにG/Hが含まれているか確認してください）";
+          "location.csv の列数が想定より少ないため、H/I を読み取れません（公開CSVにH/Iが含まれているか確認してください）";
       }
     } catch (_) {}
 
