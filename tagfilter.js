@@ -13,7 +13,6 @@
   const TREE_URL_FALLBACK = "./tree.csv";
 
   // ★追加: location.csv（G/Hを追加カテゴリに使う）
-  // ※G/H開始列は固定（G=6, H=7 / 0始まり）
   const LOCATION_URL_PRIMARY =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv";
   const LOCATION_URL_FALLBACK = "./location.csv";
@@ -117,7 +116,7 @@
   }
 
   function csvParseLine(line) {
-    // minimal CSV parser (handles quotes)
+    // minimal CSV parser (handles quotes in a single logical record)
     const out = [];
     let cur = "";
     let inQ = false;
@@ -148,6 +147,66 @@
     return out;
   }
 
+  function parseCsvRecords(text) {
+    // 改行を含む quoted field に対応したCSVパーサ
+    // 返り値: 2次元配列 rows[rowIndex][colIndex]
+    const rows = [];
+    let row = [];
+    let cur = "";
+    let inQ = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+
+      if (inQ) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') {
+            cur += '"';
+            i++;
+          } else {
+            inQ = false;
+          }
+        } else {
+          cur += ch;
+        }
+        continue;
+      }
+
+      if (ch === '"') {
+        inQ = true;
+        continue;
+      }
+
+      if (ch === ",") {
+        row.push(cur);
+        cur = "";
+        continue;
+      }
+
+      if (ch === "\n") {
+        row.push(cur);
+        cur = "";
+        if (row.some((v) => String(v).length > 0)) rows.push(row);
+        row = [];
+        continue;
+      }
+
+      if (ch === "\r") {
+        // CRLF の CR は無視（LF 側で行確定）
+        continue;
+      }
+
+      cur += ch;
+    }
+
+    if (cur.length > 0 || row.length > 0) {
+      row.push(cur);
+      if (row.some((v) => String(v).length > 0)) rows.push(row);
+    }
+
+    return rows;
+  }
+
   function ensureSet(map, key) {
     if (!map.has(key)) map.set(key, new Set());
     return map.get(key);
@@ -156,7 +215,7 @@
   // ----------------------------
   //  location.csv(G/H) -> extra category UI
   // ----------------------------
-  // ★ 追加タグ開始列は「絶対にH/I」固定（0始まりで 7/8）
+  // ★ 追加タグ開始列は H/I 固定（0始まりで 7/8）
   const LOC_G_INDEX = 7;
   const LOC_H_INDEX = 8;
 
@@ -185,7 +244,7 @@
 
     // Primary（Google Sheets CSV）
     // ★公開CSVが「使用範囲が狭い(A〜Eだけ等)」として出力される場合、G/H以降が落ちることがあります。
-    // その場合に備えて range 付きも順に試します（仕様はG/H固定のまま）。
+    // その場合に備えて range 付きも順に試します（仕様はH/I固定のまま）。
     const locPrimaryCandidates = [
       LOCATION_URL_PRIMARY,
       LOCATION_URL_PRIMARY + "&range=A:L",
@@ -219,8 +278,8 @@
       return;
     }
 
-    const lines = text.trim().split(/\r?\n/);
-    if (!lines.length) {
+    const rows = parseCsvRecords(text);
+    if (!rows.length) {
       locReady = false;
       locDebugMessage = "location.csv が空です";
       renderLocAreas();
@@ -230,7 +289,7 @@
     // ヘッダー判定（2列目/3列目が数値でないならヘッダー扱い）
     let start = 0;
     try {
-      const head = csvParseLine(lines[0]);
+      const head = rows[0] || [];
       const lat = parseFloat((head[2] || "").replace(/[−–‐]/g, "-"));
       const lng = parseFloat((head[3] || "").replace(/[−–‐]/g, "-"));
       if (isNaN(lat) || isNaN(lng)) start = 1;
@@ -239,17 +298,17 @@
     const gSet = new Set();
     const childMap = new Map();
 
-    // 列数不足チェック（最低でもHまで必要）
+    // 列数不足チェック（最低でもIまで必要）
     try {
-      const firstData = csvParseLine(lines[Math.min(start, lines.length - 1)]);
-      if ((firstData || []).length <= LOC_H_INDEX) {
+      const firstData = rows[Math.min(start, rows.length - 1)] || [];
+      if (firstData.length <= LOC_H_INDEX) {
         locDebugMessage =
           "location.csv の列数が想定より少ないため、H/I を読み取れません（公開CSVにH/Iが含まれているか確認してください）";
       }
     } catch (_) {}
 
-    for (let i = start; i < lines.length; i++) {
-      const parts = csvParseLine(lines[i]);
+    for (let i = start; i < rows.length; i++) {
+      const parts = rows[i] || [];
 
       // 行ごとに列数が足りない場合はスキップ
       if (!parts || parts.length <= LOC_G_INDEX) continue;
@@ -788,13 +847,12 @@
     postSelected();
   }
 
-
   window.addEventListener("message", (ev) => {
     const data = ev && ev.data;
     if (!data || typeof data !== "object") return;
     if (data.type === "dd-earth-ready") {
-		console.log("[tagfilter] got dd-earth-ready");
-		earthReady = true;
+      console.log("[tagfilter] got dd-earth-ready");
+      earthReady = true;
       tryAutoApply();
     }
   });
@@ -913,17 +971,17 @@
     parent.set(ROOT_ID, null);
     depthById.set(ROOT_ID, 0);
 
-    const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    if (lines.length <= 1) return;
+    const rows = parseCsvRecords(csvText);
+    if (rows.length <= 1) return;
 
-    const header = csvParseLine(lines[0]).map((s) => normalize(s).toLowerCase());
+    const header = (rows[0] || []).map((s) => normalize(s).toLowerCase());
     const idx1 = header.indexOf("level1");
     const idx2 = header.indexOf("level2");
     const idx3 = header.indexOf("level3");
     if (idx1 < 0) return;
 
-    for (let i = 1; i < lines.length; i++) {
-      const cols = csvParseLine(lines[i]);
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i] || [];
       const l1 = normalize(cols[idx1]);
       const l2 = idx2 >= 0 ? normalize(cols[idx2]) : "";
       const l3 = idx3 >= 0 ? normalize(cols[idx3]) : "";
