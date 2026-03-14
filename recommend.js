@@ -680,11 +680,12 @@ ${raw}`);
       return;
     }
 
-    ensurePanelOpenSoftly();
-    appendUser(spokenText);
-
-    const serial = ++requestSerial;
-    applyWorkerResponse(parsedValue || {}, { serial, force: true });
+    // ★重要:
+    // 音声入力も最終的な会話分岐は必ず /chat 側に一本化する。
+    // これにより、テキスト入力と同じ nextState / intent / reply 経路を通るため、
+    // 「手入力では完璧だが音声だけ別分岐になる」現象を抑える。
+    setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
+    await sendTextDirect(spokenText);
     setLucyVoiceStatus("");
   }
 
@@ -866,7 +867,6 @@ async function stopServerVoiceWav() {
       return;
     }
 
-    setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。処理しています…"));
     await handleVoiceWorkerResponse(parsed.value, text);
   } catch (e) {
     console.error(e);
@@ -973,7 +973,6 @@ async function startServerVoice() {
           return;
         }
 
-        setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。処理しています…"));
         await handleVoiceWorkerResponse(parsed.value, text);
       } catch (e) {
         console.error(e);
