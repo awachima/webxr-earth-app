@@ -752,11 +752,10 @@ AFRAME.registerComponent('marker-placer',{
         pushTag(parts[c] || '');
       }
 
-      if (isNaN(lat) || isNaN(lon)) {
-        continue;
-      }
+      const finalLat = isNaN(lat) ? -90 : lat;
+      const finalLon = isNaN(lon) ? 0 : lon;
 
-      locations.push({ title: title, lat: lat, lon: lon, url: url, tags: tags });
+      locations.push({ title: title, lat: finalLat, lon: finalLon, url: url, tags: tags });
     }
     return locations;
   },
