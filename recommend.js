@@ -385,8 +385,8 @@ let wavStartedAt = 0;
     if (isVoiceMoreLike(normalized)) {
       if (lastAssistantReplyKind === "single_recommend") {
         const workerText = lastRecommendKeyword
-          ? `${lastRecommendKeyword}のおすすめをもっと教えて`
-          : "ほかのおすすめを教えて";
+          ? `${lastRecommendKeyword}のおすすめ`
+          : "おすすめ";
         return { displayText: normalized, workerText };
       }
       if (lastAssistantReplyKind === "multi_links") {
