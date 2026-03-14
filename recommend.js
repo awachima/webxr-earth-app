@@ -61,8 +61,7 @@ const IS_QUEST = (() => {
   try { return /Quest|Oculus/i.test(navigator.userAgent || ""); } catch (_) { return false; }
 })();
 
-// Questでもテキスト入力を許可する。
-// ただし音声開始時だけ、必要に応じて一度 blur して仮想キーボードを閉じる。
+// Questでは「入力欄にフォーカスさせない」ことで、毎回キーボードが出る問題を回避する
 function questSafeBlurInput(inputEl) {
   if (!inputEl) return;
   if (!IS_QUEST) return;
@@ -71,6 +70,11 @@ function questSafeBlurInput(inputEl) {
 
 function questSafeFocusInput(inputEl) {
   if (!inputEl) return;
+  if (IS_QUEST) {
+    // Questは focus するとキーボードが必ず出るため、フォーカスしない
+    questSafeBlurInput(inputEl);
+    return;
+  }
   try { inputEl.focus(); } catch (_) {}
 }
 
@@ -153,19 +157,27 @@ try {
   }
 
   
-// ★ Questでもテキスト入力を有効にする
-try {
-  inputEl.readOnly = false;
-  inputEl.removeAttribute("readonly");
-  inputEl.setAttribute("inputmode", "text");
-} catch (_) {}
+// ★ Quest: 入力欄が誤ってフォーカスされた場合でもキーボードを出さない
+if (IS_QUEST) {
+  try {
+    inputEl.readOnly = true;               // キーボード抑止に効く環境がある
+    inputEl.setAttribute("inputmode", "none");
+    inputEl.addEventListener("focus", () => {
+      // focusイベント中にblurすると効かないことがあるため、次のtickでblur
+      setTimeout(() => questSafeBlurInput(inputEl), 0);
+    });
+    // タップでフォーカスが入る場合の保険（preventDefaultはしない：他の挙動を壊さない）
+    inputEl.addEventListener("pointerdown", () => setTimeout(() => questSafeBlurInput(inputEl), 0));
+    inputEl.addEventListener("mousedown", () => setTimeout(() => questSafeBlurInput(inputEl), 0));
+  } catch (_) {}
+  // 初期状態でも念のため blur
+  setTimeout(() => questSafeBlurInput(inputEl), 0);
+}
 
 // =========================================================
   // 4) 内部状態
   // =========================================================
   let nextState = null;
-  let requestSerial = 0;
-  let lastAppliedSerial = 0;
 
   // ★ 追加：挨拶を「パネルを開いた時」に1回だけ出すためのフラグ
   let lucyGreetingShown = false;
@@ -187,6 +199,10 @@ let wavStartedAt = 0;
   let speechRec = null;
   let speechIsRunning = false;
   let lastSpeechFinal = "";
+
+  // ★ 追加: 直前のLucy返信内容を保持し、音声の曖昧な「ほかには」を文脈で明確化する
+  let lastAssistantRawText = "";
+  let lastAssistantReplyKind = null; // "single_recommend" | "multi_links" | "choice_prompt" | null
 
   // =========================================================
   // 5) ユーティリティ
@@ -309,6 +325,52 @@ let wavStartedAt = 0;
     return { choices };
   }
 
+
+
+  function detectAssistantReplyKind(rawText) {
+    const s = String(rawText || "");
+    const choiceInfo = extractChoicesFromLucyReply(s);
+    if (choiceInfo && Array.isArray(choiceInfo.choices) && choiceInfo.choices.length >= 2) {
+      return "choice_prompt";
+    }
+
+    const anchorCount = (s.match(/<a\b[\s\S]*?<\/a>/gi) || []).length;
+    const urlCount = (s.match(/https?:\/\/[^\s<>"]+/gi) || []).length;
+    const linkCount = Math.max(anchorCount, urlCount);
+
+    if (linkCount >= 2) return "multi_links";
+    if (linkCount === 1) return "single_recommend";
+    return null;
+  }
+
+  function isVoiceMoreLike(text) {
+    const t = String(text || "")
+      .trim()
+      .replace(/[。．、,，!！?？〜~\s]+/g, "")
+      .toLowerCase();
+    if (!t) return false;
+    return /^(ほか|他|ほかに|他に|ほかには|他には|もっと|次|つぎ|別|別の|べつの)$/.test(t);
+  }
+
+  function canonicalizeVoiceTextByContext(text) {
+    const normalized = normalizeUserText(text);
+    if (!normalized) return normalized;
+
+    if (isVoiceMoreLike(normalized)) {
+      if (lastAssistantReplyKind === "single_recommend") {
+        return "ほかのおすすめを教えて";
+      }
+      if (lastAssistantReplyKind === "multi_links") {
+        return "同じ条件で別のツアーを見せて";
+      }
+      if (lastAssistantReplyKind === "choice_prompt") {
+        return "別の候補を見せて";
+      }
+    }
+
+    return normalized;
+  }
+
   // =========================================================
   // 6) UI描画（※DOM構造は元のまま維持）
   // =========================================================
@@ -340,6 +402,9 @@ let wavStartedAt = 0;
   const appendUser = (t) => appendBubble("user", "You", t, false);
 
   function appendLucy(rawText) {
+    lastAssistantRawText = String(rawText || "");
+    lastAssistantReplyKind = detectAssistantReplyKind(lastAssistantRawText);
+
     const html = sanitizeLucyReplyToHtml(rawText);
     const parts = appendBubble("assistant", "Lucy", html, true);
 
@@ -609,58 +674,37 @@ function cleanupWavRecorder() {
     const raw = await res.text();
     const parsed = safeJsonParse(raw);
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}
-${raw}`);
-    if (!parsed.ok) throw new Error(`JSON parse failed
-${raw}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
+    if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
     return parsed.value;
   }
 
-  function makeStateSnapshot() {
-    try {
-      return nextState ? JSON.parse(JSON.stringify(nextState)) : null;
-    } catch (_) {
-      return nextState || null;
-    }
-  }
+  async function sendTextDirect(text, source) {
+    const src = String(source || "text");
+    let t = normalizeUserText(text);
+    if (!t) return;
 
-  function applyWorkerResponse(data, opts = {}) {
-    const serial = Number(opts.serial || 0);
-    const force = !!opts.force;
-
-    if (!force && serial && serial < lastAppliedSerial) {
-      console.warn("[recommend.js] stale response ignored", { serial, lastAppliedSerial });
-      return false;
+    if (src === "voice") {
+      t = canonicalizeVoiceTextByContext(t);
     }
 
-    if (serial) lastAppliedSerial = serial;
-
-    if (data && data.nextState) nextState = data.nextState;
-    if (data && data.reply) appendLucy(data.reply);
-    if (data && data.debug) console.log("[Lucy debug]", data.debug);
-    return true;
+    await submitUserText(t, src);
   }
 
-  async function sendTextDirect(text) {
+  async function submitUserText(text, source) {
     const t = normalizeUserText(text);
     if (!t) return;
-    inputEl.value = t;
-    await onSend();
-  }
-
-  async function onSend() {
-    const text = normalizeUserText(inputEl.value);
-    if (!text) return;
 
     ensurePanelOpenSoftly();
-    appendUser(text);
+    appendUser(t);
     inputEl.value = "";
 
-    const serial = ++requestSerial;
     setSending(true);
     try {
-      const data = await callWorker(text);
-      applyWorkerResponse(data, { serial });
+      const data = await callWorker(t);
+      if (data.nextState) nextState = data.nextState;
+      if (data.reply) appendLucy(data.reply);
+      if (data.debug) console.log("[Lucy debug]", { source: source || "text", sentText: t, debug: data.debug });
     } catch (e) {
       appendError("通信に失敗しました", e.message);
       console.error(e);
@@ -670,23 +714,13 @@ ${raw}`);
     }
   }
 
-  async function handleVoiceWorkerResponse(parsedValue, fallbackText) {
-    const spokenText = normalizeUserText(
-      (parsedValue && (parsedValue.text || parsedValue.transcript)) || fallbackText || ""
-    );
-
-    if (!spokenText) {
-      setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
-      return;
-    }
-
-    // ★重要:
-    // 音声入力も最終的な会話分岐は必ず /chat 側に一本化する。
-    // これにより、テキスト入力と同じ nextState / intent / reply 経路を通るため、
-    // 「手入力では完璧だが音声だけ別分岐になる」現象を抑える。
-    setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
-    await sendTextDirect(spokenText);
-    setLucyVoiceStatus("");
+  // =========================================================
+  // 8) 送信処理
+  // =========================================================
+  async function onSend() {
+    const text = normalizeUserText(inputEl.value);
+    if (!text) return;
+    await submitUserText(text, "text");
   }
 
   // =========================================================
@@ -728,7 +762,7 @@ ${raw}`);
         if (finalText) {
           lastSpeechFinal = finalText;
           setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
-          await sendTextDirect(finalText);
+          await sendTextDirect(finalText, "voice");
           setLucyVoiceStatus("");
         }
       } catch (e) {
@@ -851,8 +885,6 @@ async function stopServerVoiceWav() {
     const fd = new FormData();
     fd.append("audio", wavBlob, "voice.wav");
     fd.append("lang", getCurrentLang());
-    const stateSnapshot = makeStateSnapshot();
-    if (stateSnapshot) fd.append("state", JSON.stringify(stateSnapshot));
 
     const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
     const raw = await res.text();
@@ -861,13 +893,15 @@ async function stopServerVoiceWav() {
     if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
     if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
 
-    const text = normalizeUserText(parsed.value && (parsed.value.text || parsed.value.transcript));
+    const text = normalizeUserText(parsed.value && parsed.value.text);
     if (!text) {
       setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
       return;
     }
 
-    await handleVoiceWorkerResponse(parsed.value, text);
+    setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
+    await sendTextDirect(text, "voice");
+    setLucyVoiceStatus("");
   } catch (e) {
     console.error(e);
     setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceFailed", "聞き取れませんでした。もう一度お試しください。"));
@@ -957,8 +991,6 @@ async function startServerVoice() {
         const fd = new FormData();
         fd.append("audio", blob, `voice.${ext}`);
         fd.append("lang", getCurrentLang());
-        const stateSnapshot = makeStateSnapshot();
-        if (stateSnapshot) fd.append("state", JSON.stringify(stateSnapshot));
 
         const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
         const raw = await res.text();
@@ -967,13 +999,15 @@ async function startServerVoice() {
         if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
         if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
 
-        const text = normalizeUserText(parsed.value && (parsed.value.text || parsed.value.transcript));
+        const text = normalizeUserText(parsed.value && parsed.value.text);
         if (!text) {
           setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
           return;
         }
 
-        await handleVoiceWorkerResponse(parsed.value, text);
+        setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
+        await sendTextDirect(text, "voice");
+        setLucyVoiceStatus("");
       } catch (e) {
         console.error(e);
         setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceFailed", "聞き取れませんでした。もう一度お試しください。"));
@@ -1080,9 +1114,10 @@ function stopServerVoice() {
     setLucyVoiceStatus("");
     setSending(true);
     try {
-      const serial = ++requestSerial;
       const data = await callWorker(null);
-      applyWorkerResponse(data, { serial, force: true });
+      if (data.nextState) nextState = data.nextState;
+      if (data.reply) appendLucy(data.reply);
+      if (data.debug) console.log("[Lucy debug]", data.debug);
       lucyGreetingShown = true;
     } catch (e) {
       appendError("初期化に失敗しました", e.message);
