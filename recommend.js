@@ -61,20 +61,18 @@ const IS_QUEST = (() => {
   try { return /Quest|Oculus/i.test(navigator.userAgent || ""); } catch (_) { return false; }
 })();
 
-// Questでは「入力欄にフォーカスさせない」ことで、毎回キーボードが出る問題を回避する
+// Questでも手入力は許可する。
+// 音声開始時にだけ blur して、不要なキーボード表示を抑える。
 function questSafeBlurInput(inputEl) {
   if (!inputEl) return;
   if (!IS_QUEST) return;
-  try { inputEl.blur(); } catch (_) {}
+  try {
+    if (document.activeElement === inputEl) inputEl.blur();
+  } catch (_) {}
 }
 
 function questSafeFocusInput(inputEl) {
   if (!inputEl) return;
-  if (IS_QUEST) {
-    // Questは focus するとキーボードが必ず出るため、フォーカスしない
-    questSafeBlurInput(inputEl);
-    return;
-  }
   try { inputEl.focus(); } catch (_) {}
 }
 
@@ -156,23 +154,9 @@ try {
     return;
   }
 
-  
-// ★ Quest: 入力欄が誤ってフォーカスされた場合でもキーボードを出さない
-if (IS_QUEST) {
-  try {
-    inputEl.readOnly = true;               // キーボード抑止に効く環境がある
-    inputEl.setAttribute("inputmode", "none");
-    inputEl.addEventListener("focus", () => {
-      // focusイベント中にblurすると効かないことがあるため、次のtickでblur
-      setTimeout(() => questSafeBlurInput(inputEl), 0);
-    });
-    // タップでフォーカスが入る場合の保険（preventDefaultはしない：他の挙動を壊さない）
-    inputEl.addEventListener("pointerdown", () => setTimeout(() => questSafeBlurInput(inputEl), 0));
-    inputEl.addEventListener("mousedown", () => setTimeout(() => questSafeBlurInput(inputEl), 0));
-  } catch (_) {}
-  // 初期状態でも念のため blur
-  setTimeout(() => questSafeBlurInput(inputEl), 0);
-}
+
+// ★ Questでも手入力を許可するため、入力欄の readOnly 化や自動 blur は行わない。
+//    キーボードを閉じたい場面では toggleVoice() 側から questSafeBlurInput() を呼ぶ。
 
 // =========================================================
   // 4) 内部状態
