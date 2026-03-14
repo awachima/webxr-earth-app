@@ -203,6 +203,7 @@ let wavStartedAt = 0;
   // ★ 追加: 直前のLucy返信内容を保持し、音声の曖昧な「ほかには」を文脈で明確化する
   let lastAssistantRawText = "";
   let lastAssistantReplyKind = null; // "single_recommend" | "multi_links" | "choice_prompt" | null
+  let lastRecommendKeyword = "";
 
   // =========================================================
   // 5) ユーティリティ
@@ -343,6 +344,31 @@ let wavStartedAt = 0;
     return null;
   }
 
+  function extractRecommendKeywordFromText(text) {
+    const s = normalizeUserText(text)
+      .replace(/[。．、,，!！?？〜~]+$/g, "")
+      .trim();
+    if (!s) return "";
+
+    const patterns = [
+      /^(.+?)\s*の\s*お(?:す|ス)すめ(?:を教えて)?$/i,
+      /^(.+?)\s*お(?:す|ス)すめ(?:を教えて)?$/i,
+      /^お(?:す|ス)すめ\s*(.+)$/i,
+      /^(.+?)\s*の\s*お(?:す|ス)すめ\s*を\s*もっと(?:教えて)?$/i,
+      /^(.+?)\s*の\s*お(?:す|ス)すめ\s*を\s*もう(?:一つ|ひとつ)?(?:教えて)?$/i,
+      /^(.+?)\s*の\s*ほかの\s*お(?:す|ス)すめ(?:を教えて)?$/i,
+    ];
+
+    for (const re of patterns) {
+      const m = s.match(re);
+      if (m && m[1]) {
+        const kw = normalizeUserText(String(m[1] || "").replace(/^(の|を|は|が)+/g, "").trim());
+        if (kw) return kw;
+      }
+    }
+    return "";
+  }
+
   function isVoiceMoreLike(text) {
     const t = String(text || "")
       .trim()
@@ -354,21 +380,24 @@ let wavStartedAt = 0;
 
   function canonicalizeVoiceTextByContext(text) {
     const normalized = normalizeUserText(text);
-    if (!normalized) return normalized;
+    if (!normalized) return { displayText: normalized, workerText: normalized };
 
     if (isVoiceMoreLike(normalized)) {
       if (lastAssistantReplyKind === "single_recommend") {
-        return "ほかのおすすめを教えて";
+        const workerText = lastRecommendKeyword
+          ? `${lastRecommendKeyword}のおすすめをもっと教えて`
+          : "ほかのおすすめを教えて";
+        return { displayText: normalized, workerText };
       }
       if (lastAssistantReplyKind === "multi_links") {
-        return "同じ条件で別のツアーを見せて";
+        return { displayText: normalized, workerText: "同じ条件で別のツアーを見せて" };
       }
       if (lastAssistantReplyKind === "choice_prompt") {
-        return "別の候補を見せて";
+        return { displayText: normalized, workerText: "別の候補を見せて" };
       }
     }
 
-    return normalized;
+    return { displayText: normalized, workerText: normalized };
   }
 
   // =========================================================
@@ -681,30 +710,36 @@ function cleanupWavRecorder() {
 
   async function sendTextDirect(text, source) {
     const src = String(source || "text");
-    let t = normalizeUserText(text);
-    if (!t) return;
+    const raw = normalizeUserText(text);
+    if (!raw) return;
 
     if (src === "voice") {
-      t = canonicalizeVoiceTextByContext(t);
+      const mapped = canonicalizeVoiceTextByContext(raw);
+      await submitUserText(mapped.displayText, src, mapped.workerText);
+      return;
     }
 
-    await submitUserText(t, src);
+    await submitUserText(raw, src, raw);
   }
 
-  async function submitUserText(text, source) {
-    const t = normalizeUserText(text);
-    if (!t) return;
+  async function submitUserText(displayText, source, workerText) {
+    const shownText = normalizeUserText(displayText);
+    const sentText = normalizeUserText(workerText || displayText);
+    if (!shownText || !sentText) return;
+
+    const recommendKeyword = extractRecommendKeywordFromText(sentText) || extractRecommendKeywordFromText(shownText);
+    if (recommendKeyword) lastRecommendKeyword = recommendKeyword;
 
     ensurePanelOpenSoftly();
-    appendUser(t);
+    appendUser(shownText);
     inputEl.value = "";
 
     setSending(true);
     try {
-      const data = await callWorker(t);
+      const data = await callWorker(sentText);
       if (data.nextState) nextState = data.nextState;
       if (data.reply) appendLucy(data.reply);
-      if (data.debug) console.log("[Lucy debug]", { source: source || "text", sentText: t, debug: data.debug });
+      if (data.debug) console.log("[Lucy debug]", { source: source || "text", shownText, sentText, lastRecommendKeyword, debug: data.debug });
     } catch (e) {
       appendError("通信に失敗しました", e.message);
       console.error(e);
@@ -720,7 +755,7 @@ function cleanupWavRecorder() {
   async function onSend() {
     const text = normalizeUserText(inputEl.value);
     if (!text) return;
-    await submitUserText(text, "text");
+    await submitUserText(text, "text", text);
   }
 
   // =========================================================
