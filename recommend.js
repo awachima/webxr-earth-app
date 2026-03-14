@@ -73,7 +73,23 @@ function questSafeBlurInput(inputEl) {
 
 function questSafeFocusInput(inputEl) {
   if (!inputEl) return;
-  try { inputEl.focus(); } catch (_) {}
+  try {
+    if (IS_QUEST) {
+      inputEl.readOnly = false;
+      inputEl.disabled = false;
+      inputEl.removeAttribute("readonly");
+      inputEl.removeAttribute("disabled");
+      inputEl.setAttribute("inputmode", "text");
+      inputEl.focus();
+      try { inputEl.click(); } catch (_) {}
+      const len = String(inputEl.value || "").length;
+      if (typeof inputEl.setSelectionRange === "function") {
+        inputEl.setSelectionRange(len, len);
+      }
+      return;
+    }
+    inputEl.focus();
+  } catch (_) {}
 }
 
 try {
@@ -157,6 +173,42 @@ try {
 
 // ★ Questでも手入力を許可するため、入力欄の readOnly 化や自動 blur は行わない。
 //    キーボードを閉じたい場面では toggleVoice() 側から questSafeBlurInput() を呼ぶ。
+// ★ 追加: Questで仮想キーボードが出ない場合に備え、入力欄タップ時に
+//    readOnly/inputmode/disabled を明示的に解除し、その場のユーザー操作内で focus/select する。
+if (IS_QUEST) {
+  try {
+    inputEl.readOnly = false;
+    inputEl.disabled = false;
+    inputEl.removeAttribute("readonly");
+    inputEl.removeAttribute("disabled");
+    inputEl.setAttribute("inputmode", "text");
+    inputEl.setAttribute("enterkeyhint", "send");
+    inputEl.setAttribute("autocomplete", "off");
+    inputEl.setAttribute("autocapitalize", "none");
+    inputEl.setAttribute("autocorrect", "off");
+    inputEl.tabIndex = 0;
+
+    const ensureQuestKeyboard = () => {
+      try {
+        inputEl.readOnly = false;
+        inputEl.disabled = false;
+        inputEl.removeAttribute("readonly");
+        inputEl.removeAttribute("disabled");
+        inputEl.setAttribute("inputmode", "text");
+        inputEl.focus();
+        const len = String(inputEl.value || "").length;
+        if (typeof inputEl.setSelectionRange === "function") {
+          inputEl.setSelectionRange(len, len);
+        }
+        try { inputEl.click(); } catch (_) {}
+      } catch (_) {}
+    };
+
+    inputEl.addEventListener("pointerup", ensureQuestKeyboard);
+    inputEl.addEventListener("touchend", ensureQuestKeyboard, { passive: true });
+    inputEl.addEventListener("click", ensureQuestKeyboard);
+  } catch (_) {}
+}
 
 // =========================================================
   // 4) 内部状態
