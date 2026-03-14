@@ -61,7 +61,8 @@ const IS_QUEST = (() => {
   try { return /Quest|Oculus/i.test(navigator.userAgent || ""); } catch (_) { return false; }
 })();
 
-// Questでは「入力欄にフォーカスさせない」ことで、毎回キーボードが出る問題を回避する
+// Questでもテキスト入力を許可する。
+// ただし音声開始時だけ、必要に応じて一度 blur して仮想キーボードを閉じる。
 function questSafeBlurInput(inputEl) {
   if (!inputEl) return;
   if (!IS_QUEST) return;
@@ -70,11 +71,6 @@ function questSafeBlurInput(inputEl) {
 
 function questSafeFocusInput(inputEl) {
   if (!inputEl) return;
-  if (IS_QUEST) {
-    // Questは focus するとキーボードが必ず出るため、フォーカスしない
-    questSafeBlurInput(inputEl);
-    return;
-  }
   try { inputEl.focus(); } catch (_) {}
 }
 
@@ -157,27 +153,19 @@ try {
   }
 
   
-// ★ Quest: 入力欄が誤ってフォーカスされた場合でもキーボードを出さない
-if (IS_QUEST) {
-  try {
-    inputEl.readOnly = true;               // キーボード抑止に効く環境がある
-    inputEl.setAttribute("inputmode", "none");
-    inputEl.addEventListener("focus", () => {
-      // focusイベント中にblurすると効かないことがあるため、次のtickでblur
-      setTimeout(() => questSafeBlurInput(inputEl), 0);
-    });
-    // タップでフォーカスが入る場合の保険（preventDefaultはしない：他の挙動を壊さない）
-    inputEl.addEventListener("pointerdown", () => setTimeout(() => questSafeBlurInput(inputEl), 0));
-    inputEl.addEventListener("mousedown", () => setTimeout(() => questSafeBlurInput(inputEl), 0));
-  } catch (_) {}
-  // 初期状態でも念のため blur
-  setTimeout(() => questSafeBlurInput(inputEl), 0);
-}
+// ★ Questでもテキスト入力を有効にする
+try {
+  inputEl.readOnly = false;
+  inputEl.removeAttribute("readonly");
+  inputEl.setAttribute("inputmode", "text");
+} catch (_) {}
 
 // =========================================================
   // 4) 内部状態
   // =========================================================
   let nextState = null;
+  let requestSerial = 0;
+  let lastAppliedSerial = 0;
 
   // ★ 追加：挨拶を「パネルを開いた時」に1回だけ出すためのフラグ
   let lucyGreetingShown = false;
@@ -621,9 +609,36 @@ function cleanupWavRecorder() {
     const raw = await res.text();
     const parsed = safeJsonParse(raw);
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
-    if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}
+${raw}`);
+    if (!parsed.ok) throw new Error(`JSON parse failed
+${raw}`);
     return parsed.value;
+  }
+
+  function makeStateSnapshot() {
+    try {
+      return nextState ? JSON.parse(JSON.stringify(nextState)) : null;
+    } catch (_) {
+      return nextState || null;
+    }
+  }
+
+  function applyWorkerResponse(data, opts = {}) {
+    const serial = Number(opts.serial || 0);
+    const force = !!opts.force;
+
+    if (!force && serial && serial < lastAppliedSerial) {
+      console.warn("[recommend.js] stale response ignored", { serial, lastAppliedSerial });
+      return false;
+    }
+
+    if (serial) lastAppliedSerial = serial;
+
+    if (data && data.nextState) nextState = data.nextState;
+    if (data && data.reply) appendLucy(data.reply);
+    if (data && data.debug) console.log("[Lucy debug]", data.debug);
+    return true;
   }
 
   async function sendTextDirect(text) {
@@ -633,9 +648,6 @@ function cleanupWavRecorder() {
     await onSend();
   }
 
-  // =========================================================
-  // 8) 送信処理
-  // =========================================================
   async function onSend() {
     const text = normalizeUserText(inputEl.value);
     if (!text) return;
@@ -644,12 +656,11 @@ function cleanupWavRecorder() {
     appendUser(text);
     inputEl.value = "";
 
+    const serial = ++requestSerial;
     setSending(true);
     try {
       const data = await callWorker(text);
-      if (data.nextState) nextState = data.nextState;
-      if (data.reply) appendLucy(data.reply);
-      if (data.debug) console.log("[Lucy debug]", data.debug);
+      applyWorkerResponse(data, { serial });
     } catch (e) {
       appendError("通信に失敗しました", e.message);
       console.error(e);
@@ -657,6 +668,24 @@ function cleanupWavRecorder() {
       setSending(false);
       questSafeFocusInput(inputEl);
     }
+  }
+
+  async function handleVoiceWorkerResponse(parsedValue, fallbackText) {
+    const spokenText = normalizeUserText(
+      (parsedValue && (parsedValue.text || parsedValue.transcript)) || fallbackText || ""
+    );
+
+    if (!spokenText) {
+      setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
+      return;
+    }
+
+    ensurePanelOpenSoftly();
+    appendUser(spokenText);
+
+    const serial = ++requestSerial;
+    applyWorkerResponse(parsedValue || {}, { serial, force: true });
+    setLucyVoiceStatus("");
   }
 
   // =========================================================
@@ -821,6 +850,8 @@ async function stopServerVoiceWav() {
     const fd = new FormData();
     fd.append("audio", wavBlob, "voice.wav");
     fd.append("lang", getCurrentLang());
+    const stateSnapshot = makeStateSnapshot();
+    if (stateSnapshot) fd.append("state", JSON.stringify(stateSnapshot));
 
     const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
     const raw = await res.text();
@@ -829,15 +860,14 @@ async function stopServerVoiceWav() {
     if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
     if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
 
-    const text = normalizeUserText(parsed.value && parsed.value.text);
+    const text = normalizeUserText(parsed.value && (parsed.value.text || parsed.value.transcript));
     if (!text) {
       setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
       return;
     }
 
-    setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
-    await sendTextDirect(text);
-    setLucyVoiceStatus("");
+    setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。処理しています…"));
+    await handleVoiceWorkerResponse(parsed.value, text);
   } catch (e) {
     console.error(e);
     setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceFailed", "聞き取れませんでした。もう一度お試しください。"));
@@ -927,6 +957,8 @@ async function startServerVoice() {
         const fd = new FormData();
         fd.append("audio", blob, `voice.${ext}`);
         fd.append("lang", getCurrentLang());
+        const stateSnapshot = makeStateSnapshot();
+        if (stateSnapshot) fd.append("state", JSON.stringify(stateSnapshot));
 
         const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
         const raw = await res.text();
@@ -935,15 +967,14 @@ async function startServerVoice() {
         if (!res.ok) throw new Error(`HTTP ${res.status}\n${raw}`);
         if (!parsed.ok) throw new Error(`JSON parse failed\n${raw}`);
 
-        const text = normalizeUserText(parsed.value && parsed.value.text);
+        const text = normalizeUserText(parsed.value && (parsed.value.text || parsed.value.transcript));
         if (!text) {
           setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceNoResult", "聞き取れませんでした。もう一度お試しください。"));
           return;
         }
 
-        setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。送信します…"));
-        await sendTextDirect(text);
-        setLucyVoiceStatus("");
+        setLucyVoiceStatus(getTerm("voiceRecognized", "認識しました。処理しています…"));
+        await handleVoiceWorkerResponse(parsed.value, text);
       } catch (e) {
         console.error(e);
         setLucyVoiceStatus(getTermCompat("voiceNotHeard", "voiceFailed", "聞き取れませんでした。もう一度お試しください。"));
@@ -1050,10 +1081,9 @@ function stopServerVoice() {
     setLucyVoiceStatus("");
     setSending(true);
     try {
+      const serial = ++requestSerial;
       const data = await callWorker(null);
-      if (data.nextState) nextState = data.nextState;
-      if (data.reply) appendLucy(data.reply);
-      if (data.debug) console.log("[Lucy debug]", data.debug);
+      applyWorkerResponse(data, { serial, force: true });
       lucyGreetingShown = true;
     } catch (e) {
       appendError("初期化に失敗しました", e.message);
