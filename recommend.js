@@ -92,6 +92,16 @@ function questSafeFocusInput(inputEl) {
   } catch (_) {}
 }
 
+function focusVoiceControl() {
+  try {
+    questSafeBlurInput(inputEl);
+    if (lucyVoiceAskBtn) {
+      if (!lucyVoiceAskBtn.hasAttribute("tabindex")) lucyVoiceAskBtn.tabIndex = 0;
+      lucyVoiceAskBtn.focus({ preventScroll: true });
+    }
+  } catch (_) {}
+}
+
 try {
     const u = new URL(WORKER_CHAT_URL, location.href);
     if (u.origin === location.origin) {
@@ -201,12 +211,33 @@ if (IS_QUEST) {
           inputEl.setSelectionRange(len, len);
         }
         try { inputEl.click(); } catch (_) {}
+        setTimeout(ensureQuestInputVisible, 50);
+        setTimeout(ensureQuestInputVisible, 220);
+        setTimeout(ensureQuestInputVisible, 420);
       } catch (_) {}
     };
 
     inputEl.addEventListener("pointerup", ensureQuestKeyboard);
     inputEl.addEventListener("touchend", ensureQuestKeyboard, { passive: true });
     inputEl.addEventListener("click", ensureQuestKeyboard);
+    inputEl.addEventListener("focus", () => {
+      setTimeout(ensureQuestInputVisible, 50);
+      setTimeout(ensureQuestInputVisible, 220);
+    });
+    inputEl.addEventListener("blur", () => {
+      setTimeout(() => {
+        if (document.activeElement !== inputEl) resetQuestInputVisibility();
+      }, 120);
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => {
+        if (document.activeElement === inputEl) ensureQuestInputVisible();
+      });
+      window.visualViewport.addEventListener("scroll", () => {
+        if (document.activeElement === inputEl) ensureQuestInputVisible();
+      });
+    }
   } catch (_) {}
 }
 
@@ -286,6 +317,50 @@ let wavStartedAt = 0;
 
   function escapeRegExp(s) {
     return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function getQuestKeyboardInsetPx() {
+    try {
+      if (!IS_QUEST) return 0;
+      const vv = window.visualViewport;
+      if (!vv) return 0;
+      const inset = Math.max(0, Math.round(window.innerHeight - (vv.height + vv.offsetTop)));
+      return inset > 120 ? inset : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function applyQuestInputVisibilityLayout() {
+    if (!IS_QUEST || !recommendSection) return;
+    try {
+      const basePad = 20;
+      const extraPad = questKeyboardInsetPx > 0 ? (questKeyboardInsetPx + 18) : 0;
+      recommendSection.style.paddingBottom = `${basePad + extraPad}px`;
+      inputEl.style.scrollMarginBottom = `${Math.max(140, questKeyboardInsetPx + 80)}px`;
+    } catch (_) {}
+  }
+
+  function ensureQuestInputVisible() {
+    if (!IS_QUEST || !inputEl) return;
+    try {
+      questKeyboardInsetPx = getQuestKeyboardInsetPx();
+      applyQuestInputVisibilityLayout();
+      inputEl.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      const len = String(inputEl.value || "").length;
+      if (typeof inputEl.setSelectionRange === "function") {
+        inputEl.setSelectionRange(len, len);
+      }
+    } catch (_) {}
+  }
+
+  function resetQuestInputVisibility() {
+    if (!IS_QUEST || !recommendSection) return;
+    try {
+      questKeyboardInsetPx = 0;
+      recommendSection.style.paddingBottom = "";
+      inputEl.style.scrollMarginBottom = "";
+    } catch (_) {}
   }
 
   function sanitizeAnchorHtml(anchorHtml) {
@@ -781,7 +856,15 @@ function cleanupWavRecorder() {
       console.error(e);
     } finally {
       setSending(false);
-      questSafeFocusInput(inputEl);
+      if (String(source || "text") === "voice") {
+        focusVoiceControl();
+      } else {
+        questSafeFocusInput(inputEl);
+        if (IS_QUEST) {
+          setTimeout(ensureQuestInputVisible, 50);
+          setTimeout(ensureQuestInputVisible, 220);
+        }
+      }
     }
   }
 
@@ -1131,6 +1214,7 @@ function stopServerVoice() {
 
     // ★ Quest: 音声開始前にフォーカスを外してキーボードを出さない
     questSafeBlurInput(inputEl);
+    resetQuestInputVisibility();
     if (speechIsRunning) {
       stopBrowserSpeech();
       return;
