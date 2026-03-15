@@ -489,7 +489,7 @@ let wavStartedAt = 0;
     return /^(ほか|他|ほかに|他に|ほかには|他には|もっと|次|つぎ|別|別の|べつの)$/.test(t);
   }
 
-  function raw {
+  function canonicalizeVoiceTextByContext(text) {
     const normalized = normalizeUserText(text);
     if (!normalized) return { displayText: normalized, workerText: normalized };
 
@@ -824,12 +824,7 @@ function cleanupWavRecorder() {
     const raw = normalizeUserText(text);
     if (!raw) return;
 
-    if (src === "voice") {
-      const mapped = raw;
-      await submitUserText(mapped.displayText, src, mapped.workerText);
-      return;
-    }
-
+    // 音声でも手入力でも、画面に表示した文字列そのものを Worker に送る
     await submitUserText(raw, src, raw);
   }
 
@@ -1039,7 +1034,7 @@ async function stopServerVoiceWav() {
     const fd = new FormData();
     fd.append("audio", wavBlob, "voice.wav");
     fd.append("lang", getCurrentLang());
-      try{fd.append("state", JSON.stringify(nextState||{}));}catch(e){};
+    try { fd.append("state", JSON.stringify(nextState || {})); } catch (_) {}
     fd.append("state", JSON.stringify(nextState || {}));
 
     const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
@@ -1147,7 +1142,7 @@ async function startServerVoice() {
         const fd = new FormData();
         fd.append("audio", blob, `voice.${ext}`);
         fd.append("lang", getCurrentLang());
-      try{fd.append("state", JSON.stringify(nextState||{}));}catch(e){};
+        try { fd.append("state", JSON.stringify(nextState || {})); } catch (_) {}
         fd.append("state", JSON.stringify(nextState || {}));
 
         const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
