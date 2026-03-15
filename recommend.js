@@ -248,7 +248,6 @@ if (IS_QUEST) {
 
   // ★ 追加：挨拶を「パネルを開いた時」に1回だけ出すためのフラグ
   let lucyGreetingShown = false;
-  let lucyGreetingInitializing = false;
 
   let voiceMediaStream = null;
   let voiceMediaRecorder = null;
@@ -825,9 +824,12 @@ function cleanupWavRecorder() {
     const raw = normalizeUserText(text);
     if (!raw) return;
 
-    // 根本修正:
-    // 音声でも手入力でも、チャットに表示した文字列そのものを Worker に送る。
-    // これにより PC / Quest / 音声 / 手入力で Worker 入力を統一する。
+    if (src === "voice") {
+      const mapped = canonicalizeVoiceTextByContext(raw);
+      await submitUserText(mapped.displayText, src, mapped.workerText);
+      return;
+    }
+
     await submitUserText(raw, src, raw);
   }
 
@@ -1037,6 +1039,7 @@ async function stopServerVoiceWav() {
     const fd = new FormData();
     fd.append("audio", wavBlob, "voice.wav");
     fd.append("lang", getCurrentLang());
+    fd.append("state", JSON.stringify(nextState || {}));
 
     const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
     const raw = await res.text();
@@ -1143,6 +1146,7 @@ async function startServerVoice() {
         const fd = new FormData();
         fd.append("audio", blob, `voice.${ext}`);
         fd.append("lang", getCurrentLang());
+        fd.append("state", JSON.stringify(nextState || {}));
 
         const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
         const raw = await res.text();
@@ -1257,14 +1261,13 @@ function stopServerVoice() {
   }
 
   async function initLucyGreetingIfNeeded() {
-    if (lucyGreetingShown || lucyGreetingInitializing) return;
+    if (lucyGreetingShown) return;
 
     if (!isChatEmpty()) {
       lucyGreetingShown = true;
       return;
     }
 
-    lucyGreetingInitializing = true;
     setLucyVoiceStatus("");
     setSending(true);
     try {
@@ -1277,7 +1280,6 @@ function stopServerVoice() {
       appendError("初期化に失敗しました", e.message);
       console.error(e);
     } finally {
-      lucyGreetingInitializing = false;
       setSending(false);
     }
   }
