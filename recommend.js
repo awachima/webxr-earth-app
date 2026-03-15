@@ -824,12 +824,9 @@ function cleanupWavRecorder() {
     const raw = normalizeUserText(text);
     if (!raw) return;
 
-    if (src === "voice") {
-      const mapped = canonicalizeVoiceTextByContext(raw);
-      await submitUserText(mapped.displayText, src, mapped.workerText);
-      return;
-    }
-
+    // 根本修正:
+    // 音声でも手入力でも、チャットに表示した文字列そのものを Worker へ送る。
+    // これにより、表示文と送信文の不一致をなくし、/chat への会話ルートを一本化する。
     await submitUserText(raw, src, raw);
   }
 
