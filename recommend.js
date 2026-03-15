@@ -489,7 +489,7 @@ let wavStartedAt = 0;
     return /^(ほか|他|ほかに|他に|ほかには|他には|もっと|次|つぎ|別|別の|べつの)$/.test(t);
   }
 
-  function canonicalizeVoiceTextByContext(text) {
+  function raw {
     const normalized = normalizeUserText(text);
     if (!normalized) return { displayText: normalized, workerText: normalized };
 
@@ -825,7 +825,7 @@ function cleanupWavRecorder() {
     if (!raw) return;
 
     if (src === "voice") {
-      const mapped = canonicalizeVoiceTextByContext(raw);
+      const mapped = raw;
       await submitUserText(mapped.displayText, src, mapped.workerText);
       return;
     }
@@ -1039,6 +1039,7 @@ async function stopServerVoiceWav() {
     const fd = new FormData();
     fd.append("audio", wavBlob, "voice.wav");
     fd.append("lang", getCurrentLang());
+      try{fd.append("state", JSON.stringify(nextState||{}));}catch(e){};
     fd.append("state", JSON.stringify(nextState || {}));
 
     const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
@@ -1146,6 +1147,7 @@ async function startServerVoice() {
         const fd = new FormData();
         fd.append("audio", blob, `voice.${ext}`);
         fd.append("lang", getCurrentLang());
+      try{fd.append("state", JSON.stringify(nextState||{}));}catch(e){};
         fd.append("state", JSON.stringify(nextState || {}));
 
         const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
