@@ -442,71 +442,6 @@
       .site-logo{ transform: scale(0.92); transform-origin: center; }
     }
 
-
-    /* =========================================================
-       Section close buttons（Tour Info / Waiting Room）
-       ========================================================= */
-    .section-head-actions{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      margin-left:auto;
-      flex-shrink:0;
-    }
-
-    .section-close-btn{
-      width:34px;
-      height:34px;
-      border-radius:10px;
-      border:1px solid rgba(0,0,0,0.14);
-      background:#fff;
-      color:inherit;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      font: inherit;
-      font-size:18px;
-      line-height:1;
-      cursor:pointer;
-      box-shadow:none;
-      transition:none;
-    }
-
-    .lucy-panel__top{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:16px;
-      margin-bottom:12px;
-    }
-
-    .lucy-panel__intro{
-      display:flex;
-      align-items:flex-start;
-      gap:16px;
-      min-width:0;
-      flex:1 1 auto;
-    }
-
-    .meetups__head{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      flex-wrap:wrap;
-    }
-
-    @media (max-width: 640px){
-      .lucy-panel__top{
-        flex-direction:column;
-        align-items:stretch;
-      }
-      .section-head-actions{
-        margin-left:0;
-        justify-content:flex-end;
-      }
-    }
-
   </style>
 </head>
 
@@ -635,41 +570,26 @@
         box-shadow: 0 4px 12px rgba(0,0,0,0.04);
       "
     >
-      <div class="lucy-panel__top">
-        <div class="lucy-panel__intro">
-          <img src="./assets/assistant.jpg"
-               alt="Assistant"
-               style="
-                 width:96px;
-                 height:96px;
-                 border-radius:50%;
-                 object-fit:cover;
-                 flex-shrink:0;
-               ">
-          <div>
-            <h2 id="recommendTitle" class="recommend-title">
-              ツアーインフォメーション
-            </h2>
-            <p
-              id="recommendIntro"
-              style="margin: 0; font-size: 0.9rem; line-height: 1.6;"
-            >
-              ご覧になりたいツアーのイメージをお聞かせください。いくつか選んでご提案いたします。
-            </p>
-          </div>
-        </div>
-
-        <div class="section-head-actions">
-          <button
-            type="button"
-            id="recommendCloseBtn"
-            class="section-close-btn"
-            aria-controls="recommendSection"
-            aria-label="ツアーインフォメーションを閉じる"
-            title="閉じる"
+      <div style="display:flex; align-items:flex-start; gap:16px; margin-bottom:12px;">
+        <img src="./assets/assistant.jpg"
+             alt="Assistant"
+             style="
+               width:96px;
+               height:96px;
+               border-radius:50%;
+               object-fit:cover;
+               flex-shrink:0;
+             ">
+        <div>
+          <h2 id="recommendTitle" class="recommend-title">
+            ツアーインフォメーション <button class="modal-close" id="closeTour">×</button>
+          </h2>
+          <p
+            id="recommendIntro"
+            style="margin: 0; font-size: 0.9rem; line-height: 1.6;"
           >
-            ×
-          </button>
+            ご覧になりたいツアーのイメージをお聞かせください。いくつか選んでご提案いたします。
+          </p>
         </div>
       </div>
 
@@ -729,19 +649,7 @@
     <section id="meetupsSection" class="meetups is-collapsed">
       <div class="meetups__head">
         <h2 class="meetups__title">Meetup Rooms</h2>
-        <div class="section-head-actions">
-          <button class="btn ghost head-create" id="openCreate">Create a room</button>
-          <button
-            type="button"
-            id="meetupsCloseBtn"
-            class="section-close-btn"
-            aria-controls="meetupsSection"
-            aria-label="待合室を閉じる"
-            title="閉じる"
-          >
-            ×
-          </button>
-        </div>
+        <button class="btn ghost head-create" id="openCreate">Create a room</button>
       </div>
 
       <div id="grid" class="grid">
@@ -920,32 +828,26 @@
 <!-- ✅ WaitingRoomToggle:END -->
 
 
-<!-- ✅ SectionCloseButtons:START -->
 <script>
-(function(){
-  const recommendSection = document.getElementById("recommendSection");
-  const meetupsSection = document.getElementById("meetupsSection");
-  const touristInfoBtn = document.getElementById("touristInfoBtn");
-  const waitingRoomBtn = document.getElementById("waitingRoomBtn");
-  const recommendCloseBtn = document.getElementById("recommendCloseBtn");
-  const meetupsCloseBtn = document.getElementById("meetupsCloseBtn");
+document.addEventListener("DOMContentLoaded", () => {
+  const t = document.getElementById("closeTour");
+  const w = document.getElementById("closeWaiting");
 
-  if(recommendSection && touristInfoBtn && recommendCloseBtn){
-    recommendCloseBtn.addEventListener("click", () => {
-      recommendSection.classList.add("is-collapsed");
-      touristInfoBtn.setAttribute("aria-expanded", "false");
-    });
+  if(t){
+    t.onclick = () => {
+      const el = t.closest("section, div");
+      if(el) el.style.display = "none";
+    };
   }
 
-  if(meetupsSection && waitingRoomBtn && meetupsCloseBtn){
-    meetupsCloseBtn.addEventListener("click", () => {
-      meetupsSection.classList.add("is-collapsed");
-      waitingRoomBtn.setAttribute("aria-expanded", "false");
-    });
+  if(w){
+    w.onclick = () => {
+      const el = w.closest("section, div");
+      if(el) el.style.display = "none";
+    };
   }
-})();
+});
 </script>
-<!-- ✅ SectionCloseButtons:END -->
 
 </body>
 </html>
