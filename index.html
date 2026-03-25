@@ -775,19 +775,31 @@
 <!-- ✅ AutoScrollToTourInfo:START -->
 <script>
 (function(){
-  // 観光案内パネルを開いた直後に、そこまでスムーズスクロール
+  // 観光案内パネルを開いた直後に、タイトル位置が画面上端に近づくようにスクロール
   function smoothScrollToTourInfo(){
     const section = document.getElementById("recommendSection");
+    const title = document.getElementById("recommendTitle");
     if(!section) return;
+
+    // 少しだけ余白を残して、タイトルが上端付近に来るようにする
+    const topGap = 8;
 
     // 開閉反映・レイアウト確定を少し待ってからスクロール（Quest等でも安定）
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        const target = title || section;
         try {
-          section.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+          const rect = target.getBoundingClientRect();
+          const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
+          const y = Math.max(0, rect.top + currentY - topGap);
+          window.scrollTo({ top: y, behavior: "smooth" });
         } catch (e) {
-          const y = section.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
-          window.scrollTo(0, y);
+          try {
+            target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+          } catch (_) {
+            const y = target.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+            window.scrollTo(0, y);
+          }
         }
 
         // 任意：入力欄へフォーカス（スクロールはpreventScrollで阻害しない）
