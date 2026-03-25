@@ -775,40 +775,41 @@
 <!-- ✅ AutoScrollToTourInfo:START -->
 <script>
 (function(){
-  // 観光案内パネルを開いた直後に、タイトル位置が画面上端に近づくようにスクロール
+  // 観光案内パネルを開いた直後に、タイトル行が画面上端にかなり近い位置まで来るようにスクロール
   function smoothScrollToTourInfo(){
     const section = document.getElementById("recommendSection");
     const title = document.getElementById("recommendTitle");
     if(!section) return;
 
-    // 少しだけ余白を残して、タイトルが上端付近に来るようにする
-    const topGap = 8;
+    // かなり上まで寄せる。固定ヘッダーぶんだけ少し余白を残す
+    const topGap = 4;
 
-    // 開閉反映・レイアウト確定を少し待ってからスクロール（Quest等でも安定）
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const target = title || section;
-        try {
-          const rect = target.getBoundingClientRect();
-          const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-          const y = Math.max(0, rect.top + currentY - topGap);
-          window.scrollTo({ top: y, behavior: "smooth" });
-        } catch (e) {
-          try {
-            target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
-          } catch (_) {
-            const y = target.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
-            window.scrollTo(0, y);
-          }
-        }
+        requestAnimationFrame(() => {
+          const target = title || section;
 
-        // 任意：入力欄へフォーカス（スクロールはpreventScrollで阻害しない）
-        const input = document.getElementById("recommendInput");
-        if(input){
-          setTimeout(() => {
-            try { input.focus({ preventScroll: true }); } catch (e) { try { input.focus(); } catch(_){} }
-          }, 350);
-        }
+          try {
+            const rect = target.getBoundingClientRect();
+            const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
+            const y = Math.max(0, rect.top + currentY - topGap);
+            window.scrollTo({ top: y, behavior: "smooth" });
+          } catch (e) {
+            try {
+              target.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+            } catch (_) {
+              const y = target.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+              window.scrollTo(0, Math.max(0, y - topGap));
+            }
+          }
+
+          const input = document.getElementById("recommendInput");
+          if(input){
+            setTimeout(() => {
+              try { input.focus({ preventScroll: true }); } catch (e) { try { input.focus(); } catch(_){} }
+            }, 350);
+          }
+        });
       });
     });
   }
@@ -816,9 +817,9 @@
   const btn = document.getElementById("touristInfoBtn");
   if(!btn) return;
 
-  // 既存のクリック処理を壊さないため、後追いで実行
   btn.addEventListener("click", () => {
-    setTimeout(smoothScrollToTourInfo, 0);
+    // 開閉クラス反映や画像レイアウト確定後に実行
+    setTimeout(smoothScrollToTourInfo, 120);
   }, { passive: true });
 })();
 </script>
