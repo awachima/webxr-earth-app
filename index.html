@@ -314,6 +314,23 @@
       cursor: pointer;
       background:#fff;
     }
+
+    .panel-close{
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.14);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor: pointer;
+      background:#fff;
+      font: inherit;
+      line-height: 1;
+      color: inherit;
+      padding: 0;
+      flex: 0 0 auto;
+    }
     .modal.tag-filter-modal .body{
       padding: 12px 14px 14px;
     }
@@ -417,6 +434,10 @@
 
     .meetups.is-collapsed{
       display:none;
+    }
+
+    .lucy-panel.is-collapsed{
+      display:none !important;
     }
 
     /* =========================================================
@@ -583,27 +604,30 @@
         box-shadow: 0 4px 12px rgba(0,0,0,0.04);
       "
     >
-      <div style="display:flex; align-items:flex-start; gap:16px; margin-bottom:12px;">
-        <img src="./assets/assistant.jpg"
-             alt="Assistant"
-             style="
-               width:96px;
-               height:96px;
-               border-radius:50%;
-               object-fit:cover;
-               flex-shrink:0;
-             ">
-        <div>
-          <h2 id="recommendTitle" class="recommend-title">
-            ツアーインフォメーション
-          </h2>
-          <p
-            id="recommendIntro"
-            style="margin: 0; font-size: 0.9rem; line-height: 1.6;"
-          >
-            ご覧になりたいツアーのイメージをお聞かせください。いくつか選んでご提案いたします。
-          </p>
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px;">
+        <div style="display:flex; align-items:flex-start; gap:16px; min-width:0; flex:1 1 auto;">
+          <img src="./assets/assistant.jpg"
+               alt="Assistant"
+               style="
+                 width:96px;
+                 height:96px;
+                 border-radius:50%;
+                 object-fit:cover;
+                 flex-shrink:0;
+               ">
+          <div style="min-width:0;">
+            <h2 id="recommendTitle" class="recommend-title">
+              ツアーインフォメーション
+            </h2>
+            <p
+              id="recommendIntro"
+              style="margin: 0; font-size: 0.9rem; line-height: 1.6;"
+            >
+              ご覧になりたいツアーのイメージをお聞かせください。いくつか選んでご提案いたします。
+            </p>
+          </div>
         </div>
+        <button type="button" class="panel-close" id="recommendClose" aria-label="Close">✕</button>
       </div>
 
       <!-- ✅ 会話ログは「入力行の外」に置く（これが崩れ防止の本命） -->
@@ -662,7 +686,10 @@
     <section id="meetupsSection" class="meetups is-collapsed">
       <div class="meetups__head">
         <h2 class="meetups__title">Meetup Rooms</h2>
-        <button class="btn ghost head-create" id="openCreate">Create a room</button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn ghost head-create" id="openCreate">Create a room</button>
+          <button type="button" class="panel-close" id="meetupsClose" aria-label="Close">✕</button>
+        </div>
       </div>
 
       <div id="grid" class="grid">
@@ -839,6 +866,39 @@
 })();
 </script>
 <!-- ✅ WaitingRoomToggle:END -->
+
+
+<script>
+(function(){
+  const recommendClose = document.getElementById("recommendClose");
+  const recommendSection = document.getElementById("recommendSection");
+  const touristInfoBtn = document.getElementById("touristInfoBtn");
+
+  if(recommendClose && recommendSection){
+    recommendClose.addEventListener("click", () => {
+      recommendSection.classList.add("is-collapsed");
+      if(touristInfoBtn){
+        touristInfoBtn.setAttribute("aria-expanded", "false");
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  const meetupsClose = document.getElementById("meetupsClose");
+  const meetupsSection = document.getElementById("meetupsSection");
+  const waitingRoomBtn = document.getElementById("waitingRoomBtn");
+
+  if(meetupsClose && meetupsSection){
+    meetupsClose.addEventListener("click", () => {
+      meetupsSection.classList.add("is-collapsed");
+      if(waitingRoomBtn){
+        waitingRoomBtn.setAttribute("aria-expanded", "false");
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+})();
+</script>
 
 </body>
 </html>
