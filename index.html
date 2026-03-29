@@ -399,7 +399,6 @@
     }
     .msg-row.user .msg-meta{ text-align: right; }
 
-  
     /* =========================================================
        Waiting Room Toggle Button（右上アイコン）
        ========================================================= */
@@ -441,8 +440,9 @@
     }
 
     /* =========================================================
-       Top Controls（ボタン位置2：ロゴ左右に配置）
-       - 画面幅を狭めても「左ボタン・ロゴ・右ボタン」の関係を維持
+       Top Controls
+       - PC: 左ボタン / ロゴ / 右ボタン
+       - Mobile: ロゴ / ボタン2つ
        ========================================================= */
     .top-controls{
       width: min(980px, calc(100% - 32px));
@@ -453,14 +453,79 @@
       gap: 14px;
       flex-wrap: nowrap;
     }
-    .top-controls__btn{
+
+    .top-controls__logo{
       flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .top-controls__buttons{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex: 0 0 auto;
+    }
+
+    .top-controls__btn{
+      flex: 0 1 auto;
       white-space: nowrap;
     }
+
     @media (max-width: 520px){
-      .top-controls{ gap: 10px; margin: 8px auto 12px; }
-      .top-controls__btn{ font-size: 0.92rem; padding: 8px 10px; }
-      .site-logo{ transform: scale(0.92); transform-origin: center; }
+      .top-controls{
+        width: min(100%, calc(100% - 20px));
+        margin: 8px auto 12px;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .top-controls__logo{
+        order: 1;
+      }
+
+      .top-controls__buttons{
+        order: 2;
+        width: 100%;
+        gap: 8px;
+        flex-wrap: nowrap;
+      }
+
+      .top-controls__btn{
+        flex: 1 1 0;
+        min-width: 0;
+        white-space: normal;
+        text-align: center;
+        line-height: 1.35;
+        font-size: 0.86rem;
+        padding: 8px 10px;
+      }
+
+      .site-logo{
+        transform: scale(0.90);
+        transform-origin: center;
+      }
+    }
+
+    @media (max-width: 390px){
+      .top-controls{
+        width: min(100%, calc(100% - 16px));
+      }
+
+      .top-controls__buttons{
+        gap: 6px;
+      }
+
+      .top-controls__btn{
+        font-size: 0.80rem;
+        padding: 8px 8px;
+      }
+
+      .site-logo{
+        transform: scale(0.84);
+      }
     }
 
     /* ===== initial bottom gap cleanup =====
@@ -551,17 +616,20 @@
 
     <div class="stage">
 
-      <!-- ✅ ボタン位置2：ロゴ左右に固定（幅を狭めても相対関係を維持） -->
       <div class="top-controls">
-        <button type="button" id="aboutBtn" class="intro-bar__button top-controls__btn">
-          What is Dokodemo Doors?
-        </button>
+        <div class="top-controls__logo">
+          <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+        </div>
 
-        <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+        <div class="top-controls__buttons">
+          <button type="button" id="aboutBtn" class="intro-bar__button top-controls__btn">
+            What is Dokodemo Doors?
+          </button>
 
-        <button type="button" id="guideBtn" class="intro-bar__button top-controls__btn">
-          What is this fan site?
-        </button>
+          <button type="button" id="guideBtn" class="intro-bar__button top-controls__btn">
+            What is this fan site?
+          </button>
+        </div>
       </div>
 
       <div class="earth-frame-wrap" id="earthFrameWrap">
@@ -573,7 +641,6 @@
           観光案内
         </button>
 
-        
         <button type="button"
                 id="waitingRoomBtn"
                 class="waiting-room-btn"
@@ -582,7 +649,7 @@
           <img src="./assets/waiting-room.png" alt="Waiting Room">
         </button>
 
-<iframe
+        <iframe
           id="webxr-iframe"
           title="WebXR Earth"
           src="./earth.html"
@@ -630,7 +697,6 @@
         <button type="button" class="panel-close" id="recommendClose" aria-label="Close">✕</button>
       </div>
 
-      <!-- ✅ 会話ログは「入力行の外」に置く（これが崩れ防止の本命） -->
       <div
         id="recommendChat"
         class="chat-log"
@@ -639,7 +705,6 @@
         aria-relevant="additions"
       ></div>
 
-      <!-- ✅ 入力欄＋送信ボタンはこの行だけにする -->
       <div
         class="recommend-input-row"
         style="display:flex; flex-wrap:nowrap; gap:8px; align-items:center; margin-bottom:12px;"
@@ -667,13 +732,11 @@
         </button>
       </div>
 
-      <!-- ✅ 音声 -->
       <div class="recommend-voice-ask" style="margin-bottom:12px;">
         <button id="lucyVoiceAskBtn" class="btn ghost" type="button">
           Lucyに質問（音声）
         </button>
 
-        <!-- ステータス表示用（必要なら recommend.js がここに文言を入れる） -->
         <div
           id="lucyVoiceAskStatus"
           class="status"
@@ -693,7 +756,7 @@
       </div>
 
       <div id="grid" class="grid">
-        </div>
+      </div>
     </section>
 
     <div id="backdrop" class="backdrop" aria-hidden="true">
@@ -784,121 +847,114 @@
 
   <script src="./recommend.js"></script>
 
+  <!-- ✅ AutoScrollToTourInfo:START -->
+  <script>
+  (function(){
+    function smoothScrollToTourInfo(){
+      const section = document.getElementById("recommendSection");
+      if(!section) return;
 
-<!-- ✅ AutoScrollToTourInfo:START -->
-<script>
-(function(){
-  // 観光案内パネルを開いた直後に、そこまでスムーズスクロール
-  function smoothScrollToTourInfo(){
-    const section = document.getElementById("recommendSection");
-    if(!section) return;
-
-    // 開閉反映・レイアウト確定を少し待ってからスクロール（Quest等でも安定）
-    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        try {
-          section.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
-        } catch (e) {
-          const y = section.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
-          window.scrollTo(0, y);
-        }
+        requestAnimationFrame(() => {
+          try {
+            section.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+          } catch (e) {
+            const y = section.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+            window.scrollTo(0, y);
+          }
 
-        // 任意：入力欄へフォーカス（スクロールはpreventScrollで阻害しない）
-        const input = document.getElementById("recommendInput");
-        if(input){
-          setTimeout(() => {
-            try { input.focus({ preventScroll: true }); } catch (e) { try { input.focus(); } catch(_){} }
-          }, 350);
-        }
+          const input = document.getElementById("recommendInput");
+          if(input){
+            setTimeout(() => {
+              try { input.focus({ preventScroll: true }); } catch (e) { try { input.focus(); } catch(_){} }
+            }, 350);
+          }
+        });
       });
-    });
-  }
-
-  const btn = document.getElementById("touristInfoBtn");
-  if(!btn) return;
-
-  // 既存のクリック処理を壊さないため、後追いで実行
-  btn.addEventListener("click", () => {
-    setTimeout(smoothScrollToTourInfo, 0);
-  }, { passive: true });
-})();
-</script>
-<!-- ✅ AutoScrollToTourInfo:END -->
-
-
-<!-- ✅ WaitingRoomToggle:START -->
-<script>
-(function(){
-
-  const btn = document.getElementById("waitingRoomBtn");
-  const section = document.getElementById("meetupsSection");
-
-  if(!btn || !section) return;
-
-  function smoothScroll(){
-    requestAnimationFrame(()=>{
-      requestAnimationFrame(()=>{
-        try{
-          section.scrollIntoView({behavior:"smooth", block:"start"});
-        }catch(e){
-          const y = section.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
-          window.scrollTo(0,y);
-        }
-      });
-    });
-  }
-
-  btn.addEventListener("click", ()=>{
-
-    const isOpen = !section.classList.contains("is-collapsed");
-
-    if(isOpen){
-      section.classList.add("is-collapsed");
-      btn.setAttribute("aria-expanded","false");
-    }else{
-      section.classList.remove("is-collapsed");
-      btn.setAttribute("aria-expanded","true");
-      setTimeout(smoothScroll,0);
     }
 
-  });
+    const btn = document.getElementById("touristInfoBtn");
+    if(!btn) return;
 
-})();
-</script>
-<!-- ✅ WaitingRoomToggle:END -->
+    btn.addEventListener("click", () => {
+      setTimeout(smoothScrollToTourInfo, 0);
+    }, { passive: true });
+  })();
+  </script>
+  <!-- ✅ AutoScrollToTourInfo:END -->
 
+  <!-- ✅ WaitingRoomToggle:START -->
+  <script>
+  (function(){
 
-<script>
-(function(){
-  const recommendClose = document.getElementById("recommendClose");
-  const recommendSection = document.getElementById("recommendSection");
-  const touristInfoBtn = document.getElementById("touristInfoBtn");
+    const btn = document.getElementById("waitingRoomBtn");
+    const section = document.getElementById("meetupsSection");
 
-  if(recommendClose && recommendSection){
-    recommendClose.addEventListener("click", () => {
-      recommendSection.classList.add("is-collapsed");
-      if(touristInfoBtn){
-        touristInfoBtn.setAttribute("aria-expanded", "false");
+    if(!btn || !section) return;
+
+    function smoothScroll(){
+      requestAnimationFrame(()=>{
+        requestAnimationFrame(()=>{
+          try{
+            section.scrollIntoView({behavior:"smooth", block:"start"});
+          }catch(e){
+            const y = section.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+            window.scrollTo(0,y);
+          }
+        });
+      });
+    }
+
+    btn.addEventListener("click", ()=>{
+
+      const isOpen = !section.classList.contains("is-collapsed");
+
+      if(isOpen){
+        section.classList.add("is-collapsed");
+        btn.setAttribute("aria-expanded","false");
+      }else{
+        section.classList.remove("is-collapsed");
+        btn.setAttribute("aria-expanded","true");
+        setTimeout(smoothScroll,0);
       }
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-  }
 
-  const meetupsClose = document.getElementById("meetupsClose");
-  const meetupsSection = document.getElementById("meetupsSection");
-  const waitingRoomBtn = document.getElementById("waitingRoomBtn");
-
-  if(meetupsClose && meetupsSection){
-    meetupsClose.addEventListener("click", () => {
-      meetupsSection.classList.add("is-collapsed");
-      if(waitingRoomBtn){
-        waitingRoomBtn.setAttribute("aria-expanded", "false");
-      }
-      window.scrollTo({ top: 0, behavior: "smooth" });
     });
-  }
-})();
-</script>
+
+  })();
+  </script>
+  <!-- ✅ WaitingRoomToggle:END -->
+
+  <script>
+  (function(){
+    const recommendClose = document.getElementById("recommendClose");
+    const recommendSection = document.getElementById("recommendSection");
+    const touristInfoBtn = document.getElementById("touristInfoBtn");
+
+    if(recommendClose && recommendSection){
+      recommendClose.addEventListener("click", () => {
+        recommendSection.classList.add("is-collapsed");
+        if(touristInfoBtn){
+          touristInfoBtn.setAttribute("aria-expanded", "false");
+        }
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    }
+
+    const meetupsClose = document.getElementById("meetupsClose");
+    const meetupsSection = document.getElementById("meetupsSection");
+    const waitingRoomBtn = document.getElementById("waitingRoomBtn");
+
+    if(meetupsClose && meetupsSection){
+      meetupsClose.addEventListener("click", () => {
+        meetupsSection.classList.add("is-collapsed");
+        if(waitingRoomBtn){
+          waitingRoomBtn.setAttribute("aria-expanded", "false");
+        }
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    }
+  })();
+  </script>
 
 </body>
 </html>
