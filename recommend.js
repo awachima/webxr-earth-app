@@ -592,10 +592,16 @@ function appendLucy(rawText, dynamicOptions) {
     dynamicOptions.displayB
   ) {
     wrap.appendChild(
-      makeBtn(String(dynamicOptions.displayA), String(dynamicOptions.targetA || dynamicOptions.displayA))
+      makeBtn(
+        String(dynamicOptions.displayA),
+        String(dynamicOptions.targetA || dynamicOptions.displayA)
+      )
     );
     wrap.appendChild(
-      makeBtn(String(dynamicOptions.displayB), String(dynamicOptions.targetB || dynamicOptions.displayB))
+      makeBtn(
+        String(dynamicOptions.displayB),
+        String(dynamicOptions.targetB || dynamicOptions.displayB)
+      )
     );
     addedAnyButton = true;
   } else {
@@ -636,10 +642,12 @@ function appendLucy(rawText, dynamicOptions) {
       const shouldAddNeither = !(isConfirmYesNo || isBackToTourPrompt);
 
       if (shouldAddNeither) {
-        wrap.appendChild(makeBtn(
-          getTermCompat("choiceNeither", "choiceNeither", "どっちも違う"),
-          getTermCompat("choiceNeither", "choiceNeither", "どっちも違う")
-        ));
+        wrap.appendChild(
+          makeBtn(
+            getTermCompat("choiceNeither", "choiceNeither", "どっちも違う"),
+            getTermCompat("choiceNeither", "choiceNeither", "どっちも違う")
+          )
+        );
       }
 
       addedAnyButton = true;
@@ -651,7 +659,7 @@ function appendLucy(rawText, dynamicOptions) {
     chatEl.scrollTop = chatEl.scrollHeight;
   }
 
-  // ③ リンク提示 / おすすめ提示のときは固定アクションボタンも出す
+  // ③ リンク提示 / おすすめ提示のときは固定アクションボタンを追加
   if (lastAssistantReplyKind === "single_recommend" || lastAssistantReplyKind === "multi_links") {
     const actionWrap = document.createElement("div");
     actionWrap.className = "lucy-action-wrap";
@@ -660,20 +668,7 @@ function appendLucy(rawText, dynamicOptions) {
     actionWrap.style.gap = "8px";
     actionWrap.style.flexWrap = "wrap";
 
-    actionWrap.appendChild(
-      makeBtn(
-        getTermCompat("quickRecommend", "quickRecommend", "おすすめを見る"),
-        "__INITIAL_RECOMMEND__"
-      )
-    );
-
-    actionWrap.appendChild(
-      makeBtn(
-        getTermCompat("quickSpecify", "quickSpecify", "条件を指定する"),
-        "__INITIAL_SPECIFY__"
-      )
-    );
-
+    // 「ほかには」は両方で出す
     actionWrap.appendChild(
       makeBtn(
         getTermCompat("quickMore", "quickMore", "ほかには"),
@@ -681,11 +676,35 @@ function appendLucy(rawText, dynamicOptions) {
       )
     );
 
+    if (lastAssistantReplyKind === "single_recommend") {
+      // おすすめ1件表示後は 2ボタンだけ
+      actionWrap.appendChild(
+        makeBtn(
+          getTermCompat("quickSpecify", "quickSpecify", "条件を指定する"),
+          "__INITIAL_SPECIFY__"
+        )
+      );
+    } else if (lastAssistantReplyKind === "multi_links") {
+      // 複数リンク提示後は 3ボタン
+      actionWrap.appendChild(
+        makeBtn(
+          getTermCompat("quickRecommend", "quickRecommend", "おすすめを見る"),
+          "__INITIAL_RECOMMEND__"
+        )
+      );
+
+      actionWrap.appendChild(
+        makeBtn(
+          getTermCompat("quickSpecify", "quickSpecify", "条件を指定する"),
+          "__INITIAL_SPECIFY__"
+        )
+      );
+    }
+
     parts.bubble.appendChild(actionWrap);
     chatEl.scrollTop = chatEl.scrollHeight;
   }
 }
-
 
 const appendError = (t, d) => {
   const msg = d ? `${t}\n${d}` : t;
