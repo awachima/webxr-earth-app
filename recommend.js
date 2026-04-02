@@ -692,6 +692,15 @@ const appendError = (t, d) => {
   appendBubble("assistant", "ERROR", msg, false);
 };
 
+function ensurePanelOpenSoftly() {
+  if (!recommendSection) return;
+  if (recommendSection.classList.contains("is-collapsed")) {
+    recommendSection.classList.remove("is-collapsed");
+    if (touristInfoBtn) touristInfoBtn.setAttribute("aria-expanded", "true");
+  }
+}
+
+
   // ★ステータス表示（opacity=0 や :empty の影響を強制解除する）
   function setLucyVoiceStatus(text) {
     if (!lucyVoiceAskStatus) return;
