@@ -541,100 +541,110 @@ let wavStartedAt = 0;
 
   const appendUser = (t) => appendBubble("user", "You", t, false);
 
-  function appendLucy(rawText) {
-    lastAssistantRawText = String(rawText || "");
-    lastAssistantReplyKind = detectAssistantReplyKind(lastAssistantRawText);
+function appendLucy(rawText, dynamicOptions) {
+  lastAssistantRawText = String(rawText || "");
+  lastAssistantReplyKind = detectAssistantReplyKind(lastAssistantRawText);
 
-    const html = sanitizeLucyReplyToHtml(rawText);
-    const parts = appendBubble("assistant", "Lucy", html, true);
+  const html = sanitizeLucyReplyToHtml(rawText);
+  const parts = appendBubble("assistant", "Lucy", html, true);
 
+  const wrap = document.createElement("div");
+  wrap.className = "lucy-choice-wrap";
+  wrap.style.marginTop = "10px";
+  wrap.style.display = "flex";
+  wrap.style.gap = "8px";
+  wrap.style.flexWrap = "wrap";
+
+  const makeBtn = (label) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "lucy-choice-btn";
+    btn.textContent = label;
+
+    btn.style.padding = "8px 10px";
+    btn.style.borderRadius = "10px";
+    btn.style.border = "1px solid rgba(0,0,0,0.15)";
+    btn.style.background = "#fff";
+    btn.style.cursor = "pointer";
+    btn.style.fontSize = "14px";
+
+    btn.addEventListener("click", async () => {
+      if (sendBtn.disabled) return;
+
+      try {
+        const all = wrap.querySelectorAll("button");
+        all.forEach((b) => (b.disabled = true));
+      } catch (_) {}
+
+      inputEl.value = label;
+      await onSend();
+    });
+
+    return btn;
+  };
+
+  let addedAnyButton = false;
+
+  // ① Workerの dynamicOptions を優先してボタン化
+  if (
+    dynamicOptions &&
+    typeof dynamicOptions === "object" &&
+    dynamicOptions.displayA &&
+    dynamicOptions.displayB
+  ) {
+    wrap.appendChild(makeBtn(String(dynamicOptions.displayA)));
+    wrap.appendChild(makeBtn(String(dynamicOptions.displayB)));
+    addedAnyButton = true;
+  } else {
+    // ② 従来どおり、Lucy本文の箇条書きから選択肢抽出
     const extracted = extractChoicesFromLucyReply(rawText);
     if (extracted && extracted.choices && extracted.choices.length >= 2) {
       const choices = extracted.choices;
-
-      const wrap = document.createElement("div");
-      wrap.className = "lucy-choice-wrap";
-      wrap.style.marginTop = "10px";
-      wrap.style.display = "flex";
-      wrap.style.gap = "8px";
-      wrap.style.flexWrap = "wrap";
-
-      const makeBtn = (label) => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "lucy-choice-btn";
-        btn.textContent = label;
-
-        // ★見た目を壊さないため、従来通り inline style を維持
-        btn.style.padding = "8px 10px";
-        btn.style.borderRadius = "10px";
-        btn.style.border = "1px solid rgba(0,0,0,0.15)";
-        btn.style.background = "#fff";
-        btn.style.cursor = "pointer";
-        btn.style.fontSize = "14px";
-
-        btn.addEventListener("click", async () => {
-          if (sendBtn.disabled) return;
-
-          try {
-            const all = wrap.querySelectorAll("button");
-            all.forEach((b) => (b.disabled = true));
-          } catch (_) {}
-
-          inputEl.value = label;
-          await onSend();
-        });
-
-        return btn;
-      };
-
       choices.forEach((c) => wrap.appendChild(makeBtn(c)));
 
-      // ★ここが多言語化対象（新キー choiceNeither を優先）
-      // ★「どっちも違う」は通常の絞り込み用。
-      // ★ただし「はい／いいえ」だけの確認（二択）では付けない（＝ここで「どっちも違う」を出すとUXが崩れる）。
-function isYesNoOnlyChoices(choiceList) {
-  try {
-    if (!Array.isArray(choiceList) || choiceList.length !== 2) return false;
+      function isYesNoOnlyChoices(choiceList) {
+        try {
+          if (!Array.isArray(choiceList) || choiceList.length !== 2) return false;
 
-    const norm = (s) => String(s || "")
-      .trim()
-      .replace(/[。．，、!！?？\s]+/g, "")
-      .toLowerCase();
+          const norm = (s) => String(s || "")
+            .trim()
+            .replace(/[。．，、!！?？\s]+/g, "")
+            .toLowerCase();
 
-    const yesRe = /^(はい|うん|ええ|yes|y|ok|okay|sure|是|对|好的|हाँ|हां|כן|بله)$/i;
-    const noRe  = /^(いいえ|いや|no|n|nope|否|不|不是|नहीं|いいえです|לא|نه)$/i;
+          const yesRe = /^(はい|うん|ええ|yes|y|ok|okay|sure|是|对|好的|हाँ|हां|כן|بله)$/i;
+          const noRe  = /^(いいえ|いや|no|n|nope|否|不|不是|नहीं|いいえです|לא|نه)$/i;
 
-    const a = norm(choiceList[0]);
-    const b = norm(choiceList[1]);
+          const a = norm(choiceList[0]);
+          const b = norm(choiceList[1]);
 
-    const aYes = yesRe.test(a);
-    const aNo  = noRe.test(a);
-    const bYes = yesRe.test(b);
-    const bNo  = noRe.test(b);
+          const aYes = yesRe.test(a);
+          const aNo  = noRe.test(a);
+          const bYes = yesRe.test(b);
+          const bNo  = noRe.test(b);
 
-    // 2つが Yes/No の組になっている場合のみ true
-    return (aYes && bNo) || (aNo && bYes);
-  } catch (_) {
-    return false;
+          return (aYes && bNo) || (aNo && bYes);
+        } catch (_) {
+          return false;
+        }
+      }
+
+      const isConfirmYesNo = isYesNoOnlyChoices(choices);
+      const isBackToTourPrompt = !!(nextState && nextState.uiPrompt === "backToTour");
+      const shouldAddNeither = !(isConfirmYesNo || isBackToTourPrompt);
+
+      if (shouldAddNeither) {
+        wrap.appendChild(makeBtn(getTermCompat("choiceNeither", "choiceNeither", "どっちも違う")));
+      }
+
+      addedAnyButton = true;
+    }
+  }
+
+  if (addedAnyButton) {
+    parts.bubble.appendChild(wrap);
+    chatEl.scrollTop = chatEl.scrollHeight;
   }
 }
-
-const isConfirmYesNo = isYesNoOnlyChoices(choices);
-
-// 旧ロジック：S6の「ツアーに戻る/雑談を続ける」では付けない（互換として残す）
-const isBackToTourPrompt = !!(nextState && nextState.uiPrompt === "backToTour");
-
-// 結論：Yes/No の確認、または backToTour 系の二択では「どっちも違う」を出さない
-const shouldAddNeither = !(isConfirmYesNo || isBackToTourPrompt);
-
-if (shouldAddNeither) {
-  wrap.appendChild(makeBtn(getTermCompat("choiceNeither", "choiceNeither", "どっちも違う")));
-}
-
-      parts.bubble.appendChild(wrap);
-      chatEl.scrollTop = chatEl.scrollHeight;
-    }
   }
 
   const appendError = (t, d) => {
@@ -844,7 +854,7 @@ function cleanupWavRecorder() {
     try {
       const data = await callWorker(sentText);
       if (data.nextState) nextState = data.nextState;
-      if (data.reply) appendLucy(data.reply);
+      if (data.reply) appendLucy(data.reply, data.dynamicOptions || (data.nextState && data.nextState.dynamicOptions));
       if (data.debug) console.log("[Lucy debug]", { source: source || "text", shownText, sentText, lastRecommendKeyword, debug: data.debug });
     } catch (e) {
       appendError("通信に失敗しました", e.message);
@@ -1270,7 +1280,7 @@ function stopServerVoice() {
     try {
       const data = await callWorker(null);
       if (data.nextState) nextState = data.nextState;
-      if (data.reply) appendLucy(data.reply);
+      if (data.reply) appendLucy(data.reply, data.dynamicOptions || (data.nextState && data.nextState.dynamicOptions));
       if (data.debug) console.log("[Lucy debug]", data.debug);
       lucyGreetingShown = true;
     } catch (e) {
