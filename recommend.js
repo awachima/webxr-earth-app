@@ -555,7 +555,7 @@ function appendLucy(rawText, dynamicOptions) {
   wrap.style.gap = "8px";
   wrap.style.flexWrap = "wrap";
 
-  const makeBtn = (label) => {
+  const makeBtn = (label, workerText) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "lucy-choice-btn";
@@ -572,12 +572,11 @@ function appendLucy(rawText, dynamicOptions) {
       if (sendBtn.disabled) return;
 
       try {
-        const all = wrap.querySelectorAll("button");
+        const all = parts.bubble.querySelectorAll("button");
         all.forEach((b) => (b.disabled = true));
       } catch (_) {}
 
-      inputEl.value = label;
-      await onSend();
+      await submitUserText(label, "text", workerText || label);
     });
 
     return btn;
@@ -592,15 +591,19 @@ function appendLucy(rawText, dynamicOptions) {
     dynamicOptions.displayA &&
     dynamicOptions.displayB
   ) {
-    wrap.appendChild(makeBtn(String(dynamicOptions.displayA)));
-    wrap.appendChild(makeBtn(String(dynamicOptions.displayB)));
+    wrap.appendChild(
+      makeBtn(String(dynamicOptions.displayA), String(dynamicOptions.targetA || dynamicOptions.displayA))
+    );
+    wrap.appendChild(
+      makeBtn(String(dynamicOptions.displayB), String(dynamicOptions.targetB || dynamicOptions.displayB))
+    );
     addedAnyButton = true;
   } else {
     // ② 従来どおり、Lucy本文の箇条書きから選択肢抽出
     const extracted = extractChoicesFromLucyReply(rawText);
     if (extracted && extracted.choices && extracted.choices.length >= 2) {
       const choices = extracted.choices;
-      choices.forEach((c) => wrap.appendChild(makeBtn(c)));
+      choices.forEach((c) => wrap.appendChild(makeBtn(c, c)));
 
       function isYesNoOnlyChoices(choiceList) {
         try {
@@ -633,7 +636,10 @@ function appendLucy(rawText, dynamicOptions) {
       const shouldAddNeither = !(isConfirmYesNo || isBackToTourPrompt);
 
       if (shouldAddNeither) {
-        wrap.appendChild(makeBtn(getTermCompat("choiceNeither", "choiceNeither", "どっちも違う")));
+        wrap.appendChild(makeBtn(
+          getTermCompat("choiceNeither", "choiceNeither", "どっちも違う"),
+          getTermCompat("choiceNeither", "choiceNeither", "どっちも違う")
+        ));
       }
 
       addedAnyButton = true;
@@ -644,20 +650,41 @@ function appendLucy(rawText, dynamicOptions) {
     parts.bubble.appendChild(wrap);
     chatEl.scrollTop = chatEl.scrollHeight;
   }
-  }
 
-  const appendError = (t, d) => {
-    const msg = d ? `${t}\n${d}` : t;
-    appendBubble("assistant", "ERROR", msg, false);
-  };
+  // ③ リンク提示 / おすすめ提示のときは固定アクションボタンも出す
+  if (lastAssistantReplyKind === "single_recommend" || lastAssistantReplyKind === "multi_links") {
+    const actionWrap = document.createElement("div");
+    actionWrap.className = "lucy-action-wrap";
+    actionWrap.style.marginTop = "10px";
+    actionWrap.style.display = "flex";
+    actionWrap.style.gap = "8px";
+    actionWrap.style.flexWrap = "wrap";
 
-  function ensurePanelOpenSoftly() {
-    if (!recommendSection) return;
-    if (recommendSection.classList.contains("is-collapsed")) {
-      recommendSection.classList.remove("is-collapsed");
-      if (touristInfoBtn) touristInfoBtn.setAttribute("aria-expanded", "true");
-    }
+    actionWrap.appendChild(
+      makeBtn(
+        getTermCompat("quickRecommend", "quickRecommend", "おすすめを見る"),
+        "__INITIAL_RECOMMEND__"
+      )
+    );
+
+    actionWrap.appendChild(
+      makeBtn(
+        getTermCompat("quickSpecify", "quickSpecify", "条件を指定する"),
+        "__INITIAL_SPECIFY__"
+      )
+    );
+
+    actionWrap.appendChild(
+      makeBtn(
+        getTermCompat("quickMore", "quickMore", "ほかには"),
+        "ほかには"
+      )
+    );
+
+    parts.bubble.appendChild(actionWrap);
+    chatEl.scrollTop = chatEl.scrollHeight;
   }
+}
 
   // ★ステータス表示（opacity=0 や :empty の影響を強制解除する）
   function setLucyVoiceStatus(text) {
