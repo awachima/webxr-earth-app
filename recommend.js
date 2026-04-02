@@ -644,7 +644,6 @@ function appendLucy(rawText, dynamicOptions) {
     parts.bubble.appendChild(wrap);
     chatEl.scrollTop = chatEl.scrollHeight;
   }
-}
   }
 
   const appendError = (t, d) => {
