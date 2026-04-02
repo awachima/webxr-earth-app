@@ -686,6 +686,12 @@ function appendLucy(rawText, dynamicOptions) {
   }
 }
 
+
+const appendError = (t, d) => {
+  const msg = d ? `${t}\n${d}` : t;
+  appendBubble("assistant", "ERROR", msg, false);
+};
+
   // ★ステータス表示（opacity=0 や :empty の影響を強制解除する）
   function setLucyVoiceStatus(text) {
     if (!lucyVoiceAskStatus) return;
