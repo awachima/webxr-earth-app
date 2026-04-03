@@ -12,7 +12,7 @@
  *
  * ★ 選択肢ボタン化:
  * - Lucyの返答に箇条書きが含まれる場合、ボタン化してクリック送信
- * - 「どっちも違う」ボタンを追加（recommend.choiceNeither）
+ * - 「どれも違う」ボタンを追加（recommend.choiceNeither）
  *
  * ★ 音声:
  * - VOICE_MODE = "auto" | "browser" | "server"
@@ -588,22 +588,31 @@ function appendLucy(rawText, dynamicOptions) {
   if (
     dynamicOptions &&
     typeof dynamicOptions === "object" &&
-    dynamicOptions.displayA &&
-    dynamicOptions.displayB
+    (dynamicOptions.displayA || dynamicOptions.displayB || dynamicOptions.displayC)
   ) {
-    wrap.appendChild(
-      makeBtn(
-        String(dynamicOptions.displayA),
-        String(dynamicOptions.targetA || dynamicOptions.displayA)
-      )
-    );
-    wrap.appendChild(
-      makeBtn(
-        String(dynamicOptions.displayB),
-        String(dynamicOptions.targetB || dynamicOptions.displayB)
-      )
-    );
-    addedAnyButton = true;
+    const optionDefs = [
+      {
+        label: dynamicOptions.displayA,
+        workerText: dynamicOptions.targetA || dynamicOptions.displayA,
+      },
+      {
+        label: dynamicOptions.displayB,
+        workerText: dynamicOptions.targetB || dynamicOptions.displayB,
+      },
+      {
+        label: dynamicOptions.displayC,
+        workerText: dynamicOptions.targetC || dynamicOptions.displayC,
+      },
+    ];
+
+    optionDefs.forEach((opt) => {
+      const label = String(opt.label || "").trim();
+      const workerText = String(opt.workerText || "").trim();
+      if (!label) return;
+
+      wrap.appendChild(makeBtn(label, workerText || label));
+      addedAnyButton = true;
+    });
   } else {
     // ② 従来どおり、Lucy本文の箇条書きから選択肢抽出
     const extracted = extractChoicesFromLucyReply(rawText);
@@ -644,8 +653,8 @@ function appendLucy(rawText, dynamicOptions) {
       if (shouldAddNeither) {
         wrap.appendChild(
           makeBtn(
-            getTermCompat("choiceNeither", "choiceNeither", "どっちも違う"),
-            getTermCompat("choiceNeither", "choiceNeither", "どっちも違う")
+            getTermCompat("choiceNeither", "choiceNeither", "どれも違う"),
+            getTermCompat("choiceNeither", "choiceNeither", "どれも違う")
           )
         );
       }
