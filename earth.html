@@ -1281,7 +1281,7 @@ const mkIconBtn = (y, type) => {
 
   // アイコン全体を少し左へ寄せる
   const iconWrap = document.createElement('a-entity');
-  iconWrap.setAttribute('position', '-0.007 0 0.01');
+  iconWrap.setAttribute('position', '-0.006 0 0.01');
 
   // ▲▼
 // ▲▼
@@ -1290,7 +1290,7 @@ if (type === 'up' || type === 'down') {
 
   tri.setAttribute(
     'geometry',
-    'primitive: triangle; vertexA: 0 0.020 0; vertexB: -0.018 -0.016 0; vertexC: 0.018 -0.016 0'
+    'primitive: triangle; vertexA: 0 0.023 0; vertexB: -0.020 -0.018 0; vertexC: 0.020 -0.018 0'
   );
   tri.setAttribute('material', 'color:#cfe3ff; shader:flat; side:double');
 
