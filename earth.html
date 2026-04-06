@@ -1284,17 +1284,21 @@ const mkIconBtn = (y, type) => {
   iconWrap.setAttribute('position', '-0.007 0 0.01');
 
   // ▲▼
-  if (type === 'up' || type === 'down') {
-    const tri = document.createElement('a-entity');
+// ▲▼
+if (type === 'up' || type === 'down') {
+  const tri = document.createElement('a-entity');
 
-    tri.setAttribute('geometry', `primitive: cone; radiusBottom: 0.0185; radiusTop: 0; height: 0.040`);
-    tri.setAttribute('material', 'color:#cfe3ff; shader:flat');
+  tri.setAttribute(
+    'geometry',
+    'primitive: triangle; vertexA: 0 0.020 0; vertexB: -0.018 -0.016 0; vertexC: 0.018 -0.016 0'
+  );
+  tri.setAttribute('material', 'color:#cfe3ff; shader:flat; side:double');
 
-    tri.setAttribute('rotation', type === 'up' ? '0 0 0' : '180 0 0');
-    tri.setAttribute('position', '0 0 0');
+  tri.setAttribute('rotation', type === 'up' ? '0 0 0' : '0 0 180');
+  tri.setAttribute('position', '0 0 0');
 
-    iconWrap.appendChild(tri);
-  }
+  iconWrap.appendChild(tri);
+}
 
   // ×
   if (type === 'close') {
