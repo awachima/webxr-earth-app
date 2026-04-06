@@ -612,15 +612,70 @@ AFRAME.registerComponent('marker-placer',{
       }
     };
     window.addEventListener('message', this._onFilterMessage);
-    var sheetUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv";
+
+    function getStoredLang() {
+      try {
+        var keys = [
+          "lang",
+          "dd_lang",
+          "language",
+          "ddLang",
+          "ddLanguage",
+          "selectedLang",
+          "selectedLanguage",
+          "i18n_lang",
+          "i18nextLng"
+        ];
+
+        for (var i = 0; i < keys.length; i++) {
+          var v = localStorage.getItem(keys[i]);
+          if (!v) continue;
+
+          v = String(v).trim().toLowerCase();
+          if (!v) continue;
+
+          var base = v.split("-")[0];
+          if (["ja", "en", "zh", "hi", "he", "fa"].indexOf(base) >= 0) {
+            return base;
+          }
+        }
+      } catch (_) {}
+
+      return "ja";
+    }
+
+    function getLocationSheetUrlByLang(lang) {
+      var map = {
+        ja: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv",
+        en: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=876416218&single=true&output=csv",
+        zh: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=1151530563&single=true&output=csv",
+        hi: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=1154641933&single=true&output=csv",
+        he: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=117898032&single=true&output=csv",
+        fa: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=690009794&single=true&output=csv"
+      };
+
+      return map[lang] || map.ja;
+    }
+
+    var currentLang = getStoredLang();
+    var sheetUrl = getLocationSheetUrlByLang(currentLang);
+
+    console.log('[marker-placer] currentLang =', currentLang);
     console.log('[marker-placer] fetching CSV:', sheetUrl);
+
     try{
       var res=await fetch(sheetUrl,{cache:'no-store'});
       if(res.ok){
-        var text=await res.text(); this.allLocations=this.parseCsv(text);
+        var text=await res.text();
+        this.allLocations=this.parseCsv(text);
         console.log('[marker-placer] CSV loaded:', this.allLocations.length, 'rows', 'tagStartIndex=', this._tagStartIndex);
-      }else{ console.error('CSV fetch failed:', res.status); }
-    }catch(e){ console.error("データ取得エラー:",e); }
+      }else{
+        console.error('CSV fetch failed:', res.status);
+      }
+    }catch(e){
+      console.error("データ取得エラー:",e);
+    }
+
     this.updateClusters();
   },
 

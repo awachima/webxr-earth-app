@@ -13,8 +13,53 @@
   const TREE_URL_FALLBACK = "./tree.csv";
 
   // ★追加: location.csv（G/Hを追加カテゴリに使う）
-  const LOCATION_URL_PRIMARY =
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv";
+  // ★追加: location.csv（G/Hを追加カテゴリに使う）
+  function getStoredLang() {
+    const LANG_KEYS = [
+      "lang",
+      "dd_lang",
+      "language",
+      "ddLang",
+      "ddLanguage",
+      "selectedLang",
+      "selectedLanguage",
+      "i18n_lang",
+      "i18nextLng"
+    ];
+
+    try {
+      for (const k of LANG_KEYS) {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+
+        const low = String(raw).trim().toLowerCase();
+        if (!low) continue;
+
+        const base = low.split("-")[0];
+        if (["ja", "en", "zh", "hi", "he", "fa"].includes(base)) {
+          return base;
+        }
+      }
+    } catch (_) {}
+
+    return "ja";
+  }
+
+  function getLocationUrlPrimaryByLang(lang) {
+    const map = {
+      ja: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv",
+      en: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=876416218&single=true&output=csv",
+      zh: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=1151530563&single=true&output=csv",
+      hi: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=1154641933&single=true&output=csv",
+      he: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=117898032&single=true&output=csv",
+      fa: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=690009794&single=true&output=csv"
+    };
+
+    return map[lang] || map.ja;
+  }
+
+  const CURRENT_LANG = getStoredLang();
+  const LOCATION_URL_PRIMARY = getLocationUrlPrimaryByLang(CURRENT_LANG);
   const LOCATION_URL_FALLBACK = "./location.csv";
 
   const btn = document.getElementById("tagFilterBtn");
@@ -238,6 +283,9 @@
       locReady = false;
       return;
     }
+
+    console.log("[tagfilter] CURRENT_LANG =", CURRENT_LANG);
+    console.log("[tagfilter] LOCATION_URL_PRIMARY =", LOCATION_URL_PRIMARY);
 
     let text = "";
     locDebugMessage = "";
