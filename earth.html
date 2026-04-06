@@ -1241,6 +1241,10 @@ AFRAME.registerComponent('panel-raf-proxy', {
     thumb.setAttribute('material','shader:flat;color:#7fa7ff;opacity:0.85;transparent:true;side:double');
     thumb.setAttribute('position',`${rightX} 0 0.051`); panel.appendChild(thumb);
 
+
+    const rightX_forScroll=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
+
+
 const mkBtn=(y,ch,fs)=>{
   const b=document.createElement('a-entity');
   b.setAttribute('class','ui collidable');
@@ -1394,7 +1398,6 @@ panel.appendChild(btnClose);
       updateScrollbar();
     }
 
-    const rightX_forScroll=PANEL.BOARD_W/2-PANEL.SCROLL_MARGIN_R;
     function updateScrollbar(){ const H=PANEL.SCROLL_TRACK_H, content=Math.max(viewportH,totalHeight), frac=content>0?(viewportH/content):1; const thumbH=Math.max(0.06,H*frac);
       const denom=Math.max(1e-6,maxOffset); const t=denom>0?(currentOffset/denom):0; const top=H/2-thumbH/2; const y=top - t*(H-thumbH);
       thumb.setAttribute('geometry',`primitive:plane;width:0.048;height:${thumbH}`); thumb.setAttribute('position',`${rightX_forScroll} ${y} 0.051`); }
