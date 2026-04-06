@@ -1267,16 +1267,72 @@ const mkBtn=(y,ch,fs)=>{
   return b;
 };
 
-const btnUp = mkBtn(0.50, '^', 0.075);
-const btnDn = mkBtn(-0.50, 'v', 0.075);
+// ===============================
+// ▲▼× ボタンを図形で生成
+// ===============================
+const mkIconBtn = (y, type) => {
+  const b = document.createElement('a-entity');
+
+  // 丸背景
+  b.classList.add('ui', 'collidable');
+  b.setAttribute('geometry', `primitive: circle; radius: ${BTN_R}`);
+  b.setAttribute('material', 'color:#263246; shader:flat; opacity:0.98');
+  b.setAttribute('position', `${rightX_forScroll} ${y} 0.05`);
+
+  // ▲▼
+  if (type === 'up' || type === 'down') {
+    const tri = document.createElement('a-entity');
+
+    tri.setAttribute('geometry', `primitive: cone; radiusBottom: 0.018; radiusTop: 0; height: 0.04`);
+    tri.setAttribute('material', 'color:#cfe3ff; shader:flat');
+
+    tri.setAttribute('rotation', type === 'up' ? '0 0 0' : '180 0 0');
+    tri.setAttribute('position', '0 0 0.01');
+
+    b.appendChild(tri);
+  }
+
+  // ×
+  if (type === 'close') {
+    const line1 = document.createElement('a-entity');
+    line1.setAttribute('geometry', 'primitive: box; width: 0.035; height: 0.005; depth: 0.002');
+    line1.setAttribute('material', 'color:#cfe3ff; shader:flat');
+    line1.setAttribute('rotation', '0 0 45');
+    line1.setAttribute('position', '0 0 0.01');
+
+    const line2 = document.createElement('a-entity');
+    line2.setAttribute('geometry', 'primitive: box; width: 0.035; height: 0.005; depth: 0.002');
+    line2.setAttribute('material', 'color:#cfe3ff; shader:flat');
+    line2.setAttribute('rotation', '0 0 -45');
+    line2.setAttribute('position', '0 0 0.01');
+
+    b.appendChild(line1);
+    b.appendChild(line2);
+  }
+
+  return b;
+};
+
+// ===============================
+// ボタン生成
+// ===============================
+const btnUp = mkIconBtn(0.50, 'up');
+const btnDn = mkIconBtn(-0.50, 'down');
 panel.appendChild(btnUp);
 panel.appendChild(btnDn);
 
-const closeY = 0.50 + (BTN_R*2 + 0.015);
-const btnClose = mkBtn(closeY, 'X', 0.065);
+const closeY = 0.50 + (BTN_R * 2 + 0.015);
+const btnClose = mkIconBtn(closeY, 'close');
 panel.appendChild(btnClose);
 
-    btnClose.addEventListener('mousedown', ()=>{ try{ closePanel(); }catch(e){ if (typeof window.closePanel==='function') window.closePanel(); } });
+// ===============================
+// イベント
+// ===============================
+btnClose.addEventListener('mousedown', () => {
+  try { closePanel(); } catch(e) {
+    if (typeof window.closePanel === 'function') window.closePanel();
+  }
+});
 
     const listGroup=document.createElement('a-entity'); listGroup.classList.add('list-group'); listGroup.setAttribute('position',`0 ${PANEL.CONTENT_TOP} 0.02`); panel.appendChild(listGroup);
 
