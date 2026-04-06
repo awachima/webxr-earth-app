@@ -1279,37 +1279,42 @@ const mkIconBtn = (y, type) => {
   b.setAttribute('material', 'color:#263246; shader:flat; opacity:0.98');
   b.setAttribute('position', `${rightX_forScroll} ${y} 0.05`);
 
+  // アイコン全体を少し左へ寄せるための親
+  const iconWrap = document.createElement('a-entity');
+  iconWrap.setAttribute('position', '-0.004 0 0.01');
+
   // ▲▼
   if (type === 'up' || type === 'down') {
     const tri = document.createElement('a-entity');
 
-    tri.setAttribute('geometry', `primitive: cone; radiusBottom: 0.018; radiusTop: 0; height: 0.04`);
+    tri.setAttribute('geometry', `primitive: cone; radiusBottom: 0.022; radiusTop: 0; height: 0.048`);
     tri.setAttribute('material', 'color:#cfe3ff; shader:flat');
 
     tri.setAttribute('rotation', type === 'up' ? '0 0 0' : '180 0 0');
-    tri.setAttribute('position', '0 0 0.01');
+    tri.setAttribute('position', '0 0 0');
 
-    b.appendChild(tri);
+    iconWrap.appendChild(tri);
   }
 
   // ×
   if (type === 'close') {
     const line1 = document.createElement('a-entity');
-    line1.setAttribute('geometry', 'primitive: box; width: 0.035; height: 0.005; depth: 0.002');
+    line1.setAttribute('geometry', 'primitive: box; width: 0.044; height: 0.0065; depth: 0.002');
     line1.setAttribute('material', 'color:#cfe3ff; shader:flat');
     line1.setAttribute('rotation', '0 0 45');
-    line1.setAttribute('position', '0 0 0.01');
+    line1.setAttribute('position', '0 0 0');
 
     const line2 = document.createElement('a-entity');
-    line2.setAttribute('geometry', 'primitive: box; width: 0.035; height: 0.005; depth: 0.002');
+    line2.setAttribute('geometry', 'primitive: box; width: 0.044; height: 0.0065; depth: 0.002');
     line2.setAttribute('material', 'color:#cfe3ff; shader:flat');
     line2.setAttribute('rotation', '0 0 -45');
-    line2.setAttribute('position', '0 0 0.01');
+    line2.setAttribute('position', '0 0 0');
 
-    b.appendChild(line1);
-    b.appendChild(line2);
+    iconWrap.appendChild(line1);
+    iconWrap.appendChild(line2);
   }
 
+  b.appendChild(iconWrap);
   return b;
 };
 
