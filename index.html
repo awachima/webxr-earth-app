@@ -956,5 +956,60 @@
   })();
   </script>
 
+<script>
+(function(){
+  const LANG_KEYS = [
+    "lang",
+    "dd_lang",
+    "language",
+    "ddLang",
+    "ddLanguage",
+    "selectedLang",
+    "selectedLanguage",
+    "i18n_lang",
+    "i18nextLng"
+  ];
+
+  function normalizeLang(v){
+    if(!v) return null;
+    const s = String(v).trim().toLowerCase();
+    if(!s) return null;
+    const base = s.split("-")[0];
+    if(["ja","en","zh","fa","hi","he"].includes(base)) return base;
+    return s;
+  }
+
+  function readLang(){
+    for(const k of LANG_KEYS){
+      try{
+        const v = normalizeLang(localStorage.getItem(k));
+        if(v) return v;
+      }catch(_){}
+    }
+    return normalizeLang(document.documentElement.getAttribute("lang")) || "ja";
+  }
+
+  let currentLang = readLang();
+
+  function reloadIfLangChanged(){
+    const nextLang = readLang();
+    if(nextLang && nextLang !== currentLang){
+      currentLang = nextLang;
+      location.reload();
+    }
+  }
+
+  window.addEventListener("storage", reloadIfLangChanged);
+  window.addEventListener("focus", reloadIfLangChanged);
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "visible"){
+      reloadIfLangChanged();
+    }
+  });
+
+  setInterval(reloadIfLangChanged, 500);
+})();
+</script>
+
 </body>
 </html>

@@ -115,20 +115,61 @@ AFRAME.registerComponent('rounded-panel', {
   <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/aframe-troika-text@0.9.0/dist/aframe-troika-text.min.js"></script>
 
-  <style>
-    @font-face{
-      font-family:"NotoSansJPLocal";
-      src:url("static/NotoSansJP-Regular.ttf") format("truetype");
-      font-weight:400; font-style:normal; font-display:swap;
-    }
-    html,body{ height:100%; margin:0; overflow:hidden; background:#fff; }
-    canvas.a-canvas { display:block; }
-  </style>
+<style>
+  html,body{ height:100%; margin:0; overflow:hidden; background:#fff; }
+  canvas.a-canvas { display:block; }
+</style>
 </head>
 <body>
 
 <script>
-const FONT_URL = 'static/NotoSansJP-Regular.ttf';
+function getStoredLang() {
+  try {
+    var keys = [
+      "lang",
+      "dd_lang",
+      "language",
+      "ddLang",
+      "ddLanguage",
+      "selectedLang",
+      "selectedLanguage",
+      "i18n_lang",
+      "i18nextLng"
+    ];
+
+    for (var i = 0; i < keys.length; i++) {
+      var v = localStorage.getItem(keys[i]);
+      if (!v) continue;
+
+      v = String(v).trim().toLowerCase();
+      if (!v) continue;
+
+      var base = v.split("-")[0];
+      if (["ja", "en", "zh", "hi", "he", "fa"].indexOf(base) >= 0) {
+        return base;
+      }
+    }
+  } catch (_) {}
+
+  return "ja";
+}
+
+function getFontUrlByLang(lang) {
+  var map = {
+    ja: "static/NotoSansJP-Regular.ttf",
+    en: "static/NotoSans-Regular.ttf",
+    zh: "static/NotoSansSC-Regular.ttf",
+    hi: "static/NotoSansDevanagari-Regular.ttf",
+    he: "static/NotoSansHebrew-Regular.ttf",
+    fa: "static/NotoSansArabic-Regular.ttf"
+  };
+
+  return map[lang] || map.ja;
+}
+
+const CURRENT_LANG = getStoredLang();
+const FONT_URL = getFontUrlByLang(CURRENT_LANG);
+
 window.__panelOpen = false;
 window.__panelTick = null; // panel scroll step runner injected at openPanel
 

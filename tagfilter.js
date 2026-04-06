@@ -59,6 +59,122 @@
   }
 
   const CURRENT_LANG = getStoredLang();
+
+  const UI_TEXT = {
+    ja: {
+      filter: "絞り込み",
+      category: "カテゴリ",
+      apply: "適用",
+      clear: "クリア",
+      loading: "読み込み中…",
+      noExtraCategories: "追加カテゴリがありません",
+      chooseFirstCategory: "第1カテゴリを選択してください",
+      noSecondCategory: "第2カテゴリはありません",
+      loadError: "location.csv を読み込めませんでした（URL/gid を確認してください）",
+      emptyCsv: "location.csv が空です",
+      missingColumns: "location.csv の列数が想定より少ないため、H/I を読み取れません（公開CSVにH/Iが含まれているか確認してください）"
+    },
+    en: {
+      filter: "Filter",
+      category: "Category",
+      apply: "Apply",
+      clear: "Clear",
+      loading: "Loading…",
+      noExtraCategories: "No extra categories",
+      chooseFirstCategory: "Please choose the first category",
+      noSecondCategory: "No second category",
+      loadError: "Could not load location.csv (please check the URL/gid).",
+      emptyCsv: "location.csv is empty",
+      missingColumns: "location.csv has fewer columns than expected, so H/I could not be read."
+    },
+    zh: {
+      filter: "筛选",
+      category: "分类",
+      apply: "应用",
+      clear: "清除",
+      loading: "加载中…",
+      noExtraCategories: "没有附加分类",
+      chooseFirstCategory: "请选择第一分类",
+      noSecondCategory: "没有第二分类",
+      loadError: "无法加载 location.csv（请检查 URL/gid）",
+      emptyCsv: "location.csv 为空",
+      missingColumns: "location.csv 的列数少于预期，因此无法读取 H/I。"
+    },
+    hi: {
+      filter: "फ़िल्टर",
+      category: "श्रेणी",
+      apply: "लागू करें",
+      clear: "साफ़ करें",
+      loading: "लोड हो रहा है…",
+      noExtraCategories: "कोई अतिरिक्त श्रेणी नहीं है",
+      chooseFirstCategory: "कृपया पहली श्रेणी चुनें",
+      noSecondCategory: "दूसरी श्रेणी नहीं है",
+      loadError: "location.csv लोड नहीं किया जा सका (कृपया URL/gid जाँचें)।",
+      emptyCsv: "location.csv खाली है",
+      missingColumns: "location.csv में अपेक्षा से कम कॉलम हैं, इसलिए H/I नहीं पढ़ा जा सका।"
+    },
+    he: {
+      filter: "סינון",
+      category: "קטגוריה",
+      apply: "החל",
+      clear: "נקה",
+      loading: "טוען…",
+      noExtraCategories: "אין קטגוריות נוספות",
+      chooseFirstCategory: "נא לבחור את הקטגוריה הראשונה",
+      noSecondCategory: "אין קטגוריה שנייה",
+      loadError: "לא ניתן לטעון את location.csv (נא לבדוק את ה-URL/gid).",
+      emptyCsv: "location.csv ריק",
+      missingColumns: "ב-location.csv יש פחות עמודות מהצפוי, לכן לא ניתן לקרוא את H/I."
+    },
+    fa: {
+      filter: "فیلتر",
+      category: "دسته‌بندی",
+      apply: "اعمال",
+      clear: "پاک کردن",
+      loading: "در حال بارگذاری…",
+      noExtraCategories: "دسته‌بندی اضافی وجود ندارد",
+      chooseFirstCategory: "لطفاً دسته‌بندی اول را انتخاب کنید",
+      noSecondCategory: "دسته‌بندی دوم وجود ندارد",
+      loadError: "بارگذاری location.csv انجام نشد (URL/gid را بررسی کنید).",
+      emptyCsv: "location.csv خالی است",
+      missingColumns: "تعداد ستون‌های location.csv کمتر از حد انتظار است، بنابراین H/I خوانده نشد."
+    }
+  };
+
+  function t(key) {
+    const dict = UI_TEXT[CURRENT_LANG] || UI_TEXT.ja;
+    return dict[key] || (UI_TEXT.ja[key] || key);
+  }
+
+  function applyStaticTexts() {
+    try {
+      if (btn) {
+        btn.innerHTML = `${t("filter")} <span id="tagFilterCount" class="tag-filter-count">(${selected.size})</span>`;
+      }
+
+      const modalTitle =
+        document.getElementById("tagFilterTitle") ||
+        document.getElementById("modalTitle");
+      if (modalTitle) {
+        modalTitle.textContent = t("filter");
+      }
+
+      if (applyBtn) applyBtn.textContent = t("apply");
+      if (clearBtn) clearBtn.textContent = t("clear");
+
+      const colTitles = document.querySelectorAll(".tag-filter-col-title, .column h3");
+      colTitles.forEach((el) => {
+        if ((el.textContent || "").trim() === "カテゴリ" || el.dataset.role === "category-title") {
+          el.textContent = t("category");
+          el.dataset.role = "category-title";
+        }
+      });
+    } catch (e) {
+      console.warn("[tagfilter] applyStaticTexts error:", e);
+    }
+  }
+
+
   const LOCATION_URL_PRIMARY = getLocationUrlPrimaryByLang(CURRENT_LANG);
   const LOCATION_URL_FALLBACK = "./location.csv";
 
@@ -86,6 +202,8 @@
   if (!btn || !badge || !backdrop || !modal || !closeBtn || !colWrap || !iframe) {
     return;
   }
+
+  applyStaticTexts();
 
   // ----------------------------
   //  Data structures
@@ -321,7 +439,7 @@
 
     if (!text) {
       locReady = false;
-      locDebugMessage = "location.csv を読み込めませんでした（URL/gid を確認してください）";
+      locDebugMessage = t("loadError");
       renderLocAreas();
       return;
     }
@@ -329,7 +447,7 @@
     const rows = parseCsvRecords(text);
     if (!rows.length) {
       locReady = false;
-      locDebugMessage = "location.csv が空です";
+      locDebugMessage = t("emptyCsv");
       renderLocAreas();
       return;
     }
@@ -350,8 +468,7 @@
     try {
       const firstData = rows[Math.min(start, rows.length - 1)] || [];
       if (firstData.length <= LOC_H_INDEX) {
-        locDebugMessage =
-          "location.csv の列数が想定より少ないため、H/I を読み取れません（公開CSVにH/Iが含まれているか確認してください）";
+        locDebugMessage = t("missingColumns");
       }
     } catch (_) {}
 
@@ -406,7 +523,7 @@
       const msg = document.createElement("div");
       msg.style.opacity = "0.7";
       msg.style.padding = "6px 2px";
-      msg.textContent = "読み込み中…";
+      msg.textContent = t("loading");
       locAreaG.appendChild(msg);
       // H側も空にしておく
       const hArea = ensureLocAreaHExists();
@@ -418,7 +535,7 @@
       const msg = document.createElement("div");
       msg.style.opacity = "0.7";
       msg.style.padding = "6px 2px";
-      msg.textContent = "追加カテゴリがありません";
+      msg.textContent = t("noExtraCategories");
       locAreaG.appendChild(msg);
     } else {
       // G一覧（クリックで H を切替、チェックで選択）
@@ -440,7 +557,7 @@
       const msg = document.createElement("div");
       msg.style.opacity = "0.7";
       msg.style.padding = "6px 2px";
-      msg.textContent = "第1カテゴリを選択してください";
+      msg.textContent = t("chooseFirstCategory");
       hArea.appendChild(msg);
       return;
     }
@@ -452,7 +569,7 @@
       const msg = document.createElement("div");
       msg.style.opacity = "0.7";
       msg.style.padding = "6px 2px";
-      msg.textContent = "第2カテゴリはありません";
+      msg.textContent = t("noSecondCategory");
       hArea.appendChild(msg);
       return;
     }
