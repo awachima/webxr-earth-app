@@ -778,10 +778,10 @@ makeBtn(
     if (lastAssistantReplyKind === "single_recommend") {
       // おすすめ1件表示後は 2ボタンだけ
       actionWrap.appendChild(
-        makeBtn(
-          getTermCompat("quickSpecify", "quickSpecify", "条件を指定する"),
-          "__INITIAL_SPECIFY__"
-        )
+makeBtn(
+  getTermCompat("quickSpecify", "quickSpecify", getRecommendUiDefault("quickSpecify")),
+  "__INITIAL_SPECIFY__"
+)
       );
     } else if (lastAssistantReplyKind === "multi_links") {
       // 複数リンク提示後は 3ボタン
