@@ -145,6 +145,47 @@ try {
     return def;
   };
 
+const getRecommendUiDefault = (kind) => {
+  const lang = String(getCurrentLang() || "ja").toLowerCase();
+
+  const dict = {
+    quickMore: {
+      ja: "ほかには",
+      en: "More",
+      zh: "还有吗",
+      hi: "और",
+      he: "עוד",
+      fa: "بیشتر",
+    },
+    quickRecommend: {
+      ja: "おすすめを見る",
+      en: "Show recommendations",
+      zh: "查看推荐",
+      hi: "सुझाव देखें",
+      he: "הצג המלצות",
+      fa: "نمایش پیشنهادها",
+    },
+    quickSpecify: {
+      ja: "条件を指定する",
+      en: "Specify conditions",
+      zh: "指定条件",
+      hi: "शर्तें चुनें",
+      he: "בחר תנאים",
+      fa: "تعیین شرایط",
+    },
+    choiceNeither: {
+      ja: "どれも違う",
+      en: "Neither",
+      zh: "都不是",
+      hi: "दोनों नहीं",
+      he: "אף אחד מהם",
+      fa: "هیچ‌کدام",
+    }
+  };
+
+  return (dict[kind] && (dict[kind][lang] || dict[kind].ja)) || "";
+};
+
   const langToSpeechLocale = (lang) => {
     const l = String(lang || "ja").toLowerCase();
     if (l === "ja") return "ja-JP";
@@ -701,10 +742,10 @@ function appendLucy(rawText, dynamicOptions) {
 
       if (shouldAddNeither) {
         wrap.appendChild(
-          makeBtn(
-            getTermCompat("choiceNeither", "choiceNeither", "どれも違う"),
-            getTermCompat("choiceNeither", "choiceNeither", "どれも違う")
-          )
+makeBtn(
+  getTermCompat("choiceNeither", "choiceNeither", getRecommendUiDefault("choiceNeither")),
+  getTermCompat("choiceNeither", "choiceNeither", getRecommendUiDefault("choiceNeither"))
+)
         );
       }
 
@@ -728,10 +769,10 @@ function appendLucy(rawText, dynamicOptions) {
 
     // 「ほかには」は両方で出す
     actionWrap.appendChild(
-      makeBtn(
-        getTermCompat("quickMore", "quickMore", "ほかには"),
-        "ほかには"
-      )
+makeBtn(
+  getTermCompat("quickMore", "quickMore", getRecommendUiDefault("quickMore")),
+  getTermCompat("quickMore", "quickMore", getRecommendUiDefault("quickMore"))
+)
     );
 
     if (lastAssistantReplyKind === "single_recommend") {
@@ -745,17 +786,17 @@ function appendLucy(rawText, dynamicOptions) {
     } else if (lastAssistantReplyKind === "multi_links") {
       // 複数リンク提示後は 3ボタン
       actionWrap.appendChild(
-        makeBtn(
-          getTermCompat("quickRecommend", "quickRecommend", "おすすめを見る"),
-          "__INITIAL_RECOMMEND__"
-        )
+makeBtn(
+  getTermCompat("quickRecommend", "quickRecommend", getRecommendUiDefault("quickRecommend")),
+  "__INITIAL_RECOMMEND__"
+)
       );
 
       actionWrap.appendChild(
-        makeBtn(
-          getTermCompat("quickSpecify", "quickSpecify", "条件を指定する"),
-          "__INITIAL_SPECIFY__"
-        )
+makeBtn(
+  getTermCompat("quickSpecify", "quickSpecify", getRecommendUiDefault("quickSpecify")),
+  "__INITIAL_SPECIFY__"
+)
       );
     }
 
