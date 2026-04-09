@@ -1160,10 +1160,12 @@ async function stopServerVoiceWav() {
     const wavBlob = encodeWavMono16(pcm16, wavSampleRate);
 
     const fd = new FormData();
+    const currentLang = syncLucySessionLang();
     fd.append("audio", wavBlob, "voice.wav");
-    fd.append("lang", getCurrentLang());
-    try { fd.append("state", JSON.stringify(nextState || {})); } catch (_) {}
-    fd.append("state", JSON.stringify(nextState || {}));
+    fd.append("lang", currentLang);
+    try {
+      fd.append("state", JSON.stringify(nextState || {}));
+    } catch (_) {}
 
     const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
     const raw = await res.text();
@@ -1268,10 +1270,12 @@ async function startServerVoice() {
           /wav/i.test(actualType) ? "wav" : "webm";
 
         const fd = new FormData();
+        const currentLang = syncLucySessionLang();
         fd.append("audio", blob, `voice.${ext}`);
-        fd.append("lang", getCurrentLang());
-        try { fd.append("state", JSON.stringify(nextState || {})); } catch (_) {}
-        fd.append("state", JSON.stringify(nextState || {}));
+        fd.append("lang", currentLang);
+        try {
+          fd.append("state", JSON.stringify(nextState || {}));
+        } catch (_) {}
 
         const res = await fetch(WORKER_VOICE_URL, { method: "POST", body: fd });
         const raw = await res.text();
