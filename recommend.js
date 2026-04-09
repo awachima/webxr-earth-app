@@ -180,6 +180,18 @@ try {
     return;
   }
 
+  const langMenuButtons = document.querySelectorAll("#langMenu [data-lang]");
+
+  langMenuButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const selected = String(btn.getAttribute("data-lang") || "").trim() || getCurrentLang();
+
+      setTimeout(() => {
+        resetLucyRecommendSession(selected, { clearChat: true });
+      }, 0);
+    });
+  });
+
 
 // ★ Questでも手入力を許可するため、入力欄の readOnly 化や自動 blur は行わない。
 //    キーボードを閉じたい場面では toggleVoice() 側から questSafeBlurInput() を呼ぶ。
@@ -245,6 +257,7 @@ if (IS_QUEST) {
   // 4) 内部状態
   // =========================================================
   let nextState = null;
+  let sessionLang = getCurrentLang();
 
   // ★ 追加：挨拶を「パネルを開いた時」に1回だけ出すためのフラグ
   let lucyGreetingShown = false;
@@ -271,6 +284,42 @@ let wavStartedAt = 0;
   let lastAssistantRawText = "";
   let lastAssistantReplyKind = null; // "single_recommend" | "multi_links" | "choice_prompt" | null
   let lastRecommendKeyword = "";
+
+  function resetLucyRecommendSession(newLang, options = {}) {
+    const opts = options || {};
+    const clearChat = opts.clearChat !== false;
+
+    sessionLang = String(newLang || getCurrentLang() || "ja");
+
+    nextState = null;
+    lucyGreetingShown = false;
+
+    lastAssistantRawText = "";
+    lastAssistantReplyKind = null;
+    lastRecommendKeyword = "";
+
+    lastSpeechFinal = "";
+
+    try {
+      if (inputEl) inputEl.value = "";
+    } catch (_) {}
+
+    try {
+      if (lucyVoiceAskStatus) lucyVoiceAskStatus.textContent = "";
+    } catch (_) {}
+
+    try {
+      if (clearChat && chatEl) chatEl.innerHTML = "";
+    } catch (_) {}
+  }
+
+  function syncLucySessionLang() {
+    const current = String(getCurrentLang() || "ja");
+    if (current !== sessionLang) {
+      resetLucyRecommendSession(current, { clearChat: true });
+    }
+    return current;
+  }
 
   // =========================================================
   // 5) ユーティリティ
@@ -882,7 +931,7 @@ function cleanupWavRecorder() {
     if (userText) payload.userText = userText;
     if (nextState) payload.state = nextState;
 
-    payload.lang = getCurrentLang();
+    payload.lang = syncLucySessionLang();
 
     const res = await fetch(WORKER_CHAT_URL, {
       method: "POST",
