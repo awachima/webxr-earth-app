@@ -286,38 +286,6 @@
       .replace(/[|]/g, "/");
   }
 
-  function csvParseLine(line) {
-    // minimal CSV parser (handles quotes in a single logical record)
-    const out = [];
-    let cur = "";
-    let inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (inQ) {
-        if (ch === '"') {
-          if (line[i + 1] === '"') {
-            cur += '"';
-            i++;
-          } else {
-            inQ = false;
-          }
-        } else {
-          cur += ch;
-        }
-      } else {
-        if (ch === '"') inQ = true;
-        else if (ch === ",") {
-          out.push(cur);
-          cur = "";
-        } else {
-          cur += ch;
-        }
-      }
-    }
-    out.push(cur);
-    return out;
-  }
-
   function parseCsvRecords(text) {
     // 改行を含む quoted field に対応したCSVパーサ
     // 返り値: 2次元配列 rows[rowIndex][colIndex]
@@ -383,6 +351,18 @@
     return map.get(key);
   }
 
+  function getSortLocale() {
+    const map = {
+      ja: "ja",
+      en: "en",
+      zh: "zh",
+      hi: "hi",
+      he: "he",
+      fa: "fa"
+    };
+    return map[CURRENT_LANG] || "ja";
+  }
+
   // ----------------------------
   //  location.csv(G/H) -> extra category UI
   // ----------------------------
@@ -391,7 +371,7 @@
   const LOC_H_INDEX = 8;
 
   let locReady = false;
-  let locGList = []; // ["有名な場所", "有名な物", ...]
+  let locGList = [];
   let locChildren = new Map(); // G -> Set(H)
   let locOpenG = null; // 第1カテゴリで現在選択（開いている）G
   let locDebugMessage = ""; // 表示だけ（壊さない）
@@ -405,7 +385,6 @@
 
   async function loadLocationCats() {
     if (!locAreaG) {
-      // index.html に locArea が無い構成でも落とさない
       locReady = false;
       return;
     }
@@ -417,9 +396,6 @@
     let text = "";
     locDebugMessage = "";
 
-    // Primary（Google Sheets CSV）
-    // ★公開CSVが「使用範囲が狭い(A〜Eだけ等)」として出力される場合、G/H以降が落ちることがあります。
-    // その場合に備えて range 付きも順に試します（仕様はH/I固定のまま）。
     const locPrimaryCandidates = [
       LOCATION_URL_PRIMARY,
       LOCATION_URL_PRIMARY + "&range=A:L",
@@ -438,7 +414,6 @@
       } catch (_) {}
     }
 
-    // Fallback（同階層の location.csv）
     if (!text) {
       try {
         const r2 = await fetch(LOCATION_URL_FALLBACK, { cache: "no-store" });
@@ -461,7 +436,6 @@
       return;
     }
 
-    // ヘッダー判定（2列目/3列目が数値でないならヘッダー扱い）
     let start = 0;
     try {
       const head = rows[0] || [];
@@ -473,7 +447,6 @@
     const gSet = new Set();
     const childMap = new Map();
 
-    // 列数不足チェック（最低でもIまで必要）
     try {
       const firstData = rows[Math.min(start, rows.length - 1)] || [];
       if (firstData.length <= LOC_H_INDEX) {
@@ -483,8 +456,6 @@
 
     for (let i = start; i < rows.length; i++) {
       const parts = rows[i] || [];
-
-      // 行ごとに列数が足りない場合はスキップ
       if (!parts || parts.length <= LOC_G_INDEX) continue;
 
       const g = normalize(parts[LOC_G_INDEX]);
@@ -500,7 +471,7 @@
       if (h) label.set("loc::h::" + g + "::" + h, h);
     }
 
-    locGList = Array.from(gSet).sort((a, b) => a.localeCompare(b, "ja"));
+    locGList = Array.from(gSet).sort((a, b) => a.localeCompare(b, getSortLocale()));
     locChildren = childMap;
     locOpenG = locOpenG && childMap.has(locOpenG) ? locOpenG : null;
 
@@ -508,17 +479,12 @@
     renderLocAreas();
   }
 
-  // 第1カテゴリ（G）: 第1カラムに表示
-  // 第2カテゴリ（H）: 第1カテゴリ選択時に第2カラムに表示
   function renderLocAreas() {
     if (!locAreaG) return;
 
-    // --- G（第1） ---
     locAreaG.innerHTML = "";
     locAreaG.style.marginTop = "10px";
 
-    // 「追加カテゴリ（第1）」は表示しない（要望）
-    // ただしデバッグ表示は壊さない範囲で残す
     if (locDebugMessage) {
       const msg0 = document.createElement("div");
       msg0.style.opacity = "0.65";
@@ -534,7 +500,6 @@
       msg.style.padding = "6px 2px";
       msg.textContent = t("loading");
       locAreaG.appendChild(msg);
-      // H側も空にしておく
       const hArea = ensureLocAreaHExists();
       hArea.innerHTML = "";
       return;
@@ -547,7 +512,6 @@
       msg.textContent = t("noExtraCategories");
       locAreaG.appendChild(msg);
     } else {
-      // G一覧（クリックで H を切替、チェックで選択）
       locGList.forEach((g) => {
         const id = "loc::g::" + g;
         const row = makeLocGRow(id, g);
@@ -555,12 +519,9 @@
       });
     }
 
-    // --- H（第2） ---
     const hArea = ensureLocAreaHExists();
     hArea.innerHTML = "";
     hArea.style.marginTop = "10px";
-
-    // ★要望: 追加カテゴリのタイトルは不要なので表示しない（ここでは見出しを作らない）
 
     if (!locOpenG) {
       const msg = document.createElement("div");
@@ -572,7 +533,7 @@
     }
 
     const setH = locChildren.get(locOpenG) || new Set();
-    const list = Array.from(setH).sort((a, b) => a.localeCompare(b, "ja"));
+    const list = Array.from(setH).sort((a, b) => a.localeCompare(b, getSortLocale()));
 
     if (!list.length) {
       const msg = document.createElement("div");
@@ -598,9 +559,6 @@
     cb.type = "checkbox";
     cb.checked = selected.has(id);
 
-    // ★既存カテゴリ（tree）と同様に「子が一部だけ選択されている」状態を
-    //  第1カテゴリ（G）側のチェックボックスに反映（いわゆる「ー」表示）
-    //  ※loc(G/H)は木構造(nodesById)とは別管理なので、ここで計算する
     try {
       const kids = locChildren.get(text) || new Set();
       if (kids && kids.size > 0) {
@@ -612,9 +570,6 @@
           any = any || on;
           all = all && on;
         });
-
-        // 親(G)自体が未チェックでも子が選ばれていれば indeterminate にする
-        // 親がチェック済みでも子が全て揃っていなければ indeterminate
         cb.indeterminate = (any && !all) || (any && !cb.checked);
       } else {
         cb.indeterminate = false;
@@ -636,11 +591,7 @@
     row.appendChild(chev);
 
     row.addEventListener("click", (e) => {
-      // checkboxクリックは別で処理
       if (e.target === cb) return;
-
-      // ★追加カテゴリを開いたら「第2カラムは追加カテゴリ専用」にしたいので、
-      // ここでは tree の path は維持したまま locOpenG だけセットする（表示は renderColumns が制御）
       locOpenG = text;
       renderColumns();
     });
@@ -649,7 +600,6 @@
       e.stopPropagation();
       const on = cb.checked;
 
-      // Gチェック: 配下HもまとめてON/OFF
       if (on) selected.add(id);
       else selected.delete(id);
 
@@ -660,7 +610,6 @@
         else selected.delete(hid);
       });
 
-      // チェック操作したら、そのGを開いた扱いにする（UX）
       locOpenG = text;
 
       saveSelection();
@@ -697,11 +646,6 @@
       const on = cb.checked;
       if (on) selected.add(id);
       else selected.delete(id);
-
-      // ★第2カテゴリ(H)のみを選んだ場合でも、
-      //  第1カテゴリ(G)側に「一部選択」マーク（indeterminate）が出るように更新
-      //  （renderColumns() 内で renderLocAreas() が呼ばれるため、
-      //   ここでは locOpenG を維持するだけでOK）
 
       saveSelection();
       setBadge();
@@ -834,6 +778,55 @@
     return { checked, indeterminate };
   }
 
+  function buildTreeFromCsv(csvText) {
+    nodesById.clear();
+    childrenByParent.clear();
+    label.clear();
+    parent.clear();
+    depthById.clear();
+    pathById.clear();
+
+    nodesById.set(ROOT_ID, {
+      id: ROOT_ID,
+      label: "ROOT",
+      depth: 0,
+      parentId: null,
+      children: new Set(),
+    });
+    label.set(ROOT_ID, "ROOT");
+    parent.set(ROOT_ID, null);
+    depthById.set(ROOT_ID, 0);
+
+    const rows = parseCsvRecords(csvText);
+    if (rows.length <= 1) return;
+
+    // ★重要:
+    // 見出し名(level1 / 层级1 / स्तर1 ...)には依存せず、
+    // A列/B列/C列をそのまま level1/2/3 として読む。
+    // これで中国語・ヒンディー語・ヘブライ語・ペルシャ語でも動く。
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i] || [];
+      const l1 = normalize(cols[0]);
+      const l2 = normalize(cols[1]);
+      const l3 = normalize(cols[2]);
+
+      if (!l1) continue;
+
+      const id1 = "L1|" + safeIdFromLabel(l1);
+      addNode(id1, l1, 1, ROOT_ID);
+
+      if (l2) {
+        const id2 = id1 + "|L2|" + safeIdFromLabel(l2);
+        addNode(id2, l2, 2, id1);
+
+        if (l3) {
+          const id3 = id2 + "|L3|" + safeIdFromLabel(l3);
+          addNode(id3, l3, 3, id2);
+        }
+      }
+    }
+  }
+
   // ----------------------------
   //  UI build
   // ----------------------------
@@ -859,7 +852,7 @@
       .map((id) => nodesById.get(id))
       .filter(Boolean);
 
-    kids.sort((a, b) => (a.label || "").localeCompare(b.label || "", "ja"));
+    kids.sort((a, b) => (a.label || "").localeCompare(b.label || "", getSortLocale()));
 
     kids.forEach((node) => {
       const row = document.createElement("div");
@@ -894,7 +887,6 @@
       });
 
       row.addEventListener("click", () => {
-        // ★重要: 既存カテゴリ側をクリックしたら、追加カテゴリの表示モードを解除する
         locOpenG = null;
 
         const depthIdx = node.depth - 1;
@@ -928,7 +920,6 @@
     const col1 = createColumn(t("category"));
     renderList(col1, ROOT_ID, checked, indeterminate);
 
-    // 第1カテゴリ（G）: 第1カラムに表示（見出しは消す）
     if (locAreaG) {
       if (locAreaG.parentNode) locAreaG.parentNode.removeChild(locAreaG);
       locAreaG.classList.add("loc-area-in-col1");
@@ -936,23 +927,18 @@
     }
 
     const l1 = path[0] || null;
-
-    // ★要望: 追加カテゴリを表示しているときは「タイトルを表示しない」
     const col2Title = locOpenG ? "" : (l1 ? label.get(l1) || " " : " ");
     const col2 = createColumn(col2Title);
 
     if (!locOpenG) {
-      // 既存カテゴリの第2カラム
       renderList(col2, l1, checked, indeterminate);
     } else {
-      // 追加カテゴリの第2カラム（専用表示）
       const hArea = ensureLocAreaHExists();
       if (hArea.parentNode) hArea.parentNode.removeChild(hArea);
       hArea.classList.add("loc-area-in-col2");
       col2.appendChild(hArea);
     }
 
-    // 第3カラムは「追加カテゴリ表示中」は空にする
     const l2 = (!locOpenG) ? (path[1] || null) : null;
     const showL2 = l2 && nodeHasChildren(l2);
     const col3 = createColumn(showL2 ? label.get(l2) || " " : " ");
@@ -962,7 +948,6 @@
     colWrap.appendChild(col2);
     colWrap.appendChild(col3);
 
-    // 追加カテゴリのUIもここで再描画（配置先が変わるため）
     if (locAreaG) {
       renderLocAreas();
     }
@@ -988,24 +973,18 @@
 
       const n = nodesById.get(id);
       if (n) {
-        // tree.csv 側は親カテゴリを送らず leaf のみ送る
         return !(n.children && n.children.size > 0);
       }
 
-      // 追加カテゴリ loc(G/H) の扱い
       if (id.startsWith("loc::g::")) {
         const g = id.slice("loc::g::".length);
         const kids = locChildren.get(g) || new Set();
 
-        // H が1つでも選ばれているなら、Gは送らない
-        // これで「盛りだくさん」+「インドのベストシーン集」が同時送信されず、
-        // OR 条件で別行まで混ざる問題を防ぐ
         for (const h of kids) {
           const hid = "loc::h::" + g + "::" + h;
           if (selected.has(hid)) return false;
         }
 
-        // Hが無いG、またはG単独選択の時だけ送る
         return true;
       }
 
@@ -1013,7 +992,6 @@
         return true;
       }
 
-      // label が無い不明IDは送らない
       return label.has(id);
     });
 
@@ -1035,10 +1013,8 @@
     if (!treeReady) return;
     if (!hadSavedSelection) return;
 
-    // ★重要: 選択IDの label が揃うまで待つ（起動直後の一瞬でIDが送られるのを防ぐ）
     const unresolved = Array.from(selected).some((id) => !label.has(id));
     if (unresolved) {
-      // 少し待って再試行（短時間で揃う想定）
       setTimeout(tryAutoApply, 50);
       return;
     }
@@ -1151,64 +1127,6 @@
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error("fetch failed: " + res.status);
     return await res.text();
-  }
-
-  function buildTreeFromCsv(csvText) {
-    nodesById.clear();
-    childrenByParent.clear();
-    label.clear();
-    parent.clear();
-    depthById.clear();
-    pathById.clear();
-
-    nodesById.set(ROOT_ID, {
-      id: ROOT_ID,
-      label: "ROOT",
-      depth: 0,
-      parentId: null,
-      children: new Set(),
-    });
-    label.set(ROOT_ID, "ROOT");
-    parent.set(ROOT_ID, null);
-    depthById.set(ROOT_ID, 0);
-
-    const rows = parseCsvRecords(csvText);
-    if (rows.length <= 1) return;
-
-    const header = (rows[0] || []).map((s) => normalize(s).toLowerCase());
-    const idx1 = header.indexOf("level1");
-    const idx2 = header.indexOf("level2");
-    const idx3 = header.indexOf("level3");
-    if (idx1 < 0) return;
-
-    for (let i = 1; i < rows.length; i++) {
-      const cols = rows[i] || [];
-      const l1 = normalize(cols[idx1]);
-      const l2 = idx2 >= 0 ? normalize(cols[idx2]) : "";
-      const l3 = idx3 >= 0 ? normalize(cols[idx3]) : "";
-
-      if (!l1) continue;
-
-      const a = l1.toLowerCase();
-      const b = (l2 || "").toLowerCase();
-      const c = (l3 || "").toLowerCase();
-      if (a === "level1" && (b === "level2" || b === "") && (c === "level3" || c === "")) {
-        continue;
-      }
-
-      const id1 = "L1|" + safeIdFromLabel(l1);
-      addNode(id1, l1, 1, ROOT_ID);
-
-      if (l2) {
-        const id2 = id1 + "|L2|" + safeIdFromLabel(l2);
-        addNode(id2, l2, 2, id1);
-
-        if (l3) {
-          const id3 = id2 + "|L3|" + safeIdFromLabel(l3);
-          addNode(id3, l3, 3, id2);
-        }
-      }
-    }
   }
 
   async function loadTree() {
