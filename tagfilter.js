@@ -56,7 +56,9 @@ function getCurrentLang() {
   return getStoredLang();
 }
 
-const TREE_URL_PRIMARY = getTreeUrlPrimaryByLang(getCurrentLang());
+function getTreeUrlPrimary() {
+  return getTreeUrlPrimaryByLang(getCurrentLang());
+}
 
   // ★追加: location.csv（G/Hを追加カテゴリに使う）
   function getLocationUrlPrimaryByLang(lang) {
@@ -162,7 +164,7 @@ function t(key) {
   function applyStaticTexts() {
     try {
       if (btn) {
-        btn.innerHTML = `${t("filter")} <span id="tagFilterCount" class="tag-filter-count">(${selected.size})</span>`;
+        btn.innerHTML = `${t("filter")} <span id="tagFilterCount" class="tag-filter-count">(${selected ? selected.size : 0})</span>`;
       }
 
       const modalTitle =
@@ -187,7 +189,9 @@ function t(key) {
     }
   }
 
-  const LOCATION_URL_PRIMARY = getLocationUrlPrimaryByLang(CURRENT_LANG);
+  function getLocationUrlPrimary() {
+  return getLocationUrlPrimaryByLang(getCurrentLang());
+}
   const LOCATION_URL_FALLBACK = "./location.csv";
 
   const btn = document.getElementById("tagFilterBtn");
@@ -577,18 +581,18 @@ function getSortLocale() {
       return;
     }
 
-    console.log("[tagfilter] CURRENT_LANG =", CURRENT_LANG);
-    console.log("[tagfilter] TREE_URL_PRIMARY =", TREE_URL_PRIMARY);
-    console.log("[tagfilter] LOCATION_URL_PRIMARY =", LOCATION_URL_PRIMARY);
+console.log("[tagfilter] CURRENT_LANG =", getCurrentLang());
+console.log("[tagfilter] TREE_URL_PRIMARY =", getTreeUrlPrimary());
+console.log("[tagfilter] LOCATION_URL_PRIMARY =", getLocationUrlPrimary());
 
-    let text = "";
-    locDebugMessage = "";
+let text = "";
+locDebugMessage = "";
 
-    const locPrimaryCandidates = [
-      LOCATION_URL_PRIMARY,
-      LOCATION_URL_PRIMARY + "&range=A:L",
-      LOCATION_URL_PRIMARY + "&range=A:Z",
-    ];
+const locPrimaryCandidates = [
+  getLocationUrlPrimary(),
+  getLocationUrlPrimary() + "&range=A:L",
+  getLocationUrlPrimary() + "&range=A:Z",
+];
 
     for (const u of locPrimaryCandidates) {
       try {
@@ -1318,7 +1322,7 @@ function buildTreeFromCsv(csvText) {
     treeReady = false;
 
     try {
-      const csv = await fetchCsv(TREE_URL_PRIMARY);
+      const csv = await fetchCsv(getTreeUrlPrimary());
       buildTreeFromCsv(csv);
       treeReady = true;
       await loadLocationCats();
@@ -1326,7 +1330,7 @@ function buildTreeFromCsv(csvText) {
       tryAutoApply();
       return;
     } catch (e) {
-      console.warn("[tagfilter] failed to load TREE_URL_PRIMARY:", TREE_URL_PRIMARY, e);
+      console.warn("[tagfilter] failed to load TREE_URL_PRIMARY:", getTreeUrlPrimary(), e);
     }
 
     try {
