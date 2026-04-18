@@ -455,7 +455,8 @@ fa: [
 }
 
 function canonicalizeCategory(s) {
-  return normalize(replaceByLang(s, CURRENT_LANG));
+  const normalized = normalize(s);
+  return normalize(replaceByLang(normalized, CURRENT_LANG));
 }
 
 
