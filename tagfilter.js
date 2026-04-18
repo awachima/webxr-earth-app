@@ -274,9 +274,58 @@
   // ----------------------------
   //  Helpers
   // ----------------------------
-  function normalize(s) {
-    return (s || "").toString().trim();
+function normalize(s) {
+  return (s || "")
+    .toString()
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")          // ゼロ幅文字
+    .replace(/[\u200E\u200F\u061C]/g, "")           // LRM / RLM / ALM
+    .replace(/[\u202A-\u202E\u2066-\u2069]/g, "")   // 双方向制御文字
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function replaceByLang(s, lang) {
+  let v = (s || "").toString();
+
+  const rules = {
+    he: [
+      [/מקומות מפורסמים/g, "מקום מפורסם"],
+      [/מקומות מפורסמים מוצגים/g, "מקום מפורסם"],
+      [/מקום מפורסם נראה/g, "מקום מפורסם"],
+      [/מקום מפורסם במיוחד/g, "מקום מפורסם"],
+      [/מקום בעל משמעות מיוחדת/g, "מקום מיוחד"],
+      [/מקום עם סיפור/g, "מקום מיוחד"]
+    ],
+    hi: [
+      [/प्रसिद्ध व्यक्तियों से संबंधित है/g, "प्रसिद्ध व्यक्ति से संबंधित"],
+      [/प्रसिद्ध व्यक्तियों से संबंधित/g, "प्रसिद्ध व्यक्ति से संबंधित"],
+      [/एक अनोखा स्थान/g, "अनोखी जगह"],
+      [/एक कहानी वाली जगह/g, "कहानी वाली जगह"]
+    ],
+    zh: [
+      [/画面中出现了著名景点/g, "著名景点"],
+      [/映入眼帘的是著名景点/g, "著名景点"],
+      [/展示着著名景点/g, "著名景点"],
+      [/有特殊背景的地点/g, "特殊地点"]
+    ],
+    fa: [
+      [/مکان‌های مشهور/g, "مکان مشهور"],
+      [/یک مکان مشهور/g, "مکان مشهور"],
+      [/مکان با اهمیت ویژه/g, "مکان ویژه"]
+    ]
+  };
+
+  for (const [pattern, replacement] of (rules[lang] || [])) {
+    v = v.replace(pattern, replacement);
   }
+  return v;
+}
+
+function canonicalizeCategory(s) {
+  return normalize(replaceByLang(s, CURRENT_LANG));
+}
+
 
   function safeIdFromLabel(s) {
     // stable-ish id: depth/label path
@@ -458,8 +507,8 @@
       const parts = rows[i] || [];
       if (!parts || parts.length <= LOC_G_INDEX) continue;
 
-      const g = normalize(parts[LOC_G_INDEX]);
-      const h = parts.length > LOC_H_INDEX ? normalize(parts[LOC_H_INDEX]) : "";
+const g = canonicalizeCategory(parts[LOC_G_INDEX]);
+const h = parts.length > LOC_H_INDEX ? canonicalizeCategory(parts[LOC_H_INDEX]) : "";
 
       if (!g) continue;
 
@@ -778,54 +827,51 @@
     return { checked, indeterminate };
   }
 
-  function buildTreeFromCsv(csvText) {
-    nodesById.clear();
-    childrenByParent.clear();
-    label.clear();
-    parent.clear();
-    depthById.clear();
-    pathById.clear();
+function buildTreeFromCsv(csvText) {
+  nodesById.clear();
+  childrenByParent.clear();
+  label.clear();
+  parent.clear();
+  depthById.clear();
+  pathById.clear();
 
-    nodesById.set(ROOT_ID, {
-      id: ROOT_ID,
-      label: "ROOT",
-      depth: 0,
-      parentId: null,
-      children: new Set(),
-    });
-    label.set(ROOT_ID, "ROOT");
-    parent.set(ROOT_ID, null);
-    depthById.set(ROOT_ID, 0);
+  nodesById.set(ROOT_ID, {
+    id: ROOT_ID,
+    label: "ROOT",
+    depth: 0,
+    parentId: null,
+    children: new Set(),
+  });
+  label.set(ROOT_ID, "ROOT");
+  parent.set(ROOT_ID, null);
+  depthById.set(ROOT_ID, 0);
 
-    const rows = parseCsvRecords(csvText);
-    if (rows.length <= 1) return;
+  const rows = parseCsvRecords(csvText);
+  if (rows.length <= 1) return;
 
-    // ★重要:
-    // 見出し名(level1 / 层级1 / स्तर1 ...)には依存せず、
-    // A列/B列/C列をそのまま level1/2/3 として読む。
-    // これで中国語・ヒンディー語・ヘブライ語・ペルシャ語でも動く。
-    for (let i = 1; i < rows.length; i++) {
-      const cols = rows[i] || [];
-      const l1 = normalize(cols[0]);
-      const l2 = normalize(cols[1]);
-      const l3 = normalize(cols[2]);
+  // 見出し名には依存せず、A/B/C列をそのまま level1/2/3 として扱う
+  for (let i = 1; i < rows.length; i++) {
+    const cols = rows[i] || [];
+    const l1 = canonicalizeCategory(cols[0]);
+    const l2 = canonicalizeCategory(cols[1]);
+    const l3 = canonicalizeCategory(cols[2]);
 
-      if (!l1) continue;
+    if (!l1) continue;
 
-      const id1 = "L1|" + safeIdFromLabel(l1);
-      addNode(id1, l1, 1, ROOT_ID);
+    const id1 = "L1|" + safeIdFromLabel(l1);
+    addNode(id1, l1, 1, ROOT_ID);
 
-      if (l2) {
-        const id2 = id1 + "|L2|" + safeIdFromLabel(l2);
-        addNode(id2, l2, 2, id1);
+    if (l2) {
+      const id2 = id1 + "|L2|" + safeIdFromLabel(l2);
+      addNode(id2, l2, 2, id1);
 
-        if (l3) {
-          const id3 = id2 + "|L3|" + safeIdFromLabel(l3);
-          addNode(id3, l3, 3, id2);
-        }
+      if (l3) {
+        const id3 = id2 + "|L3|" + safeIdFromLabel(l3);
+        addNode(id3, l3, 3, id2);
       }
     }
   }
+}
 
   // ----------------------------
   //  UI build
