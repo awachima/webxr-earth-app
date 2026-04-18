@@ -278,6 +278,8 @@ function normalize(s) {
   return (s || "")
     .toString()
     .normalize("NFKC")
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
     .replace(/[\u200E\u200F\u061C]/g, "")
     .replace(/[\u202A-\u202E\u2066-\u2069]/g, "")
