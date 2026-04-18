@@ -52,8 +52,11 @@
   // フォールバック（同梱tree.csvがある場合）
   const TREE_URL_FALLBACK = "./tree.csv";
 
-  const CURRENT_LANG = getStoredLang();
-  const TREE_URL_PRIMARY = getTreeUrlPrimaryByLang(CURRENT_LANG);
+function getCurrentLang() {
+  return getStoredLang();
+}
+
+const TREE_URL_PRIMARY = getTreeUrlPrimaryByLang(getCurrentLang());
 
   // ★追加: location.csv（G/Hを追加カテゴリに使う）
   function getLocationUrlPrimaryByLang(lang) {
@@ -150,10 +153,11 @@
     }
   };
 
-  function t(key) {
-    const dict = UI_TEXT[CURRENT_LANG] || UI_TEXT.ja;
-    return dict[key] || (UI_TEXT.ja[key] || key);
-  }
+function t(key) {
+  const lang = getCurrentLang();
+  const dict = UI_TEXT[lang] || UI_TEXT.ja;
+  return dict[key] || (UI_TEXT.ja[key] || key);
+}
 
   function applyStaticTexts() {
     try {
@@ -211,7 +215,7 @@
     return;
   }
 
-  applyStaticTexts();
+
 
   // ----------------------------
   //  Data structures
@@ -231,6 +235,8 @@
   // selection state
   let selected = new Set(); // Set<nodeId>
   let path = []; // currently opened path (ids per depth)
+
+applyStaticTexts();
 
   // 自動適用（リロード時に earth 側へ再送）
   let hadSavedSelection = false;
@@ -456,7 +462,7 @@ fa: [
 
 function canonicalizeCategory(s) {
   const normalized = normalize(s);
-  return normalize(replaceByLang(normalized, CURRENT_LANG));
+  return normalize(replaceByLang(normalized, getCurrentLang()));
 }
 
 
@@ -533,17 +539,17 @@ function canonicalizeCategory(s) {
     return map.get(key);
   }
 
-  function getSortLocale() {
-    const map = {
-      ja: "ja",
-      en: "en",
-      zh: "zh",
-      hi: "hi",
-      he: "he",
-      fa: "fa"
-    };
-    return map[CURRENT_LANG] || "ja";
-  }
+function getSortLocale() {
+  const map = {
+    ja: "ja",
+    en: "en",
+    zh: "zh",
+    hi: "hi",
+    he: "he",
+    fa: "fa"
+  };
+  return map[getCurrentLang()] || "ja";
+}
 
   // ----------------------------
   //  location.csv(G/H) -> extra category UI
