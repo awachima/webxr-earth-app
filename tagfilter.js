@@ -4,16 +4,7 @@
   // ----------------------------
   const STORAGE_KEY = "dd_selected_tags_v1";
 
-  // ★ Google Sheets「ウェブに公開」(CSV) を読む
-  // 重要: pubhtml ではなく output=csv を使う
-  const TREE_URL_PRIMARY =
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxY1OEEnEqJi1gK6D156ql0Ybe5Hqsn-mrAmvC3p98oRYYdXFNTjUY3-SMNgusPHqowztL3aAF3COl/pub?gid=0&single=true&output=csv";
-
-  // フォールバック（同梱tree.csvがある場合）
-  const TREE_URL_FALLBACK = "./tree.csv";
-
-  // ★追加: location.csv（G/Hを追加カテゴリに使う）
-  // ★追加: location.csv（G/Hを追加カテゴリに使う）
+  // 言語取得
   function getStoredLang() {
     const LANG_KEYS = [
       "lang",
@@ -45,6 +36,26 @@
     return "ja";
   }
 
+  function getTreeUrlPrimaryByLang(lang) {
+    const map = {
+      ja: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxY1OEEnEqJi1gK6D156ql0Ybe5Hqsn-mrAmvC3p98oRYYdXFNTjUY3-SMNgusPHqowztL3aAF3COl/pub?gid=0&single=true&output=csv",
+      en: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxY1OEEnEqJi1gK6D156ql0Ybe5Hqsn-mrAmvC3p98oRYYdXFNTjUY3-SMNgusPHqowztL3aAF3COl/pub?gid=191705455&single=true&output=csv",
+      zh: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxY1OEEnEqJi1gK6D156ql0Ybe5Hqsn-mrAmvC3p98oRYYdXFNTjUY3-SMNgusPHqowztL3aAF3COl/pub?gid=1744467585&single=true&output=csv",
+      hi: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxY1OEEnEqJi1gK6D156ql0Ybe5Hqsn-mrAmvC3p98oRYYdXFNTjUY3-SMNgusPHqowztL3aAF3COl/pub?gid=1976865856&single=true&output=csv",
+      he: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxY1OEEnEqJi1gK6D156ql0Ybe5Hqsn-mrAmvC3p98oRYYdXFNTjUY3-SMNgusPHqowztL3aAF3COl/pub?gid=1609603534&single=true&output=csv",
+      fa: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxY1OEEnEqJi1gK6D156ql0Ybe5Hqsn-mrAmvC3p98oRYYdXFNTjUY3-SMNgusPHqowztL3aAF3COl/pub?gid=772346125&single=true&output=csv"
+    };
+
+    return map[lang] || map.ja;
+  }
+
+  // フォールバック（同梱tree.csvがある場合）
+  const TREE_URL_FALLBACK = "./tree.csv";
+
+  const CURRENT_LANG = getStoredLang();
+  const TREE_URL_PRIMARY = getTreeUrlPrimaryByLang(CURRENT_LANG);
+
+  // ★追加: location.csv（G/Hを追加カテゴリに使う）
   function getLocationUrlPrimaryByLang(lang) {
     const map = {
       ja: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQKDucOdVD9mvoZHq-HIOxi_J1L8s9Qjh7hP3oU_oTQrh1k_4tvB8m9ZRtp9Lond1XqVDdu5R8bNAsW/pub?gid=717261533&single=true&output=csv",
@@ -57,8 +68,6 @@
 
     return map[lang] || map.ja;
   }
-
-  const CURRENT_LANG = getStoredLang();
 
   const UI_TEXT = {
     ja: {
@@ -173,7 +182,6 @@
       console.warn("[tagfilter] applyStaticTexts error:", e);
     }
   }
-
 
   const LOCATION_URL_PRIMARY = getLocationUrlPrimaryByLang(CURRENT_LANG);
   const LOCATION_URL_FALLBACK = "./location.csv";
@@ -403,6 +411,7 @@
     }
 
     console.log("[tagfilter] CURRENT_LANG =", CURRENT_LANG);
+    console.log("[tagfilter] TREE_URL_PRIMARY =", TREE_URL_PRIMARY);
     console.log("[tagfilter] LOCATION_URL_PRIMARY =", LOCATION_URL_PRIMARY);
 
     let text = "";
@@ -909,14 +918,14 @@
       const msg = document.createElement("div");
       msg.style.padding = "10px";
       msg.style.opacity = "0.8";
-      msg.textContent = "読み込み中…";
+      msg.textContent = t("loading");
       colWrap.appendChild(msg);
       return;
     }
 
     const { checked, indeterminate } = computeIndeterminateStates();
 
-    const col1 = createColumn("カテゴリ");
+    const col1 = createColumn(t("category"));
     renderList(col1, ROOT_ID, checked, indeterminate);
 
     // 第1カテゴリ（G）: 第1カラムに表示（見出しは消す）
@@ -1118,6 +1127,7 @@
       closeModal();
     });
   }
+
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
       selected = new Set();
@@ -1203,6 +1213,7 @@
 
   async function loadTree() {
     treeReady = false;
+
     try {
       const csv = await fetchCsv(TREE_URL_PRIMARY);
       buildTreeFromCsv(csv);
@@ -1211,7 +1222,9 @@
       renderColumns();
       tryAutoApply();
       return;
-    } catch (e) {}
+    } catch (e) {
+      console.warn("[tagfilter] failed to load TREE_URL_PRIMARY:", TREE_URL_PRIMARY, e);
+    }
 
     try {
       const csv = await fetchCsv(TREE_URL_FALLBACK);
@@ -1221,6 +1234,7 @@
       renderColumns();
       tryAutoApply();
     } catch (e2) {
+      console.warn("[tagfilter] failed to load TREE_URL_FALLBACK:", TREE_URL_FALLBACK, e2);
       treeReady = false;
     }
   }
