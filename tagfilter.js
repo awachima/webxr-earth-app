@@ -1156,45 +1156,62 @@ function buildTreeFromCsv(csvText) {
   // ----------------------------
   //  Earth messaging
   // ----------------------------
-  function postSelected() {
-    const ids = Array.from(selected).filter((id) => {
-      if (!id || id === ROOT_ID || id === EMPTY_ID) return false;
-
-      const n = nodesById.get(id);
-      if (n) {
-        return !(n.children && n.children.size > 0);
-      }
-
-      if (id.startsWith("loc::g::")) {
-        const g = id.slice("loc::g::".length);
-        const kids = locChildren.get(g) || new Set();
-
-        for (const h of kids) {
-          const hid = "loc::h::" + g + "::" + h;
-          if (selected.has(hid)) return false;
-        }
-
-        return true;
-      }
-
-      if (id.startsWith("loc::h::")) {
-        return true;
-      }
-
-      return label.has(id);
-    });
-
-    const tags = ids
-      .map((id) => label.get(id))
-      .map((s) => (s == null ? "" : String(s).trim()))
-      .filter(Boolean);
-
-    try {
-      iframe.contentWindow.postMessage({ type: "dd-tags-apply", tags }, "*");
-    } catch (e) {
-      console.warn(e);
+function postSelected() {
+  function hasSelectedAncestor(id) {
+    let cur = parent.get(id);
+    while (cur && cur !== ROOT_ID) {
+      if (selected.has(cur)) return true;
+      cur = parent.get(cur);
     }
+    return false;
   }
+
+  const ids = Array.from(selected).filter((id) => {
+    if (!id || id === ROOT_ID || id === EMPTY_ID) return false;
+
+    const n = nodesById.get(id);
+
+    // ===== tree.csv 側 =====
+    if (n) {
+      // 親が選ばれているなら子は送らない
+      if (hasSelectedAncestor(id)) return false;
+
+      // ★ 親も送る（←ここが重要）
+      return true;
+    }
+
+    // ===== location.csv 側 =====
+    if (id.startsWith("loc::g::")) {
+      return true;
+    }
+
+    if (id.startsWith("loc::h::")) {
+      const parts = id.split("::");
+      const g = parts[2];
+      const gid = "loc::g::" + g;
+
+      // 親(G)が選ばれているなら子(H)は送らない
+      if (selected.has(gid)) return false;
+
+      return true;
+    }
+
+    return label.has(id);
+  });
+
+  const tags = ids
+    .map((id) => label.get(id))
+    .map((s) => (s == null ? "" : String(s).trim()))
+    .filter(Boolean);
+
+  console.log("[tagfilter] postSelected tags =", tags);
+
+  try {
+    iframe.contentWindow.postMessage({ type: "dd-tags-apply", tags }, "*");
+  } catch (e) {
+    console.warn(e);
+  }
+}
 
   function tryAutoApply() {
     if (autoApplied) return;
