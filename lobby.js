@@ -454,13 +454,7 @@ function detectLang() {
             return;
           }
 
-          // WebRTC Signaling
-          if (data && data.rtc) {
-            const rtc = data.rtc;
-            const from = rtc.from;
-            if (from && from !== myId) handleRTC(from, rtc);
-            return;
-          }
+
           // System Messages
           if (data.sys) {
             if (data.type === "welcome") {
@@ -489,7 +483,6 @@ function detectLang() {
             } else if (data.type === "roster") {
               rosterMembers = Array.isArray(data.members) ? data.members : [];
               renderMembers(rosterMembers);
-              if (localStream) startCalls(rosterMembers);
             } else if (data.type === "join") {
               const tpl = t("lobby.joined", "{name} が参加しました（合計 {count} 名）");
               addSys(tpl.replace("{name}", data.name || "").replace("{count}", String(data.count || 0)));
@@ -541,118 +534,218 @@ function detectLang() {
     });
   }
 
-  // ===== WebRTC Voice =====
+  // ===== LiveKit Voice =====
   const voiceStatus = $("#voiceStatus");
   const voicePowerBtn = $("#voicePower");
   const micToggleBtn = $("#micToggle");
   const voiceHintEl = $("#voiceHint");
-  let localStream = null;
-  const peers = new Map();
-  const remoteAudios = new Map();
+
+  const LIVEKIT_TOKEN_URL = "https://do-chat.awachima7.workers.dev/livekit-token";
+
+  let livekitRoom = null;
   let voiceJoined = false;
   let micMuted = false;
+  let livekitConnecting = false;
 
   function updateVoiceUI() {
-    if (voicePowerBtn) voicePowerBtn.textContent = voiceJoined ? t("lobby.voiceOff", "音声OFF") : t("lobby.voiceOn", "音声ON");
+    if (voicePowerBtn) {
+      voicePowerBtn.textContent = voiceJoined
+        ? t("lobby.voiceOff", "音声OFF")
+        : t("lobby.voiceOn", "音声ON");
+    }
+
     if (micToggleBtn) {
       micToggleBtn.style.display = voiceJoined ? "inline-block" : "none";
-      micToggleBtn.textContent = micMuted ? t("lobby.unmute", "ミュート解除") : t("lobby.mute", "ミュート");
+      micToggleBtn.textContent = micMuted
+        ? t("lobby.unmute", "ミュート解除")
+        : t("lobby.mute", "ミュート");
     }
+
     if (voiceStatus) {
-      if (!voiceJoined) voiceStatus.textContent = t("lobby.voiceNone", "音声: 未参加");
-      else {
+      if (livekitConnecting) {
+        voiceStatus.textContent = t("lobby.voiceJoining", "音声チャンネルに参加しています…");
+      } else if (!voiceJoined) {
+        voiceStatus.textContent = t("lobby.voiceNone", "音声: 未参加");
+      } else {
         const state = micMuted ? t("lobby.mute", "ミュート") : t("lobby.unmute", "ミュート解除");
         voiceStatus.textContent = t("lobby.voiceJoined", "音声: 参加中（マイク{state}）").replace("{state}", state);
       }
     }
-    if (voiceHintEl) voiceHintEl.textContent = t("lobby.voiceHint", "※ 音声はブラウザ同士で直接やり取りされます。");
+
+    if (voiceHintEl) {
+      voiceHintEl.textContent = t("lobby.voiceHint", "※ 音声はLiveKit経由で接続されます。");
+    }
   }
+
   updateVoiceUI();
 
-  async function joinVoice() {
-    if (voiceJoined) return;
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (e) {
-      alert(t("lobby.micErrorMsg", "マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。"));
-      return;
+  function getLiveKitClient() {
+    const LK = window.LivekitClient || window.LiveKit || window.livekitClient;
+    if (!LK) {
+      throw new Error("LiveKit client library is not loaded.");
     }
-    voiceJoined = true;
-    micMuted = false;
-    updateVoiceUI();
-    if (voiceStatus) voiceStatus.textContent = t("lobby.voiceJoining", "音声チャンネルに参加しています…");
-    if (rosterMembers.length > 0) startCalls(rosterMembers);
+    return LK;
   }
+
+  async function fetchLiveKitToken() {
+    const res = await fetch(LIVEKIT_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        roomId,
+        nickname: user || "Guest",
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`LiveKit token error: ${res.status} ${text}`);
+    }
+
+    const data = await res.json();
+    if (!data || !data.token || !data.wsUrl) {
+      throw new Error("LiveKit token response is invalid.");
+    }
+
+    return data;
+  }
+
+  function attachRemoteTrack(track, participant) {
+    if (!track || track.kind !== "audio") return;
+
+    const audio = track.attach();
+    audio.autoplay = true;
+    audio.playsInline = true;
+    audio.dataset.livekitParticipant = participant?.identity || "";
+    document.body.appendChild(audio);
+  }
+
+  function detachRemoteTrack(track) {
+    if (!track) return;
+
+    const elements = track.detach();
+    elements.forEach((el) => {
+      try {
+        el.remove();
+      } catch (e) {}
+    });
+  }
+
+  async function joinVoice() {
+    if (voiceJoined || livekitConnecting) return;
+
+    livekitConnecting = true;
+    updateVoiceUI();
+
+    try {
+      const LK = getLiveKitClient();
+      const { token, wsUrl } = await fetchLiveKitToken();
+
+      const room = new LK.Room({
+        adaptiveStream: true,
+        dynacast: true,
+        audioCaptureDefaults: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      livekitRoom = room;
+
+      room.on(LK.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        attachRemoteTrack(track, participant);
+      });
+
+      room.on(LK.RoomEvent.TrackUnsubscribed, (track) => {
+        detachRemoteTrack(track);
+      });
+
+      room.on(LK.RoomEvent.Disconnected, () => {
+        voiceJoined = false;
+        micMuted = false;
+        livekitConnecting = false;
+        livekitRoom = null;
+        updateVoiceUI();
+      });
+
+      await room.connect(wsUrl, token);
+
+      await room.localParticipant.setMicrophoneEnabled(true);
+
+      voiceJoined = true;
+      micMuted = false;
+      livekitConnecting = false;
+      updateVoiceUI();
+
+      if (voiceStatus) {
+        voiceStatus.textContent = t("lobby.voiceJoined", "音声: 参加中（マイク{state}）").replace("{state}", t("lobby.unmute", "ミュート解除"));
+      }
+    } catch (e) {
+      console.error(e);
+      livekitConnecting = false;
+      voiceJoined = false;
+      micMuted = false;
+
+      try {
+        if (livekitRoom) {
+          livekitRoom.disconnect();
+        }
+      } catch (e2) {}
+
+      livekitRoom = null;
+      updateVoiceUI();
+
+      alert(t("lobby.voiceJoinError", "音声チャンネルへの参加に失敗しました。"));
+    }
+  }
+
   function leaveVoice() {
     voiceJoined = false;
     micMuted = false;
-    updateVoiceUI();
-    if (localStream) {
-      localStream.getTracks().forEach((t2) => t2.stop());
-      localStream = null;
-    }
-    for (const pc of peers.values()) pc.close();
-    peers.clear();
-    for (const audio of remoteAudios.values()) audio.remove();
-    remoteAudios.clear();
-    if (voiceStatus) voiceStatus.textContent = t("lobby.voiceLeft", "音声チャンネルから退出しました。");
-  }
-  if (voicePowerBtn) voicePowerBtn.addEventListener("click", () => { if (!voiceJoined) joinVoice(); else leaveVoice(); });
-  if (micToggleBtn) micToggleBtn.addEventListener("click", () => {
-    if (!voiceJoined || !localStream) return;
-    micMuted = !micMuted;
-    localStream.getAudioTracks().forEach((track) => { track.enabled = !micMuted; });
-    updateVoiceUI();
-  });
+    livekitConnecting = false;
 
-  function makePC(id) {
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-    pc.onicecandidate = (ev) => {
-      if (!ev.candidate) return;
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      ws.send(JSON.stringify({ rtc: { type: "candidate", to: id, candidate: ev.candidate } }));
-    };
-    pc.ontrack = (ev) => {
-      let audio = remoteAudios.get(id);
-      if (!audio) {
-        audio = document.createElement("audio");
-        audio.autoplay = true;
-        remoteAudios.set(id, audio);
-        document.body.appendChild(audio);
+    try {
+      if (livekitRoom) {
+        livekitRoom.disconnect();
       }
-      audio.srcObject = ev.streams[0];
-    };
-    if (localStream) localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
-    peers.set(id, pc);
-    return pc;
-  }
-  async function startCalls(members) {
-    if (!voiceJoined || !localStream) return;
-    for (const m of members) {
-      if (!m.id || m.id === myId) continue;
-      if (peers.has(m.id)) continue;
-      const pc = makePC(m.id);
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ rtc: { type: "offer", to: m.id, sdp: offer.sdp } }));
+    } catch (e) {}
+
+    livekitRoom = null;
+    updateVoiceUI();
+
+    if (voiceStatus) {
+      voiceStatus.textContent = t("lobby.voiceLeft", "音声チャンネルから退出しました。");
     }
   }
-  async function handleRTC(from, rtc) {
-    const { type } = rtc;
-    if (type === "offer") {
-      let pc = peers.get(from);
-      if (!pc) pc = makePC(from);
-      await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: rtc.sdp }));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ rtc: { type: "answer", to: from, sdp: answer.sdp } }));
-    } else if (type === "answer") {
-      const pc = peers.get(from);
-      if (pc) await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: rtc.sdp }));
-    } else if (type === "candidate") {
-      const pc = peers.get(from);
-      if (pc && rtc.candidate) { try { await pc.addIceCandidate(new RTCIceCandidate(rtc.candidate)); } catch (e) {} }
+
+  async function toggleMic() {
+    if (!voiceJoined || !livekitRoom) return;
+
+    micMuted = !micMuted;
+
+    try {
+      await livekitRoom.localParticipant.setMicrophoneEnabled(!micMuted);
+    } catch (e) {
+      console.error(e);
     }
+
+    updateVoiceUI();
+  }
+
+  if (voicePowerBtn) {
+    voicePowerBtn.addEventListener("click", () => {
+      if (!voiceJoined) joinVoice();
+      else leaveVoice();
+    });
+  }
+
+  if (micToggleBtn) {
+    micToggleBtn.addEventListener("click", () => {
+      toggleMic();
+    });
   }
 
   const enableSoundBtn = $("#enableSound");
