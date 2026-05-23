@@ -768,7 +768,18 @@ function detectLang() {
       livekitRoom = null;
       updateVoiceUI();
 
-      alert(t("lobby.voiceJoinError", "会話機能をONにできませんでした。マイクの許可をご確認ください。"));
+      const errMsg = e && e.message ? e.message : String(e);
+
+alert(
+  t("lobby.voiceJoinError", "会話機能をONにできませんでした。") +
+  "\n\n原因:\n" +
+  errMsg
+);
+
+if (voiceStatus) {
+  voiceStatus.textContent =
+    "会話機能をONにできませんでした。原因: " + errMsg;
+}
     }
   }
 
