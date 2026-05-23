@@ -724,7 +724,25 @@ function detectLang() {
       // ★マイクだけは別扱いにする
       // 失敗しても「聞く専用」として会話機能ONは維持する
       try {
-        await room.localParticipant.setMicrophoneEnabled(true);
+        try {
+  // スマホ対策：先にブラウザ標準APIでマイクを明示的に開く
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+  // 取得できたらすぐ停止
+  // LiveKit側で改めてマイクを使う
+  stream.getTracks().forEach((track) => track.stop());
+
+  await room.localParticipant.setMicrophoneEnabled(true);
+  micMuted = false;
+} catch (e) {
+  console.warn("microphone enable failed", e);
+  micMuted = true;
+
+  if (voiceStatus) {
+    voiceStatus.textContent =
+      "会話機能はONですが、スマホ側でマイクを有効化できませんでした。相手の声は聞こえる可能性があります。";
+  }
+}
         micMuted = false;
       } catch (e) {
         console.warn("microphone enable failed", e);
