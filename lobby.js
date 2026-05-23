@@ -546,34 +546,55 @@ function detectLang() {
   let voiceJoined = false;
   let micMuted = false;
   let livekitConnecting = false;
+  let voicePromptShown = false;
+
+  function getOrCreateLiveKitIdentity() {
+    const key = `livekit-identity:${roomId}`;
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) return saved;
+
+      const random =
+        (crypto && crypto.randomUUID)
+          ? crypto.randomUUID().replace(/-/g, "").slice(0, 20)
+          : String(Date.now()) + "_" + Math.random().toString(36).slice(2, 12);
+
+      const identity = `lk_${random}`;
+      localStorage.setItem(key, identity);
+      return identity;
+    } catch (e) {
+      return "lk_" + String(Date.now()) + "_" + Math.random().toString(36).slice(2, 12);
+    }
+  }
 
   function updateVoiceUI() {
     if (voicePowerBtn) {
       voicePowerBtn.textContent = voiceJoined
-        ? t("lobby.voiceOff", "音声OFF")
-        : t("lobby.voiceOn", "音声ON");
+        ? t("lobby.pauseConversation", "会話機能の一時停止")
+        : t("lobby.resumeConversation", "会話機能をONにする");
     }
 
     if (micToggleBtn) {
       micToggleBtn.style.display = voiceJoined ? "inline-block" : "none";
       micToggleBtn.textContent = micMuted
-        ? t("lobby.unmute", "ミュート解除")
-        : t("lobby.mute", "ミュート");
+        ? t("lobby.unmuteSelf", "自分の声のミュート解除")
+        : t("lobby.muteSelf", "自分の声だけミュート");
     }
 
     if (voiceStatus) {
       if (livekitConnecting) {
-        voiceStatus.textContent = t("lobby.voiceJoining", "音声チャンネルに参加しています…");
+        voiceStatus.textContent = t("lobby.voiceJoining", "会話機能を準備しています…");
       } else if (!voiceJoined) {
-        voiceStatus.textContent = t("lobby.voiceNone", "音声: 未参加");
+        voiceStatus.textContent = t("lobby.voiceNone", "会話機能: 一時停止中");
+      } else if (micMuted) {
+        voiceStatus.textContent = t("lobby.voiceJoinedMuted", "会話機能: ON（相手の声は聞こえます／自分の声は届きません）");
       } else {
-        const state = micMuted ? t("lobby.mute", "ミュート") : t("lobby.unmute", "ミュート解除");
-        voiceStatus.textContent = t("lobby.voiceJoined", "音声: 参加中（マイク{state}）").replace("{state}", state);
+        voiceStatus.textContent = t("lobby.voiceJoinedUnmuted", "会話機能: ON（相手の声が聞こえ、自分の声も届きます）");
       }
     }
 
     if (voiceHintEl) {
-      voiceHintEl.textContent = t("lobby.voiceHint", "※ 音声はLiveKit経由で接続されます。");
+      voiceHintEl.textContent = t("lobby.voiceHint", "※ 会話機能は後から一時停止できます。");
     }
   }
 
@@ -596,6 +617,7 @@ function detectLang() {
       body: JSON.stringify({
         roomId,
         nickname: user || "Guest",
+        identity: getOrCreateLiveKitIdentity(),
       }),
     });
 
@@ -619,6 +641,18 @@ function detectLang() {
     audio.autoplay = true;
     audio.playsInline = true;
     audio.dataset.livekitParticipant = participant?.identity || "";
+
+    const p = audio.play && audio.play();
+    if (p && typeof p.catch === "function") {
+      p.catch(() => {
+        const enableSoundBtn = $("#enableSound");
+        if (enableSoundBtn) {
+          enableSoundBtn.style.display = "inline-block";
+          enableSoundBtn.textContent = t("lobby.enableSound", "音を有効化");
+        }
+      });
+    }
+
     document.body.appendChild(audio);
   }
 
@@ -673,16 +707,13 @@ function detectLang() {
 
       await room.connect(wsUrl, token);
 
+      // ここでマイク許可ダイアログが出る
       await room.localParticipant.setMicrophoneEnabled(true);
 
       voiceJoined = true;
       micMuted = false;
       livekitConnecting = false;
       updateVoiceUI();
-
-      if (voiceStatus) {
-        voiceStatus.textContent = t("lobby.voiceJoined", "音声: 参加中（マイク{state}）").replace("{state}", t("lobby.unmute", "ミュート解除"));
-      }
     } catch (e) {
       console.error(e);
       livekitConnecting = false;
@@ -690,15 +721,13 @@ function detectLang() {
       micMuted = false;
 
       try {
-        if (livekitRoom) {
-          livekitRoom.disconnect();
-        }
+        if (livekitRoom) livekitRoom.disconnect();
       } catch (e2) {}
 
       livekitRoom = null;
       updateVoiceUI();
 
-      alert(t("lobby.voiceJoinError", "音声チャンネルへの参加に失敗しました。"));
+      alert(t("lobby.voiceJoinError", "会話機能をONにできませんでした。マイクの許可をご確認ください。"));
     }
   }
 
@@ -717,7 +746,7 @@ function detectLang() {
     updateVoiceUI();
 
     if (voiceStatus) {
-      voiceStatus.textContent = t("lobby.voiceLeft", "音声チャンネルから退出しました。");
+      voiceStatus.textContent = t("lobby.voiceLeft", "会話機能を一時停止しました。");
     }
   }
 
@@ -733,6 +762,78 @@ function detectLang() {
     }
 
     updateVoiceUI();
+  }
+
+  function showVoiceStartModal() {
+    if (voicePromptShown) return;
+    voicePromptShown = true;
+
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.background = "rgba(0,0,0,0.45)";
+    overlay.style.zIndex = "9999";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.padding = "16px";
+
+    const box = document.createElement("div");
+    box.style.background = "#fff";
+    box.style.color = "#111";
+    box.style.borderRadius = "16px";
+    box.style.padding = "20px";
+    box.style.maxWidth = "420px";
+    box.style.width = "100%";
+    box.style.boxShadow = "0 12px 36px rgba(0,0,0,0.25)";
+
+    const titleEl = document.createElement("div");
+    titleEl.style.fontWeight = "700";
+    titleEl.style.fontSize = "18px";
+    titleEl.style.marginBottom = "10px";
+    titleEl.textContent = t("lobby.voiceModalTitle", "会話機能をONにしますか？");
+
+    const msg = document.createElement("div");
+    msg.style.lineHeight = "1.7";
+    msg.style.marginBottom = "16px";
+    msg.textContent = t(
+      "lobby.voiceModalMessage",
+      "待合室内の人と会話できる機能をONにしますか？これは後からOFFにすることが可能です。"
+    );
+
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.gap = "10px";
+    row.style.justifyContent = "flex-end";
+
+    const noBtn = document.createElement("button");
+    noBtn.type = "button";
+    noBtn.className = "btn ghost";
+    noBtn.textContent = t("lobby.no", "いいえ");
+
+    const yesBtn = document.createElement("button");
+    yesBtn.type = "button";
+    yesBtn.className = "btn";
+    yesBtn.textContent = t("lobby.yes", "はい");
+
+    noBtn.addEventListener("click", () => {
+      overlay.remove();
+      updateVoiceUI();
+    });
+
+    yesBtn.addEventListener("click", async () => {
+      overlay.remove();
+      await joinVoice();
+    });
+
+    row.appendChild(noBtn);
+    row.appendChild(yesBtn);
+
+    box.appendChild(titleEl);
+    box.appendChild(msg);
+    box.appendChild(row);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
   }
 
   if (voicePowerBtn) {
@@ -751,12 +852,20 @@ function detectLang() {
   const enableSoundBtn = $("#enableSound");
   if (enableSoundBtn) {
     enableSoundBtn.addEventListener("click", () => {
-      const ctx = window._audioContext;
-      if (ctx && ctx.state === "suspended") {
-        ctx.resume().then(() => { enableSoundBtn.textContent = t("lobby.enableSoundRetry", "音が出ない？もう一度有効化"); });
-      } else enableSoundBtn.textContent = t("lobby.enableSoundRetry", "音が出ない？もう一度有効化");
+      const audios = document.querySelectorAll("audio");
+      audios.forEach((audio) => {
+        try {
+          const p = audio.play && audio.play();
+          if (p && typeof p.catch === "function") p.catch(() => {});
+        } catch (e) {}
+      });
+
+      enableSoundBtn.textContent = t("lobby.enableSoundRetry", "音が出ない？もう一度有効化");
     });
   }
+
+  setTimeout(showVoiceStartModal, 500);
+
 
   // ===== 執事に質問（音声） =====
   const voiceAskBtn2 = $("#voiceAskBtn");
