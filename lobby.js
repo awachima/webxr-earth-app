@@ -707,12 +707,35 @@ function detectLang() {
 
       await room.connect(wsUrl, token);
 
-      // ここでマイク許可ダイアログが出る
-      await room.localParticipant.setMicrophoneEnabled(true);
+      // ★スマホ対策: 受信音声の再生をユーザー操作内で明示的に開始
+      try {
+        if (typeof room.startAudio === "function") {
+          await room.startAudio();
+        }
+      } catch (e) {
+        console.warn("startAudio failed", e);
+      }
 
       voiceJoined = true;
       micMuted = false;
       livekitConnecting = false;
+      updateVoiceUI();
+
+      // ★マイクだけは別扱いにする
+      // 失敗しても「聞く専用」として会話機能ONは維持する
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+        micMuted = false;
+      } catch (e) {
+        console.warn("microphone enable failed", e);
+        micMuted = true;
+
+        if (voiceStatus) {
+          voiceStatus.textContent =
+            "会話機能はONですが、スマホ側でマイクを有効化できませんでした。相手の声は聞こえる可能性があります。ブラウザのマイク許可をご確認ください。";
+        }
+      }
+
       updateVoiceUI();
     } catch (e) {
       console.error(e);
