@@ -506,7 +506,18 @@
            スクロールコンテナ化してしまい、sticky が正常に
            固定されない問題を確認したため、fixed にしている。
            fixed はフローから外れるので、直後の .earth-frame-wrap に
-           margin-top で余白を補ってレイアウトジャンプを防いでいる。 */
+           margin-top で余白を補ってレイアウトジャンプを防いでいる。
+
+           ※ 幅によってはボタン文言（多言語対応で長さが変わる）が
+             アイコン列と衝突することがあったため、.top-controls は
+             常に flex-wrap:wrap にしておき、1行に収まらない場合は
+             アイコン列が自動的に2段目へ折り返す仕様にしている
+             （特定のブレークポイントの数値に頼らず、実際のコンテンツ
+             幅で自動的に安全な折り返しが起きるようにするため）。
+             また .earth-frame-wrap の margin-top は、下部の
+             ResizeObserver（syncToolbarSpacing）で top-controls の
+             実際の高さに合わせて動的に上書きするため、ここでの
+             px指定はJS実行前の初期値／フォールバックに過ぎない。 */
     .top-controls{
       position: fixed;
       top: var(--header-offset, 76px);
@@ -518,8 +529,9 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
-      flex-wrap: nowrap;
+      column-gap: 14px;
+      row-gap: 8px;
+      flex-wrap: wrap;
       padding: 8px 12px;
       background: rgba(255,255,255,0.85);
       backdrop-filter: blur(10px);
@@ -529,7 +541,8 @@
     }
 
     /* top-controls が fixed になった分、直後の地球エリアが
-       上に隠れないように余白を確保（幅はモバイルで変える） */
+       上に隠れないように余白を確保（幅はモバイルで変える）
+       ※ 実際の値は syncToolbarSpacing() が動的に上書きする */
     .earth-frame-wrap{
       margin-top: 86px;
     }
@@ -563,6 +576,7 @@
       justify-content: flex-end;
       gap: 10px;
       flex: 0 0 auto;
+      margin-left: auto;
     }
 
     /* 3アイコン（絞り込み / 観光案内 / 待合室）の見た目
@@ -1162,6 +1176,43 @@
   setInterval(reloadIfLangChanged, 500);
 })();
 </script>
+
+<!-- ✅ ToolbarSpacingSync:START
+     .top-controls は position:fixed なのでドキュメントフローに影響しない。
+     多言語対応でボタンの文字数が変わり、幅によってはアイコン列が
+     2段目に折り返されて top-controls 自体の高さが変わるため、
+     固定 px の margin-top では地球エリアとの隙間がズレる。
+     ResizeObserver で top-controls の実高さを常に監視し、
+     .earth-frame-wrap の margin-top をその都度合わせて更新する。 -->
+<script>
+(function(){
+  function syncToolbarSpacing(){
+    var tc = document.querySelector(".top-controls");
+    var earth = document.querySelector(".earth-frame-wrap");
+    if(!tc || !earth) return;
+    var h = tc.getBoundingClientRect().height;
+    if(!h) return;
+    earth.style.marginTop = Math.ceil(h + 10) + "px";
+  }
+
+  window.addEventListener("load", syncToolbarSpacing);
+  window.addEventListener("resize", syncToolbarSpacing);
+  window.addEventListener("orientationchange", syncToolbarSpacing);
+  document.addEventListener("DOMContentLoaded", syncToolbarSpacing);
+
+  if(window.ResizeObserver){
+    document.addEventListener("DOMContentLoaded", function(){
+      var tc = document.querySelector(".top-controls");
+      if(!tc) return;
+      var ro = new ResizeObserver(syncToolbarSpacing);
+      ro.observe(tc);
+    });
+  }
+
+  syncToolbarSpacing();
+})();
+</script>
+<!-- ✅ ToolbarSpacingSync:END -->
 
 </body>
 </html>
