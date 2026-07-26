@@ -1214,5 +1214,50 @@
 </script>
 <!-- ✅ ToolbarSpacingSync:END -->
 
+<!-- ✅ TagFilterModalCenter:START
+     tagfilter.js は「絞り込みボタンの真下」にモーダルを出す位置計算をしている。
+     ボタンをツールバー右側のアイコン列に移動したことで、モーダルが画面右寄りに
+     開くようになってしまった。tagfilter.js 自体は編集できないので、
+     モーダルの style 属性の変化を監視し、開いた直後に
+     バックドロップ（= ビューポート全体）の中心に位置を上書きする。
+     モーダルがビューポートより大きい狭い画面でも見えなくならないよう、
+     左上（0,0）より小さくはしない（= 従来通りスクロールで全体を確認できる）。 -->
+<script>
+(function(){
+  var backdrop = document.getElementById("tagFilterBackdrop");
+  if(!backdrop) return;
+  var modal = backdrop.querySelector(".tag-filter-modal");
+  if(!modal) return;
+
+  var centering = false;
+
+  function centerTagFilterModal(){
+    if(!backdrop.classList.contains("open")) return;
+    var bw = backdrop.clientWidth;
+    var bh = backdrop.clientHeight;
+    var mw = modal.offsetWidth;
+    var mh = modal.offsetHeight;
+    if(!mw || !mh) return;
+    var left = Math.max(0, Math.round((bw - mw) / 2));
+    var top = Math.max(0, Math.round((bh - mh) / 2));
+    centering = true;
+    modal.style.left = left + "px";
+    modal.style.top = top + "px";
+    centering = false;
+  }
+
+  var mo = new MutationObserver(function(){
+    if(centering) return;
+    requestAnimationFrame(function(){
+      requestAnimationFrame(centerTagFilterModal);
+    });
+  });
+  mo.observe(modal, { attributes: true, attributeFilter: ["style"] });
+
+  window.addEventListener("resize", centerTagFilterModal);
+})();
+</script>
+<!-- ✅ TagFilterModalCenter:END -->
+
 </body>
 </html>
