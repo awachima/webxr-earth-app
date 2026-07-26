@@ -1078,3 +1078,26 @@ header *{
 .card{
   overflow: hidden;
 }
+
+/* 絞り込みボタン：画面に固定（スクロール追従） */
+.earth-frame-wrap .tag-filter-btn{
+  position: fixed !important;
+  top: calc(var(--header-offset, 76px) + 12px) !important;
+  left: 14px !important;
+  z-index: 999 !important;
+}
+
+/* 観光案内ボタン：画面に固定（スクロール追従） */
+.earth-frame-wrap .tourist-info-btn{
+  position: fixed !important;
+  left: 14px !important;
+  bottom: 14px !important;
+  z-index: 999 !important;
+}
+
+/* ON（開いている）時は色反転 */
+.tag-filter-btn[aria-expanded="true"],
+.tourist-info-btn[aria-expanded="true"]{
+  filter: invert(1);
+  transition: filter .15s ease;
+}

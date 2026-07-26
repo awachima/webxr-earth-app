@@ -401,12 +401,14 @@
 
     /* =========================================================
        Waiting Room Toggle Button（右上アイコン）
+       → earth-frame-wrap 内固定(absolute)ではなく、
+         画面(ビューポート)に対して固定=スクロール追従型に変更
        ========================================================= */
     .waiting-room-btn{
-      position:absolute;
-      top:14px;
+      position:fixed;
+      top:calc(var(--header-offset, 76px) + 12px);
       right:14px;
-      z-index:9999;
+      z-index:999;
       background:rgba(255,255,255,0.92);
       border:1px solid rgba(0,0,0,0.12);
       border-radius:50%;
@@ -420,7 +422,7 @@
       box-shadow:0 8px 22px rgba(0,0,0,0.18);
       backdrop-filter:blur(6px);
       -webkit-backdrop-filter:blur(6px);
-      transition:all .18s ease;
+      transition:all .18s ease, filter .15s ease;
     }
     .waiting-room-btn:hover{
       transform:scale(1.06);
@@ -429,6 +431,13 @@
       width:34px;
       height:34px;
       display:block;
+    }
+
+    /* ON（開いている）時は色反転。main.js側で
+       btn.setAttribute('aria-expanded','true'/'false') が
+       既にトグルされているのでJS変更は不要 */
+    .waiting-room-btn[aria-expanded="true"]{
+      filter: invert(1);
     }
 
     .meetups.is-collapsed{
