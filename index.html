@@ -449,8 +449,55 @@
     }
 
     /* =========================================================
+       ヘッダーロゴ
+       - どこでもドアのロゴを、ヘッダー内タイトル（h1）の左に配置。
+         元々 .brand-logo-text 単体に付いていたレイアウト用の
+         margin/max-width/text-align は、ロゴとタイトルをまとめて
+         動かせるよう .header-brand（新設のラッパー）側に移し、
+         同じ見た目（モバイル：中央寄せ／デスクトップ：左寄せ）を
+         ラッパー単位で再現している。
+         .header-brand 側は2クラスセレクタで .brand-logo-text 単体
+         より詳細度が高くなるので、外部 styles.css 側のmargin指定を
+         確実に打ち消せる。 */
+    .header-brand{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 auto;
+      margin-top: 4px;
+      max-width: calc(100% - 160px);
+      position: relative;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .header-brand .header-logo{
+      flex: 0 0 auto;
+      display: block;
+      height: clamp(24px, 6vw, 36px);
+      width: auto;
+    }
+
+    .header-brand .brand-logo-text{
+      margin: 0;
+      max-width: none;
+      text-align: left;
+    }
+
+    @media (min-width: 1024px){
+      .header-brand{
+        margin: 0;
+        margin-top: 4px;
+        margin-left: 30px;
+        margin-right: auto;
+        max-width: calc(100% - 200px);
+        justify-content: flex-start;
+      }
+    }
+
+    /* =========================================================
        Top Controls
-       - ロゴ＋説明ボタン（左寄せ）と、絞り込み/観光案内/待合室の
+       - 説明ボタン（左寄せ）と、絞り込み/観光案内/待合室の
          3アイコン（右寄せ）を1つの帯にまとめ、
          画面に常時表示（スクロール追従）させる
 
@@ -494,13 +541,6 @@
       gap: 14px;
       flex: 1 1 auto;
       min-width: 0;
-    }
-
-    .top-controls__logo{
-      flex: 0 0 auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
 
     .top-controls__buttons{
@@ -590,11 +630,6 @@
         gap: 8px;
       }
 
-      .top-controls__logo{
-        order: 1;
-        align-self: center;
-      }
-
       .top-controls__buttons{
         order: 2;
         width: 100%;
@@ -620,11 +655,6 @@
         padding: 8px 10px;
       }
 
-      .site-logo{
-        transform: scale(0.90);
-        transform-origin: center;
-      }
-
       /* モバイルでは top-controls が2段になり背が高くなるため、
          地球エリア上部の余白を広めにとる */
       .earth-frame-wrap{
@@ -644,10 +674,6 @@
       .top-controls__buttons .top-controls__btn{
         font-size: 0.80rem;
         padding: 8px 8px;
-      }
-
-      .site-logo{
-        transform: scale(0.84);
       }
     }
 
@@ -671,7 +697,10 @@
   <div class="wrap">
 
     <header>
-      <h1 class="brand-logo-text" id="siteTitle">Dokodemo Doors Fan Site</h1>
+      <div class="header-brand">
+        <img class="header-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Dokodemo Doors">
+        <h1 class="brand-logo-text" id="siteTitle">Dokodemo Doors Fan Site</h1>
+      </div>
 
       <div class="lang-switch">
         <button id="langToggle" class="lang-switch__toggle" type="button">Language</button>
@@ -741,10 +770,6 @@
 
       <div class="top-controls">
         <div class="top-controls__left">
-          <div class="top-controls__logo">
-            <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
-          </div>
-
           <div class="top-controls__buttons">
             <button type="button" id="aboutBtn" class="intro-bar__button top-controls__btn">
               What is Dokodemo Doors?
