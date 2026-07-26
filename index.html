@@ -1182,17 +1182,36 @@
      多言語対応でボタンの文字数が変わり、幅によってはアイコン列が
      2段目に折り返されて top-controls 自体の高さが変わるため、
      固定 px の margin-top では地球エリアとの隙間がズレる。
-     ResizeObserver で top-controls の実高さを常に監視し、
-     .earth-frame-wrap の margin-top をその都度合わせて更新する。 -->
+
+     ※ 以前の実装は "top-controls 自身の高さ + 余白" だけを
+       margin-top に入れていたが、top-controls は position:fixed で
+       ビューポート上部から var(--header-offset) 分下がった位置に
+       表示されるのに対し、.earth-frame-wrap はフロー上ではすでに
+       上部にヘッダー分のオフセットがあるため、単純に
+       "高さ分だけ" margin-top に入れるとオフセット分が二重に
+       抜け落ちてしまい、モバイル幅では台座同士が密着（または
+       わずかに重なる）していた。
+       → 代わりに「今の実際の表示位置」と「本来あるべき位置
+       （top-controls の下端 + 希望する隣間）の差分を現在の
+       margin-top に加算する方式に変更。これにより、
+       header-offset やフロー上の初期オフセットを意識しなくても
+       常に正確な隙間（GAP_PX）に収束する。 -->
 <script>
 (function(){
+  var GAP_PX = 16; // top-controls の下端と .earth-frame-wrap の間に欲しい隣間
+
   function syncToolbarSpacing(){
     var tc = document.querySelector(".top-controls");
     var earth = document.querySelector(".earth-frame-wrap");
     if(!tc || !earth) return;
-    var h = tc.getBoundingClientRect().height;
-    if(!h) return;
-    earth.style.marginTop = Math.ceil(h + 10) + "px";
+    var tcRect = tc.getBoundingClientRect();
+    if(!tcRect.height) return;
+    var earthRect = earth.getBoundingClientRect();
+    var currentMargin = parseFloat(getComputedStyle(earth).marginTop) || 0;
+    var desiredTop = tcRect.bottom + GAP_PX;
+    var delta = desiredTop - earthRect.top;
+    var newMargin = Math.max(0, Math.round(currentMargin + delta));
+    earth.style.marginTop = newMargin + "px";
   }
 
   window.addEventListener("load", syncToolbarSpacing);
