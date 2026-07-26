@@ -400,15 +400,13 @@
     .msg-row.user .msg-meta{ text-align: right; }
 
     /* =========================================================
-       Waiting Room Toggle Button（右上アイコン）
-       → earth-frame-wrap 内固定(absolute)ではなく、
-         画面(ビューポート)に対して固定=スクロール追従型に変更
+       Waiting Room Toggle Button（アイコン）
+       → top-controls__icons のフレックス子要素として配置。
+         画面固定（スクロール追従）は親の .top-controls 側で
+         sticky 指定するため、ここでは position:static に戻す。
        ========================================================= */
     .waiting-room-btn{
-      position:fixed;
-      top:calc(var(--header-offset, 76px) + 12px);
-      right:14px;
-      z-index:999;
+      position:static;
       background:rgba(255,255,255,0.92);
       border:1px solid rgba(0,0,0,0.12);
       border-radius:50%;
@@ -435,9 +433,11 @@
 
     /* ON（開いている）時は色反転。main.js側で
        btn.setAttribute('aria-expanded','true'/'false') が
-       既にトグルされているのでJS変更は不要 */
-    .waiting-room-btn[aria-expanded="true"]{
+       既にトグルされているのでJS変更は不要。
+       絞り込み/観光案内/待合室の3アイコンをまとめて対象にする */
+    .top-controls__icons [aria-expanded="true"]{
       filter: invert(1);
+      transition: filter .15s ease;
     }
 
     .meetups.is-collapsed{
@@ -450,17 +450,50 @@
 
     /* =========================================================
        Top Controls
-       - PC: 左ボタン / ロゴ / 右ボタン
-       - Mobile: ロゴ / ボタン2つ
-       ========================================================= */
+       - ロゴ＋説明ボタン（左寄せ）と、絞り込み/観光案内/待合室の
+         3アイコン（右寄せ）を1つの帯にまとめ、
+         画面に常時表示（スクロール追従）させる
+
+         ※ position:sticky ではなく position:fixed を使用。
+           既存の body{ overflow-x:hidden } 指定の影響で body が
+           スクロールコンテナ化してしまい、sticky が正常に
+           固定されない問題を確認したため、fixed にしている。
+           fixed はフローから外れるので、直後の .earth-frame-wrap に
+           margin-top で余白を補ってレイアウトジャンプを防いでいる。 */
     .top-controls{
+      position: fixed;
+      top: var(--header-offset, 76px);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 500;
       width: min(980px, calc(100% - 32px));
-      margin: 10px auto 16px;
+      margin: 0;
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
       gap: 14px;
       flex-wrap: nowrap;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: 0 8px 20px rgba(15,23,42,0.08);
+    }
+
+    /* top-controls が fixed になった分、直後の地球エリアが
+       上に隠れないように余白を確保（幅はモバイルで変える） */
+    .earth-frame-wrap{
+      margin-top: 86px;
+    }
+
+    .top-controls__left{
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 14px;
+      flex: 1 1 auto;
+      min-width: 0;
     }
 
     .top-controls__logo{
@@ -473,9 +506,10 @@
     .top-controls__buttons{
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       gap: 14px;
-      flex: 0 0 auto;
+      flex: 0 1 auto;
+      min-width: 0;
     }
 
     .top-controls__btn{
@@ -483,16 +517,82 @@
       white-space: nowrap;
     }
 
+    .top-controls__icons{
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+
+    /* 3アイコン（絞り込み / 観光案内 / 待合室）の見た目
+       ※ .earth-frame-wrap 配下からこの位置へ移動したため、
+         旧 styles.css の ".earth-frame-wrap .tag-filter-btn" /
+         ".earth-frame-wrap .tourist-info-btn" の外観指定はもう
+         効かない。ここで同等の見た目（丸アイコン化）を再定義する。 */
+    .top-controls__icons .tag-filter-btn,
+    .top-controls__icons .tourist-info-btn{
+      position: static;
+      width: 46px;
+      height: 46px;
+      min-width: 46px;
+      min-height: 46px;
+      padding: 0;
+      border-radius: 999px;
+      background-color: rgba(255,255,255,0.92);
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 46px 46px;
+      border: 1px solid rgba(0,0,0,0.12);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+      font-size: 0;
+      line-height: 0;
+      color: transparent;
+      gap: 0;
+      cursor: pointer;
+      transition: transform .18s ease, box-shadow .18s ease, filter .15s ease;
+    }
+    .top-controls__icons .tag-filter-btn{
+      background-image: url("./assets/filter.png");
+    }
+    .top-controls__icons .tourist-info-btn{
+      background-image: url("./assets/tourist-information.png");
+    }
+    .top-controls__icons .tag-filter-btn #tagFilterCount{
+      display: none;
+    }
+    .top-controls__icons .tag-filter-btn:hover,
+    .top-controls__icons .tourist-info-btn:hover{
+      transform: translateY(-1px);
+      box-shadow: 0 14px 28px rgba(0,0,0,0.14);
+    }
+    .top-controls__icons .tag-filter-btn:active,
+    .top-controls__icons .tourist-info-btn:active{
+      transform: translateY(0);
+      box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+    }
+
     @media (max-width: 520px){
       .top-controls{
         width: min(100%, calc(100% - 20px));
         margin: 8px auto 12px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        row-gap: 8px;
+        gap: 8px;
+      }
+
+      .top-controls__left{
+        order: 1;
+        flex: 1 1 100%;
         flex-direction: column;
-        gap: 10px;
+        align-items: stretch;
+        gap: 8px;
       }
 
       .top-controls__logo{
         order: 1;
+        align-self: center;
       }
 
       .top-controls__buttons{
@@ -502,7 +602,15 @@
         flex-wrap: nowrap;
       }
 
-      .top-controls__btn{
+      .top-controls__icons{
+        order: 2;
+        flex: 0 0 auto;
+        margin-left: auto;
+      }
+
+      /* ※ styles.css の ".top-controls .intro-bar__button"（クラス。2つ分）に
+         詳細度で負けないよう、ここもクラス。2つのセレクタにする */
+      .top-controls__buttons .top-controls__btn{
         flex: 1 1 0;
         min-width: 0;
         white-space: normal;
@@ -516,6 +624,12 @@
         transform: scale(0.90);
         transform-origin: center;
       }
+
+      /* モバイルでは top-controls が2段になり背が高くなるため、
+         地球エリア上部の余白を広めにとる */
+      .earth-frame-wrap{
+        margin-top: 190px;
+      }
     }
 
     @media (max-width: 390px){
@@ -527,7 +641,7 @@
         gap: 6px;
       }
 
-      .top-controls__btn{
+      .top-controls__buttons .top-controls__btn{
         font-size: 0.80rem;
         padding: 8px 8px;
       }
@@ -626,38 +740,42 @@
     <div class="stage">
 
       <div class="top-controls">
-        <div class="top-controls__logo">
-          <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+        <div class="top-controls__left">
+          <div class="top-controls__logo">
+            <img class="site-logo" src="./assets/jp-mobile-new.fffa2967.png" alt="Logo">
+          </div>
+
+          <div class="top-controls__buttons">
+            <button type="button" id="aboutBtn" class="intro-bar__button top-controls__btn">
+              What is Dokodemo Doors?
+            </button>
+
+            <button type="button" id="guideBtn" class="intro-bar__button top-controls__btn">
+              What is this fan site?
+            </button>
+          </div>
         </div>
 
-        <div class="top-controls__buttons">
-          <button type="button" id="aboutBtn" class="intro-bar__button top-controls__btn">
-            What is Dokodemo Doors?
+        <div class="top-controls__icons">
+          <button type="button" id="tagFilterBtn" class="tag-filter-btn" aria-haspopup="dialog" aria-controls="tagFilterBackdrop">
+            絞り込み <span id="tagFilterCount" class="tag-filter-count">(0)</span>
           </button>
 
-          <button type="button" id="guideBtn" class="intro-bar__button top-controls__btn">
-            What is this fan site?
+          <button type="button" id="touristInfoBtn" class="tourist-info-btn" aria-controls="recommendSection" aria-expanded="false">
+            観光案内
+          </button>
+
+          <button type="button"
+                  id="waitingRoomBtn"
+                  class="waiting-room-btn"
+                  aria-controls="meetupsSection"
+                  aria-expanded="false">
+            <img src="./assets/waiting-room.png" alt="Waiting Room">
           </button>
         </div>
       </div>
 
       <div class="earth-frame-wrap" id="earthFrameWrap">
-        <button type="button" id="tagFilterBtn" class="tag-filter-btn" aria-haspopup="dialog" aria-controls="tagFilterBackdrop">
-          絞り込み <span id="tagFilterCount" class="tag-filter-count">(0)</span>
-        </button>
-
-        <button type="button" id="touristInfoBtn" class="tourist-info-btn" aria-controls="recommendSection" aria-expanded="false">
-          観光案内
-        </button>
-
-        <button type="button"
-                id="waitingRoomBtn"
-                class="waiting-room-btn"
-                aria-controls="meetupsSection"
-                aria-expanded="false">
-          <img src="./assets/waiting-room.png" alt="Waiting Room">
-        </button>
-
         <iframe
           id="webxr-iframe"
           title="WebXR Earth"
