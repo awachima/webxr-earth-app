@@ -1005,7 +1005,7 @@
       const isAndroid = ua.indexOf("Android") !== -1;
 
       if (isQuest || isAndroid) {
-        window.__LUCY_VOICE_MODE = "server";
+        window.__LUCY_VOICE_MODE = "auto";
         console.log("Quest/Android detected: Force voice mode to 'server'");
       }
     })();
